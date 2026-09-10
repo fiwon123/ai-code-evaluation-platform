@@ -4,6 +4,14 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import StaticPool
+
+from app.core.database import Base
 
 
 @pytest.fixture
@@ -45,3 +53,38 @@ async def client(
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest_asyncio.fixture
+async def db_client() -> AsyncGenerator[AsyncClient]:
+    """Async test client against an in-memory SQLite database (fresh per test)."""
+    from app.core.database import get_session
+    from app.core.redis import get_redis
+    from app.main import create_app
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    app = create_app()
+
+    async def override_get_session() -> AsyncGenerator[AsyncSession]:
+        async with test_session() as session:
+            yield session
+
+    async def override_get_redis() -> AsyncMock:
+        return mock_redis_client()
+
+    app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_redis] = override_get_redis
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+    await engine.dispose()

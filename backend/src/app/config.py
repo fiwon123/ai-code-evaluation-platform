@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
     redis_url: str = "redis://localhost:6379"
     jwt_secret_key: str = "dev-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24  # 24 hours
     cors_origins: list[str] = ["http://localhost:5173"]
 
     @field_validator("database_url")
