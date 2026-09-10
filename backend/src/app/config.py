@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24  # 24 hours
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Evaluation pipeline
+    llm_provider: str = "demo"  # default provider: demo | openai | anthropic
+    evaluation_timeout: int = 30  # seconds for test execution
+    evaluation_dir: str = "/tmp/evaluations"
+
     @field_validator("database_url")
     @classmethod
     def ensure_psycopg_driver(cls, value: str) -> str:
