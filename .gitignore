@@ -199,6 +199,7 @@ Thumbs.db
 node_modules/
 dist/
 dist-ssr/
+*.tsbuildinfo
 
 # Docker
 docker-compose.override.yml
