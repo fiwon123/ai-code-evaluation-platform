@@ -1,0 +1,191 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  ApiError,
+  api,
+  authApi,
+  challengesApi,
+  clearToken,
+  setToken,
+} from "./api.ts";
+
+const fetchMock = vi.fn();
+
+describe("api service", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    clearToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("sends a JSON body on POST with content-type header", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    await api.post("/api/challenges", { title: "X" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/challenges",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ title: "X" }),
+      }),
+    );
+  });
+
+  it("includes the bearer token when one is stored", async () => {
+    setToken("secret-token");
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+
+    await api.get("/api/challenges");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/challenges",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer secret-token" }),
+      }),
+    );
+  });
+
+  it("omits the bearer header when no token is stored", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+
+    await api.get("/api/challenges");
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.stringify(options.headers)).not.toContain("Authorization");
+  });
+
+  it("returns undefined for 204 responses", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    const result = await api.del("/api/challenges/abc");
+    expect(result).toBeUndefined();
+  });
+
+  it("throws an ApiError with the server detail on failure", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Challenge not found" }), { status: 404 }),
+    );
+
+    await expect(api.get("/api/challenges/missing")).rejects.toMatchObject({
+      name: "ApiError",
+      status: 404,
+      detail: "Challenge not found",
+    });
+  });
+
+  it("falls back to status text when the error body is not JSON", async () => {
+    fetchMock.mockResolvedValue(new Response("boom", { status: 500, statusText: "Internal Server Error" }));
+
+    await expect(api.get("/api/challenges")).rejects.toSatisfy(
+      (err: unknown) => err instanceof ApiError && err.detail.includes("500"),
+    );
+  });
+});
+
+describe("authApi", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    clearToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("registers a user and parses the token response", async () => {
+    const body = {
+      access_token: "jwt",
+      token_type: "bearer",
+      user: { id: "1", email: "a@b.co", username: "alice", created_at: "2026-01-01T00:00:00Z" },
+    };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(body), { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const result = await authApi.register({
+      email: "a@b.co",
+      username: "alice",
+      password: "password123",
+    });
+
+    expect(result.access_token).toBe("jwt");
+    expect(result.user.username).toBe("alice");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/register"),
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("logs in with an identifier and password", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ access_token: "t", token_type: "bearer", user: {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await authApi.login({ identifier: "alice", password: "password123" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/login"),
+      expect.objectContaining({ body: JSON.stringify({ identifier: "alice", password: "password123" }) }),
+    );
+  });
+});
+
+describe("challengesApi", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    clearToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("creates a challenge with a POST to /api/challenges", async () => {
+    const challenge = {
+      id: "c1",
+      title: "Two Sum",
+      description: "d",
+      prompt: "p",
+      test_code: "",
+      language: "python",
+      owner_id: "u1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(challenge), { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const result = await challengesApi.create({
+      title: "Two Sum",
+      description: "d",
+      prompt: "p",
+    });
+
+    expect(result.id).toBe("c1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/challenges"),
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("deletes a challenge with a DELETE request", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await challengesApi.remove("c1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/challenges/c1"),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+});
