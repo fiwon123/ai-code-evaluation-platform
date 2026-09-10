@@ -7,17 +7,12 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "sqlalchemy[asyncio]>=2.0.0",
-    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "psycopg[binary]>=3.2.0",
     "celery[redis]>=5.4.0",
     "redis>=5.0.0",
     "pydantic-settings>=2.0.0",
-    "python-jose[cryptography]>=3.3.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.8.0",
+    "pyjwt>=2.9.0",
 ]
 
 [build-system]
@@ -25,20 +20,22 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["src/app"]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
+    "httpx>=0.27.0",
 ]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
+select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
