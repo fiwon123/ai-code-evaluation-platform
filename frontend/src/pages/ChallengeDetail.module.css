@@ -1,57 +1,193 @@
 .page {
   padding: var(--space-8) var(--space-6) var(--space-16);
-  max-width: 760px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+
+.status {
+  padding: var(--space-16) var(--space-6);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.notFound {
+  padding: var(--space-16) var(--space-6);
+  text-align: center;
+}
+
+.back {
+  margin-bottom: var(--space-4);
 }
 
 .header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-6);
 }
 
 .title {
   margin: 0;
-  font-size: var(--font-3xl);
+  font-size: var(--font-size-3xl);
+  line-height: 1.2;
 }
 
-.sections {
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.mainCol {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  min-width: 0;
+}
+
+.sideCol {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-4));
+}
+
+.evalCard {
+  display: flex;
+  flex-direction: column;
 }
 
 .sectionTitle {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-xl);
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-lg);
 }
 
-.pre {
-  background: var(--color-surface-raised, #f8fafc);
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  overflow-x: auto;
+.description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
   white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
 }
 
-.submitForm {
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Provider picker */
+.providerGroup {
+  border: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+}
+
+.providerLegend {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.providerOption {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
-  align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.providerOption:hover {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg);
+}
+
+.providerSelected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.providerRadio {
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.providerInfo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.providerName {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.providerDesc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.submitButton {
+  width: 100%;
 }
 
 .errorText {
-  color: var(--color-error, #dc2626);
-  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  background: var(--color-danger-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
 }
 
 .hint {
-  color: var(--color-muted);
-  font-size: var(--font-sm);
-  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin: var(--space-3) 0 0;
+  line-height: 1.5;
+}
+
+.loginPrompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.deleteButton {
+  margin-top: var(--space-6);
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.deleteButton:hover {
+  text-decoration: underline;
+}
+
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sideCol {
+    position: static;
+  }
 }

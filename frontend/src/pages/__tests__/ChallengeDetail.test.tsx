@@ -101,7 +101,7 @@ describe("ChallengeDetail", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Two Sum" });
 
-    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "openai" } });
+    fireEvent.click(screen.getByLabelText(/OpenAI/));
     fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
 
     await waitFor(() => {

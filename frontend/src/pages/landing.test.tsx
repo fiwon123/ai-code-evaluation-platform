@@ -1,10 +1,36 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import About from "./About/About.tsx";
 import Demo from "./Demo/Demo.tsx";
 import Features from "./Features/Features.tsx";
 import Pricing from "./Pricing/Pricing.tsx";
+
+vi.mock("../services/api.ts", () => ({
+  challengesApi: { list: vi.fn().mockResolvedValue([]) },
+  submissionsApi: { create: vi.fn(), get: vi.fn() },
+  ApiError: class ApiError extends Error {
+    status: number;
+    detail: string;
+    constructor(status: number, detail: string) {
+      super(detail);
+      this.name = "ApiError";
+      this.status = status;
+      this.detail = detail;
+    }
+  },
+}));
+
+vi.mock("../context/AuthContext.tsx", () => ({
+  useAuth: () => ({
+    user: null,
+    token: null,
+    initializing: false,
+    login: vi.fn(),
+    register: vi.fn(),
+    logout: vi.fn(),
+  }),
+}));
 
 describe("landing pages", () => {
   it("renders the Features page", () => {

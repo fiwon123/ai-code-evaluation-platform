@@ -35,6 +35,194 @@
   flex-wrap: wrap;
 }
 
+/* ---- Animated pipeline ---- */
+.pipeline {
+  max-width: 900px;
+  margin: var(--space-16) auto 0;
+}
+
+.pipelineTrack {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.pipelineGroup {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.pipelineStep {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  opacity: 0.55;
+  transform: scale(0.96);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.pipelineIcon {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-1);
+}
+
+.pipelineLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.pipelineDesc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.pipelineArrow {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xl);
+  padding: 0 var(--space-2);
+  flex-shrink: 0;
+}
+
+/* Sequential activation: 10s loop, 2s per step */
+@keyframes pipelineActivate {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+    border-color: var(--color-border);
+    background: var(--color-surface);
+  }
+  10% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.05);
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+  }
+  30% {
+    opacity: 0.8;
+  }
+  55% {
+    opacity: 0.55;
+    transform: scale(0.96);
+    border-color: var(--color-border);
+    background: var(--color-surface);
+  }
+}
+
+.step0 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 0s;
+}
+
+.step1 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+.step2 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 4s;
+}
+
+.step3 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 6s;
+}
+
+.step4 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 8s;
+}
+
+/* Arrow pulses while the step before it is active */
+@keyframes arrowPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateX(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(3px);
+    color: var(--color-primary);
+  }
+  30% {
+    opacity: 0.35;
+    transform: translateX(0);
+  }
+}
+
+.arrow0 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 0s;
+}
+
+.arrow1 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+.arrow2 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 4s;
+}
+
+.arrow3 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 6s;
+}
+
+/* Progress bar */
+.progressTrack {
+  margin-top: var(--space-6);
+  height: 6px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--color-primary), #4f46e5);
+  border-radius: var(--radius-full);
+  animation: progressFill 10s linear infinite;
+}
+
+@keyframes progressFill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.pipelineCaption {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* ---- Sections ---- */
 .section {
   padding: var(--space-16) var(--space-6);
 }
@@ -59,6 +247,15 @@
   gap: var(--space-6);
   max-width: var(--max-width);
   margin: 0 auto;
+}
+
+.featureCard {
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.featureCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
 }
 
 .featureIcon {
@@ -112,7 +309,7 @@
 /* CTA banner */
 .cta {
   text-align: center;
-  background: var(--color-surface);
+  background: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   padding: var(--space-16) var(--space-8);
@@ -144,5 +341,19 @@
 
   .section {
     padding: var(--space-10) var(--space-4);
+  }
+
+  .pipelineTrack {
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: stretch;
+  }
+
+  .pipelineGroup {
+    flex-direction: row;
+  }
+
+  .pipelineArrow {
+    transform: rotate(90deg);
   }
 }
