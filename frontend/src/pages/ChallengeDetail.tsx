@@ -1,8 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import Badge from "../components/Badge/Badge.tsx";
+import Button from "../components/Button/Button.tsx";
+import Card from "../components/Card/Card.tsx";
+import { Field, SelectInput, useFieldId } from "../components/Input/Input.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
-import { challengesApi, ApiError } from "../services/api.ts";
+import { challengesApi, submissionsApi, ApiError } from "../services/api.ts";
 import type { Challenge } from "../types.ts";
+import styles from "./ChallengeDetail.module.css";
+
+const PROVIDERS = [
+  { value: "demo", label: "Demo (free, no API key)" },
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+];
 
 function ChallengeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +23,10 @@ function ChallengeDetail() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [provider, setProvider] = useState("demo");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const providerFieldId = useFieldId("provider");
 
   useEffect(() => {
     if (!id) {
@@ -61,6 +76,26 @@ function ChallengeDetail() {
     }
   }
 
+  async function handleSubmit() {
+    if (!challenge) {
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const submission = await submissionsApi.create({
+        challenge_id: challenge.id,
+        provider,
+      });
+      navigate(`/submissions/${submission.id}`);
+    } catch (err) {
+      setSubmitError(
+        err instanceof ApiError ? err.detail : "Failed to submit evaluation.",
+      );
+      setSubmitting(false);
+    }
+  }
+
   if (loading) {
     return <p>Loading challenge…</p>;
   }
@@ -77,25 +112,82 @@ function ChallengeDetail() {
   }
 
   return (
-    <div>
+    <div className={styles.page}>
       <p>
-        <Link to="/challenges">Back to challenges</Link>
+        <Link to="/challenges">← Back to challenges</Link>
       </p>
-      <h1>{challenge.title}</h1>
-      <p>
-        Language: <code>{challenge.language}</code>
-      </p>
-      <h2>Description</h2>
-      <p>{challenge.description}</p>
-      <h2>Prompt</h2>
-      <pre>{challenge.prompt}</pre>
-      <h2>Test code</h2>
-      <pre>{challenge.test_code || "(none)"}</pre>
-      {isOwner && (
-        <button type="button" onClick={() => void handleDelete()} disabled={deleting}>
-          {deleting ? "Deleting…" : "Delete challenge"}
-        </button>
-      )}
+
+      <div className={styles.header}>
+        <h1 className={styles.title}>{challenge.title}</h1>
+        <Badge variant="neutral">{challenge.language}</Badge>
+      </div>
+
+      <div className={styles.sections}>
+        <Card>
+          <h2 className={styles.sectionTitle}>Description</h2>
+          <p>{challenge.description}</p>
+        </Card>
+
+        <Card>
+          <h2 className={styles.sectionTitle}>Prompt</h2>
+          <pre className={styles.pre}>{challenge.prompt}</pre>
+        </Card>
+
+        <Card>
+          <h2 className={styles.sectionTitle}>Test code</h2>
+          <pre className={styles.pre}>{challenge.test_code || "(none)"}</pre>
+        </Card>
+
+        <Card>
+          <h2 className={styles.sectionTitle}>Run evaluation</h2>
+          {user ? (
+            <form
+              className={styles.submitForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSubmit();
+              }}
+            >
+              <Field label="Provider" id={providerFieldId}>
+                <SelectInput
+                  id={providerFieldId}
+                  value={provider}
+                  onChange={(event) => setProvider(event.target.value)}
+                >
+                  {PROVIDERS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </SelectInput>
+              </Field>
+              {submitError && (
+                <p role="alert" className={styles.errorText}>
+                  {submitError}
+                </p>
+              )}
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Submitting…" : "Generate & evaluate"}
+              </Button>
+              <p className={styles.hint}>
+                Tip: the demo provider works instantly with prompts containing
+                keywords like "two sum" or "fizzbuzz".
+              </p>
+            </form>
+          ) : (
+            <p>
+              <Link to="/login">Log in</Link> to submit this challenge for
+              evaluation.
+            </p>
+          )}
+        </Card>
+
+        {isOwner && (
+          <button type="button" onClick={() => void handleDelete()} disabled={deleting}>
+            {deleting ? "Deleting…" : "Delete challenge"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

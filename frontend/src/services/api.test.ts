@@ -6,6 +6,7 @@ import {
   challengesApi,
   clearToken,
   setToken,
+  submissionsApi,
 } from "./api.ts";
 
 const fetchMock = vi.fn();
@@ -186,6 +187,69 @@ describe("challengesApi", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/challenges/c1"),
       expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+});
+
+describe("submissionsApi", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    clearToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("creates a submission with a POST to /api/submissions", async () => {
+    const submission = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(submission), { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const result = await submissionsApi.create({ challenge_id: "c1", provider: "demo" });
+
+    expect(result.id).toBe("s1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/submissions"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ challenge_id: "c1", provider: "demo" }),
+      }),
+    );
+  });
+
+  it("lists submissions via GET /api/submissions", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+
+    await submissionsApi.list();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/submissions"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
+    );
+  });
+
+  it("fetches a single submission via GET /api/submissions/:id", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "s1" }), { status: 200 }));
+
+    await submissionsApi.get("s1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/submissions/s1"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
     );
   });
 });
