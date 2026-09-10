@@ -1,0 +1,106 @@
+.page {
+  padding: var(--space-16) var(--space-6) var(--space-20);
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.pageTitle {
+  text-align: center;
+  font-size: var(--font-size-4xl);
+  margin-bottom: var(--space-4);
+}
+
+.pageSubtitle {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-lg);
+  max-width: 600px;
+  margin: 0 auto var(--space-16);
+}
+
+.tiers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+  margin-bottom: var(--space-16);
+  align-items: stretch;
+}
+
+.tier {
+  display: flex;
+  flex-direction: column;
+}
+
+.tierFeatured {
+  border: 2px solid var(--color-primary);
+  position: relative;
+}
+
+.tierBadge {
+  position: absolute;
+  top: calc(-1 * var(--space-3));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tierName {
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--space-2);
+}
+
+.tierPrice {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: var(--space-1);
+}
+
+.tierPriceSpan {
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tierDescription {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-6);
+}
+
+.tierList {
+  list-style: none;
+  padding: 0;
+  margin-bottom: var(--space-8);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tierItem {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.check {
+  color: var(--color-success);
+  font-weight: 700;
+  margin-right: var(--space-2);
+}
+
+.tierButton {
+  width: 100%;
+}
+
+.note {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .tiers {
+    grid-template-columns: 1fr;
+  }
+}
