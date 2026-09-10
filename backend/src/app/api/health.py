@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.redis import get_redis
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -21,6 +25,7 @@ async def health(
         await db.execute(text("SELECT 1"))
         status["db"] = "ok"
     except Exception:
+        logger.exception("Database health check failed")
         status["db"] = "error"
 
     # Check Redis
@@ -28,6 +33,7 @@ async def health(
         await redis.ping()
         status["redis"] = "ok"
     except Exception:
+        logger.exception("Redis health check failed")
         status["redis"] = "error"
 
     # Overall status is degraded if any component is down

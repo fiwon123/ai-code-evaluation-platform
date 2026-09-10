@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 
@@ -21,7 +22,7 @@ def mock_redis_client() -> AsyncMock:
     return redis
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(
     mock_db_session: AsyncMock, mock_redis_client: AsyncMock
 ) -> AsyncGenerator[AsyncClient]:

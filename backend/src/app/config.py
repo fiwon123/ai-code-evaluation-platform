@@ -10,11 +10,14 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
     redis_url: str = "redis://localhost:6379"
     jwt_secret_key: str = "dev-secret-key-change-in-production"
+    cors_origins: list[str] = ["http://localhost:5173"]
 
     @field_validator("database_url")
     @classmethod
     def ensure_psycopg_driver(cls, value: str) -> str:
-        """Normalize bare postgres:// URLs to use the psycopg (v3) driver."""
+        """Normalize legacy/bare postgres URLs to use the psycopg (v3) driver."""
+        if value.startswith("postgresql+asyncpg://"):
+            return value.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
         if value.startswith("postgres://"):
             return value.replace("postgres://", "postgresql+psycopg://", 1)
         if value.startswith("postgresql://"):

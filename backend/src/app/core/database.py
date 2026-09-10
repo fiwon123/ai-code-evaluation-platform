@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, Uuid
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -24,12 +24,9 @@ class Base(DeclarativeBase):
 
 
 class UUIDMixin:
-    """Mixin that adds a UUID primary key column."""
+    """Mixin that adds a native UUID primary key column."""
 
-    id: Mapped[str] = mapped_column(
-        primary_key=True,
-        default=lambda: str(uuid4()),
-    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
 
 
 engine = create_async_engine(settings.database_url, echo=False)

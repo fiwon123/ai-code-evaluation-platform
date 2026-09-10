@@ -15,8 +15,9 @@ import app.models  # noqa: F401
 config = context.config
 
 # Override the database URL from application settings so the environment
-# (env vars / .env) is the single source of truth.
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# (env vars / .env) is the single source of truth. Escape "%" to avoid
+# ConfigParser interpolation issues with URL-encoded passwords.
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:

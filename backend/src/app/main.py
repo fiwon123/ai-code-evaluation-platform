@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import api_router
 from app.api.health import router as health_router
+from app.config import settings
 
 
 @asynccontextmanager
@@ -29,7 +30,7 @@ def create_app() -> FastAPI:
     # CORS for the frontend dev server
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
