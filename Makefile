@@ -1,4 +1,4 @@
-.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend install
+.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install
 
 # Install all dependencies
 install:
@@ -14,7 +14,21 @@ dev-backend:
 	cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 dev-frontend:
-	cd frontend && npm run dev
+	cd frontend && npm run dev -- --host 0.0.0.0
+
+dev-celery:
+	cd backend && uv run celery -A app.core.celery_app:celery_app worker --loglevel=info
+
+# Start all development services in the background
+dev-all:
+	@echo "Starting development services..."
+	@cd backend && nohup uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+	@cd backend && nohup uv run celery -A app.core.celery_app:celery_app worker --loglevel=info > /tmp/celery.log 2>&1 &
+	@cd frontend && nohup npm run dev -- --host 0.0.0.0 > /tmp/frontend.log 2>&1 &
+	@sleep 2
+	@echo "  Backend:  http://localhost:8000  (logs: /tmp/backend.log)"
+	@echo "  Frontend: http://localhost:5173  (logs: /tmp/frontend.log)"
+	@echo "  Celery:   running                (logs: /tmp/celery.log)"
 
 # Testing
 test: test-backend test-frontend

@@ -5,7 +5,7 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - ..:/workspace:cached
-    command: sleep infinity
+    command: tail -f /dev/null
     ports:
       - "8000:8000"
     environment:
@@ -22,7 +22,7 @@ services:
     image: mcr.microsoft.com/devcontainers/javascript-node:22
     volumes:
       - ..:/workspace:cached
-    command: sleep infinity
+    command: bash -c "/workspace/.devcontainer/start-frontend.sh; exec tail -f /dev/null"
     ports:
       - "5173:5173"
     depends_on:
