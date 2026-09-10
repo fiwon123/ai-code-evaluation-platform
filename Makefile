@@ -1,4 +1,4 @@
-.PHONY: run test lint format typecheck check clean dev-backend dev-frontend install
+.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend install
 
 # Install all dependencies
 install:
@@ -17,8 +17,13 @@ dev-frontend:
 	cd frontend && npm run dev
 
 # Testing
-test:
+test: test-backend test-frontend
+
+test-backend:
 	cd backend && uv run pytest
+
+test-frontend:
+	cd frontend && npm test
 
 # Linting
 lint:
