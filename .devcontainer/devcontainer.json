@@ -1,0 +1,27 @@
+{
+  "name": "AI Code Evaluation Platform",
+  "dockerComposeFile": ["docker-compose.yml"],
+  "service": "backend",
+  "runServices": ["backend", "frontend", "postgres", "redis"],
+  "workspaceFolder": "/workspace",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [8000, 5173, 5432, 6379],
+  "postCreateCommand": "cd backend && uv sync && cd ../frontend && npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "oxc.oxc-vscode",
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml"
+      ]
+    }
+  }
+}

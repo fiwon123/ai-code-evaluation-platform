@@ -1,0 +1,121 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", "PROJECT_CONTEXT.md", ".opencode/instructions/*.md"],
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "opencode/big-pickle",
+      "prompt": "You are a senior full-stack developer specializing in Python/FastAPI backends and React/TypeScript frontends. You implement features, fix bugs, and refactor code across the entire codebase. Always follow existing patterns, run tests before committing, and use conventional commits.",
+      "permission": {
+        "edit": "allow",
+        "bash": {
+          "*": "ask",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git branch*": "allow",
+          "git checkout*": "allow",
+          "git pull*": "allow",
+          "git push*": "allow",
+          "git add*": "allow",
+          "git commit*": "allow",
+          "gh issue*": "allow",
+          "gh pr create*": "allow",
+          "gh pr comment*": "allow",
+          "gh pr edit*": "allow",
+          "gh pr list*": "allow",
+          "gh pr view*": "allow",
+          "gh pr checks*": "allow",
+          "gh label*": "allow",
+          "gh pr merge*": "allow",
+          "uv run*": "allow",
+          "uv sync*": "allow",
+          "make *": "allow",
+          "docker compose ps*": "allow",
+          "docker compose logs*": "allow"
+        },
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "reviewer": "allow"
+        },
+        "skill": {
+          "*": "allow"
+        }
+      }
+    },
+    "plan": {
+      "mode": "primary",
+      "model": "opencode/mimo-v2.5-free",
+      "prompt": "You are a software architect specializing in Python/FastAPI backends and Docker-based execution environments. Analyze requirements, explore the codebase, and create detailed implementation plans. Do not make any changes. Output: Goal, Files to modify, Dependencies, Risks, Steps.",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "git log*": "allow",
+          "git diff*": "allow",
+          "ls*": "allow"
+        },
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "reviewer": "allow"
+        },
+        "skill": {
+          "*": "allow"
+        }
+      }
+    },
+    "backend": {
+      "description": "Implements FastAPI routes, services, Celery workers, and evaluation logic",
+      "mode": "subagent",
+      "permission": {
+        "edit": {
+          "backend/**": "allow",
+          "*.py": "allow",
+          "migrations/**": "allow"
+        },
+        "bash": {
+          "*": "ask",
+          "cd backend*": "allow",
+          "uv run*": "allow",
+          "uv sync*": "allow",
+          "python*": "allow"
+        }
+      }
+    },
+    "frontend": {
+      "description": "Implements React UI components, pages, hooks, and client-side behavior",
+      "mode": "subagent",
+      "permission": {
+        "edit": {
+          "frontend/**": "allow",
+          "*.tsx": "allow",
+          "*.ts": "allow"
+        },
+        "bash": {
+          "*": "ask",
+          "cd frontend*": "allow",
+          "npm*": "allow",
+          "npx*": "allow"
+        }
+      }
+    },
+    "reviewer": {
+      "description": "Reviews code for bugs, security issues, and regressions without editing",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "grep *": "allow"
+        },
+        "skill": {
+          "*": "allow"
+        }
+      }
+    }
+  }
+}
