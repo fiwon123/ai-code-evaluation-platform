@@ -10,6 +10,8 @@ describe("App", () => {
         <App />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/AI Code Evaluation Platform/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /AI Code Evaluation Platform/i }),
+    ).toBeInTheDocument();
   });
 });
