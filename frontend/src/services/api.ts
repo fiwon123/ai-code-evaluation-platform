@@ -4,6 +4,8 @@ import type {
   ChallengeCreatePayload,
   LoginPayload,
   RegisterPayload,
+  Submission,
+  SubmissionCreatePayload,
   User,
 } from "../types.ts";
 
@@ -97,4 +99,11 @@ export const challengesApi = {
     api.post<Challenge>("/api/challenges", payload),
   get: (id: string) => api.get<Challenge>(`/api/challenges/${id}`),
   remove: (id: string) => api.del<void>(`/api/challenges/${id}`),
+};
+
+export const submissionsApi = {
+  create: (payload: SubmissionCreatePayload) =>
+    api.post<Submission>("/api/submissions", payload),
+  list: () => api.get<Submission[]>("/api/submissions"),
+  get: (id: string) => api.get<Submission>(`/api/submissions/${id}`),
 };

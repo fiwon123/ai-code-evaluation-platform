@@ -41,3 +41,31 @@ export interface ChallengeCreatePayload {
   test_code?: string;
   language?: string;
 }
+
+export type SubmissionStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface EvaluationResult {
+  id: string;
+  passed_tests: number;
+  total_tests: number;
+  score: number;
+  logs: string;
+  metrics: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface Submission {
+  id: string;
+  challenge_id: string;
+  status: SubmissionStatus;
+  provider: string | null;
+  code: string | null;
+  score: number | null;
+  evaluation_result: EvaluationResult | null;
+  created_at: string;
+}
+
+export interface SubmissionCreatePayload {
+  challenge_id: string;
+  provider: string;
+}

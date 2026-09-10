@@ -64,9 +64,16 @@ function Demo() {
               Browse challenges
             </Button>
           </Link>
+          <Link to="/challenges/new">
+            <Button variant="ghost" size="lg">
+              Create a challenge
+            </Button>
+          </Link>
         </div>
         <p className={styles.liveHint}>
-          Tip: use the demo provider for zero-cost, instant evaluations.
+          Tip: create a challenge whose prompt contains a keyword like{" "}
+          <strong>"two sum"</strong> or <strong>"fizzbuzz"</strong> — the demo
+          provider instantly produces a matching solution, no API keys needed.
         </p>
       </section>
     </div>

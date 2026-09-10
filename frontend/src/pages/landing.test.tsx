@@ -46,7 +46,7 @@ describe("landing pages", () => {
     expect(
       screen.getByRole("heading", { name: /See how it works/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Create a challenge/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Create a challenge/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Try it live/i)).toBeInTheDocument();
     expect(screen.getAllByText(/demo provider/i).length).toBeGreaterThan(0);
   });

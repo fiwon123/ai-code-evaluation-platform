@@ -13,6 +13,7 @@ import Login from "./pages/Login.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Pricing from "./pages/Pricing/Pricing.tsx";
 import Register from "./pages/Register.tsx";
+import SubmissionDetail from "./pages/SubmissionDetail.tsx";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="/challenges/:id" element={<ChallengeDetail />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/challenges/new" element={<CreateChallenge />} />
+            <Route path="/submissions/:id" element={<SubmissionDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Route>
