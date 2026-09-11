@@ -57,7 +57,7 @@
 
 /* Live demo */
 .liveSection {
-  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 60%);
+  background: linear-gradient(135deg, var(--color-bg-gradient) 0%, var(--color-bg) 100%);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   padding: var(--space-12) var(--space-8);
