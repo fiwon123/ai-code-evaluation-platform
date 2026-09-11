@@ -36,6 +36,7 @@ const STEPS = [
 const KEYWORD_CHIPS = ["two sum", "fizzbuzz", "fibonacci", "palindrome"];
 
 const POLL_INTERVAL_MS = 1500;
+const POLL_MAX_ATTEMPTS = 40; // ~60s cap before we give up
 
 function Demo() {
   const { user } = useAuth();
@@ -104,13 +105,17 @@ function Demo() {
   }
 
   async function poll(submissionId: string): Promise<Submission> {
-    for (;;) {
+    for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
       const data = await submissionsApi.get(submissionId);
       if (data.status === "completed" || data.status === "failed") {
         return data;
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
+    throw new Error(
+      "Evaluation timed out after about 60 seconds — the Celery worker may " +
+        "not be running. Check that the worker is up and resubmit.",
+    );
   }
 
   const inProgress = running && result === null;

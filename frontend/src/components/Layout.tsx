@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.tsx";
 import Button from "./Button/Button.tsx";
 import Footer from "./Footer/Footer.tsx";
 import Logo from "./Logo/Logo.tsx";
+import ThemeToggle from "./ThemeToggle/ThemeToggle.tsx";
 import styles from "./Layout.module.css";
 
 function Layout() {
@@ -85,6 +86,7 @@ function Layout() {
           </div>
 
           <div className={styles.navRight}>
+            <ThemeToggle />
             {user ? (
               <div className={styles.userMenu}>
                 {userMenuOpen && (
