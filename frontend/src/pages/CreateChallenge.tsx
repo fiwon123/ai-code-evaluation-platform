@@ -1,9 +1,22 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import styles from "./CreateChallenge.module.css";
 import { challengesApi, ApiError } from "../services/api.ts";
+import Button from "../components/Button/Button.tsx";
+import Card from "../components/Card/Card.tsx";
+import {
+  Field,
+  TextInput,
+  SelectInput,
+  TextAreaInput,
+  useFieldId,
+} from "../components/Input/Input.tsx";
 
-function CreateChallenge() {
+const LANGUAGES = ["python", "javascript", "typescript", "java", "go"];
+
+export default function CreateChallenge() {
   const navigate = useNavigate();
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -11,6 +24,12 @@ function CreateChallenge() {
   const [language, setLanguage] = useState("python");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const titleId = useFieldId("title");
+  const languageId = useFieldId("language");
+  const descriptionId = useFieldId("description");
+  const promptId = useFieldId("prompt");
+  const testCodeId = useFieldId("test-code");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,80 +56,106 @@ function CreateChallenge() {
   }
 
   return (
-    <div>
-      <h1>Create challenge</h1>
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div>
-          <label htmlFor="title">
-            Title
-            <input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              maxLength={255}
-            />
-          </label>
-        </div>
-        <div>
-          <label htmlFor="language">
-            Language
-            <select
-              id="language"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-            >
-              <option value="python">Python</option>
-              <option value="javascript">JavaScript</option>
-              <option value="typescript">TypeScript</option>
-              <option value="java">Java</option>
-              <option value="go">Go</option>
-            </select>
-          </label>
-        </div>
-        <div>
-          <label htmlFor="description">
-            Description
-            <textarea
-              id="description"
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <nav className={styles.crumbs} aria-label="Breadcrumb">
+          <Link to="/challenges" className={styles.crumbLink}>
+            Challenges
+          </Link>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">New challenge</span>
+        </nav>
+        <h1>Create a challenge</h1>
+          <p className={styles.subtitle}>
+            Define a coding task, the prompt your LLM will see, and the tests
+            used to grade the generated solution.
+          </p>
+      </header>
+
+      <Card className={styles.card}>
+        <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
+          <div className={styles.row}>
+            <Field id={titleId} label="Title">
+              <TextInput
+                id={titleId}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Two Sum"
+                required
+                maxLength={120}
+              />
+            </Field>
+
+            <Field id={languageId} label="Language">
+              <SelectInput
+                id={languageId}
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+              >
+                {LANGUAGES.map((lang) => (
+                  <option key={lang} value={lang}>
+                    {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+          </div>
+
+          <Field
+            id={descriptionId}
+            label="Description"
+          >
+            <TextAreaInput
+              id={descriptionId}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              required
+              placeholder="Given an array of integers, return the indices of the two numbers that add up to a target."
               rows={3}
             />
-          </label>
-        </div>
-        <div>
-          <label htmlFor="prompt">
-            Prompt for the LLM
-            <textarea
-              id="prompt"
+          </Field>
+
+          <Field
+            id={promptId}
+            label="Prompt for the LLM"
+          >
+            <TextAreaInput
+              id={promptId}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              required
-              rows={6}
+              placeholder="Write a Python function two_sum(nums, target) that returns the indices of the two numbers that add up to target."
+              rows={5}
             />
-          </label>
-        </div>
-        <div>
-          <label htmlFor="testCode">
-            Test code (pytest)
-            <textarea
-              id="testCode"
+          </Field>
+
+          <Field
+            id={testCodeId}
+            label="Test code (pytest)"
+          >
+            <TextAreaInput
+              id={testCodeId}
               value={testCode}
               onChange={(e) => setTestCode(e.target.value)}
+              placeholder={'def test_two_sum():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]'}
               rows={6}
-              placeholder="def test_example():&#10;    assert True"
             />
-          </label>
-        </div>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Creating…" : "Create challenge"}
-        </button>
-      </form>
+          </Field>
+
+          {error && (
+            <p className={styles.errorBanner} role="alert">
+              {error}
+            </p>
+          )}
+
+          <div className={styles.actions}>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Creating…" : "Create challenge"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => navigate("/challenges")}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }
-
-export default CreateChallenge;

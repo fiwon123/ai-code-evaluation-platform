@@ -1,7 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import Button from "../components/Button/Button.tsx";
+import Card from "../components/Card/Card.tsx";
+import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
+import Logo from "../components/Logo/Logo.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { ApiError } from "../services/api.ts";
+import styles from "./Login.module.css";
 
 function Login() {
   const { login } = useAuth();
@@ -10,6 +15,8 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const identifierId = useFieldId("identifier");
+  const passwordId = useFieldId("password");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,42 +35,51 @@ function Login() {
   }
 
   return (
-    <div>
-      <h1>Log in</h1>
-      <form onSubmit={(e) => void handleSubmit(e)}>
-        <div>
-          <label htmlFor="identifier">
-            Email or username
-            <input
-              id="identifier"
+    <div className={styles.page}>
+      <Card className={styles.card}>
+        <div className={styles.header}>
+          <Logo size="lg" />
+          <h1 className={styles.title}>Welcome back</h1>
+          <p className={styles.subtitle}>Log in to your account</p>
+        </div>
+        <form onSubmit={(e) => void handleSubmit(e)} className={styles.form}>
+          <Field label="Email or username" id={identifierId}>
+            <TextInput
+              id={identifierId}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               required
               autoComplete="username"
+              placeholder="you@example.com"
             />
-          </label>
-        </div>
-        <div>
-          <label htmlFor="password">
-            Password
-            <input
-              id="password"
+          </Field>
+          <Field label="Password" id={passwordId}>
+            <TextInput
+              id={passwordId}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
+              placeholder="••••••••"
             />
-          </label>
-        </div>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Logging in…" : "Log in"}
-        </button>
-      </form>
-      <p>
-        No account? <Link to="/register">Register</Link>
-      </p>
+          </Field>
+          {error && (
+            <p role="alert" className={styles.error}>
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={submitting} size="lg" className={styles.submit}>
+            {submitting ? "Logging in…" : "Log in"}
+          </Button>
+        </form>
+        <p className={styles.footerText}>
+          No account?{" "}
+          <Link to="/register" className={styles.link}>
+            Sign up
+          </Link>
+        </p>
+      </Card>
     </div>
   );
 }

@@ -41,6 +41,14 @@ const STEPS = [
   },
 ];
 
+const PIPELINE = [
+  { icon: "📝", label: "Write challenge", desc: "Prompt + tests" },
+  { icon: "🤖", label: "Pick provider", desc: "OpenAI · Anthropic · Demo" },
+  { icon: "⚙️", label: "AI generates code", desc: "Sandboxed" },
+  { icon: "🧪", label: "Tests run", desc: "pytest in isolation" },
+  { icon: "📊", label: "Get score", desc: "Pass/fail + metrics" },
+];
+
 function Home() {
   return (
     <div>
@@ -67,6 +75,32 @@ function Home() {
             </Button>
           </Link>
         </div>
+
+        {/* Animated pipeline */}
+        <div className={styles.pipeline} aria-hidden="true">
+          <div className={styles.pipelineTrack}>
+            {PIPELINE.map((step, index) => (
+              <div key={step.label} className={styles.pipelineGroup}>
+                <div className={`${styles.pipelineStep} ${styles[`step${index}`]}`}>
+                  <span className={styles.pipelineIcon}>{step.icon}</span>
+                  <span className={styles.pipelineLabel}>{step.label}</span>
+                  <span className={styles.pipelineDesc}>{step.desc}</span>
+                </div>
+                {index < PIPELINE.length - 1 && (
+                  <span className={`${styles.pipelineArrow} ${styles[`arrow${index}`]}`}>
+                    →
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className={styles.progressTrack}>
+            <div className={styles.progressBar} />
+          </div>
+          <p className={styles.pipelineCaption}>
+            From challenge to scored result in seconds
+          </p>
+        </div>
       </section>
 
       <section className={styles.section}>
@@ -77,7 +111,7 @@ function Home() {
         </p>
         <div className={styles.featuresGrid}>
           {FEATURES.map((feature) => (
-            <Card key={feature.title}>
+            <Card key={feature.title} className={styles.featureCard}>
               <div className={styles.featureIcon}>{feature.icon}</div>
               <h3 className={styles.featureTitle}>{feature.title}</h3>
               <p className={styles.featureText}>{feature.text}</p>
