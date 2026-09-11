@@ -17,6 +17,7 @@
 
   /* Neutrals */
   --color-bg: #f1f5f9;
+  --color-bg-subtle: #eff6ff;
   --color-bg-gradient:
     linear-gradient(180deg, #dbeafe 0%, #f1f5f9 100%);
   --color-surface: #ffffff;
@@ -46,6 +47,7 @@
 
   /* Neutrals */
   --color-bg: #0b1220;
+  --color-bg-subtle: #111c34;
   --color-bg-gradient:
     linear-gradient(180deg, #111c34 0%, #0b1220 100%);
   --color-surface: #111a2e;

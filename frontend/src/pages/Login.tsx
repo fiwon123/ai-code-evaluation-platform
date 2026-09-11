@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
@@ -9,7 +9,7 @@ import { ApiError } from "../services/api.ts";
 import styles from "./Login.module.css";
 
 function Login() {
-  const { login } = useAuth();
+  const { user, initializing, login } = useAuth();
   const navigate = useNavigate();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +32,14 @@ function Login() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (initializing) {
+    return <div className={styles.page} />;
+  }
+
+  if (user) {
+    return <Navigate to="/challenges" replace />;
   }
 
   return (

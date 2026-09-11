@@ -33,6 +33,16 @@
 .searchInput {
   flex: 1;
   min-width: 220px;
+  background: var(--color-bg-subtle);
+  border-color: var(--color-border);
+}
+
+.searchInput:hover {
+  border-color: var(--color-primary);
+}
+
+.searchInput:focus-within {
+  border-color: var(--color-primary);
 }
 
 .filterSelect {

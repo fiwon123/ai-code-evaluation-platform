@@ -4,7 +4,7 @@
   align-items: flex-start;
   justify-content: center;
   padding: var(--space-16) var(--space-6) var(--space-20);
-  background: linear-gradient(180deg, #eff6ff 0%, var(--color-bg) 100%);
+  background: var(--color-bg-gradient);
 }
 
 .card {
