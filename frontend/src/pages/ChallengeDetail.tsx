@@ -1,0 +1,253 @@
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import Badge from "../components/Badge/Badge.tsx";
+import Button from "../components/Button/Button.tsx";
+import Card from "../components/Card/Card.tsx";
+import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
+import { useAuth } from "../context/AuthContext.tsx";
+import { challengesApi, submissionsApi, ApiError } from "../services/api.ts";
+import type { Challenge } from "../types.ts";
+import styles from "./ChallengeDetail.module.css";
+
+const PROVIDERS = [
+  {
+    value: "demo",
+    name: "Demo",
+    description: "Free · no API key",
+  },
+  {
+    value: "openai",
+    name: "OpenAI",
+    description: "gpt-4o-mini",
+  },
+  {
+    value: "anthropic",
+    name: "Anthropic",
+    description: "claude-3-5-haiku",
+  },
+];
+
+function ChallengeDetail() {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [provider, setProvider] = useState("demo");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+    const challengeId = id;
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await challengesApi.get(challengeId);
+        if (!cancelled) {
+          setChallenge(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof ApiError ? err.detail : "Failed to load challenge.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const isOwner = challenge != null && user?.id === challenge.owner_id;
+
+  async function handleDelete() {
+    if (!challenge || !confirm(`Delete challenge "${challenge.title}"?`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await challengesApi.remove(challenge.id);
+      navigate("/challenges");
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.detail : "Failed to delete challenge.",
+      );
+      setDeleting(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!challenge) {
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const submission = await submissionsApi.create({
+        challenge_id: challenge.id,
+        provider,
+      });
+      navigate(`/submissions/${submission.id}`);
+    } catch (err) {
+      setSubmitError(
+        err instanceof ApiError ? err.detail : "Failed to submit evaluation.",
+      );
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return <p className={styles.status}>Loading challenge…</p>;
+  }
+
+  if (error || !challenge) {
+    return (
+      <div className={styles.notFound}>
+        <p role="alert">{error ?? "Challenge not found."}</p>
+        <p>
+          <Link to="/challenges">Back to challenges</Link>
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.page}>
+      <p className={styles.back}>
+        <Link to="/challenges">← Back to challenges</Link>
+      </p>
+
+      <div className={styles.header}>
+        <div>
+          <h1 className={styles.title}>{challenge.title}</h1>
+        </div>
+        <Badge variant="neutral">{challenge.language}</Badge>
+      </div>
+
+      <div className={styles.layout}>
+        <div className={styles.mainCol}>
+          <Card>
+            <h2 className={styles.sectionTitle}>Description</h2>
+            <p className={styles.description}>{challenge.description}</p>
+          </Card>
+
+          <Card>
+            <h2 className={styles.sectionTitle}>Prompt</h2>
+            <CodeBlock
+              code={challenge.prompt}
+              language="text"
+              filename="prompt.txt"
+            />
+          </Card>
+
+          <Card>
+            <h2 className={styles.sectionTitle}>Test code</h2>
+            {challenge.test_code ? (
+              <CodeBlock
+                code={challenge.test_code}
+                language="python"
+                filename="test_solution.py"
+              />
+            ) : (
+              <p className={styles.muted}>No test code provided.</p>
+            )}
+          </Card>
+        </div>
+
+        <aside className={styles.sideCol}>
+          <Card className={styles.evalCard}>
+            <h2 className={styles.sectionTitle}>Run evaluation</h2>
+            {user ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSubmit();
+                }}
+              >
+                <fieldset className={styles.providerGroup}>
+                  <legend className={styles.providerLegend}>Provider</legend>
+                  {PROVIDERS.map((p) => (
+                    <label
+                      key={p.value}
+                      className={`${styles.providerOption} ${
+                        provider === p.value ? styles.providerSelected : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="provider"
+                        value={p.value}
+                        checked={provider === p.value}
+                        onChange={() => setProvider(p.value)}
+                        className={styles.providerRadio}
+                      />
+                      <span className={styles.providerInfo}>
+                        <span className={styles.providerName}>{p.name}</span>
+                        <span className={styles.providerDesc}>{p.description}</span>
+                      </span>
+                      {p.value === "demo" && (
+                        <Badge variant="success">Free</Badge>
+                      )}
+                    </label>
+                  ))}
+                </fieldset>
+
+                {submitError && (
+                  <p role="alert" className={styles.errorText}>
+                    {submitError}
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className={styles.submitButton}
+                >
+                  {submitting ? "Submitting…" : "Generate & evaluate"}
+                </Button>
+                <p className={styles.hint}>
+                  Tip: the demo provider works instantly with prompts containing
+                  keywords like "two sum" or "fizzbuzz".
+                </p>
+              </form>
+            ) : (
+              <div className={styles.loginPrompt}>
+                <p className={styles.muted}>
+                  Log in to submit this challenge for evaluation.
+                </p>
+                <Link to="/login">
+                  <Button variant="secondary" className={styles.submitButton}>
+                    Log in
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {isOwner && (
+              <button
+                type="button"
+                className={styles.deleteButton}
+                onClick={() => void handleDelete()}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting…" : "Delete challenge"}
+              </button>
+            )}
+          </Card>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+export default ChallengeDetail;

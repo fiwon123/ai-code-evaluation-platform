@@ -1,0 +1,210 @@
+.page {
+  padding: var(--space-12) var(--space-6) var(--space-16);
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.status {
+  padding: var(--space-16) var(--space-6);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* Profile header */
+.profileCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.identity {
+  flex: 1;
+  min-width: 200px;
+}
+
+.name {
+  font-size: var(--font-size-2xl);
+  margin-bottom: var(--space-1);
+}
+
+.email {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.memberSince {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-1);
+}
+
+.profileActions {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+/* Stats */
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.statCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.statValue {
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.statLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Columns */
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.colHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.colTitle {
+  font-size: var(--font-size-xl);
+}
+
+.colAction {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.challengeList,
+.submissionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.challengeItem,
+.submissionItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.challengeTitle {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+}
+
+.challengeTitle:hover {
+  text-decoration: none;
+  color: var(--color-primary);
+}
+
+.challengeMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.metaDate {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.submissionLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: inherit;
+}
+
+.submissionLink:hover {
+  text-decoration: none;
+}
+
+.submissionTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.submissionScore {
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
+}
+
+.emptyCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.emptyText {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .statsRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .statsRow {
+    grid-template-columns: 1fr;
+  }
+}

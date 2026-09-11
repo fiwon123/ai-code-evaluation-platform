@@ -1,0 +1,83 @@
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import Button from "./Button/Button.tsx";
+import Card from "./Card/Card.tsx";
+import Badge from "./Badge/Badge.tsx";
+import CodeBlock from "./CodeBlock/CodeBlock.tsx";
+
+describe("shared components", () => {
+  describe("Button", () => {
+    it("renders children", () => {
+      render(<Button>Click me</Button>);
+      expect(screen.getByRole("button", { name: "Click me" })).toBeInTheDocument();
+    });
+
+    it("applies variant and size classes", () => {
+      const { container } = render(
+        <Button variant="danger" size="sm">
+          Delete
+        </Button>,
+      );
+      const button = container.querySelector("button");
+      expect(button?.className).toContain("button");
+      expect(button?.className).toContain("danger");
+      expect(button?.className).toContain("sm");
+    });
+
+    it("is disabled when disabled prop set", () => {
+      render(
+        <Button disabled>
+          Save
+        </Button>,
+      );
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    });
+  });
+
+  describe("Card", () => {
+    it("renders children", () => {
+      render(<Card>Card content</Card>);
+      expect(screen.getByText("Card content")).toBeInTheDocument();
+    });
+
+    it("applies compact padding class", () => {
+      const { container } = render(<Card padding="compact">Content</Card>);
+      expect(container.querySelector("div")?.className).toContain("compact");
+    });
+  });
+
+  describe("Badge", () => {
+    it("renders children with variant classes", () => {
+      const { container } = render(<Badge variant="success">Passed</Badge>);
+      const badge = container.querySelector("span");
+      expect(badge?.className).toContain("badge");
+      expect(badge?.className).toContain("success");
+      expect(screen.getByText("Passed")).toBeInTheDocument();
+    });
+
+    it("defaults to neutral variant", () => {
+      const { container } = render(<Badge>N/A</Badge>);
+      expect(container.querySelector("span")?.className).toContain("neutral");
+    });
+  });
+
+  describe("CodeBlock", () => {
+    it("renders code content", () => {
+      render(<CodeBlock code="print('hello')" filename="solution.py" />);
+      expect(screen.getByText("print('hello')")).toBeInTheDocument();
+      expect(screen.getByText("solution.py")).toBeInTheDocument();
+    });
+
+    it("copies code to clipboard on button click", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, { clipboard: { writeText } });
+
+      render(<CodeBlock code="x = 1" />);
+      const copyButton = screen.getByRole("button", { name: "Copy" });
+      fireEvent.click(copyButton);
+
+      expect(writeText).toHaveBeenCalledWith("x = 1");
+      expect(await screen.findByText("Copied!")).toBeInTheDocument();
+    });
+  });
+});

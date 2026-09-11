@@ -1,0 +1,32 @@
+{
+  "name": "ai-code-evaluation-platform-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "vite preview",
+    "clean": "rm -rf dist node_modules"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.18.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "jsdom": "^30.0.1",
+    "oxlint": "^0.8.0",
+    "typescript": "~5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^5.0.0"
+  }
+}

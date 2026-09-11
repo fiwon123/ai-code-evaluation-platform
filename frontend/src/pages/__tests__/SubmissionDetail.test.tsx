@@ -1,0 +1,144 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import SubmissionDetail from "../SubmissionDetail.tsx";
+import { clearToken } from "../../services/api.ts";
+
+const fetchMock = vi.fn();
+
+function renderPage(pollIntervalMs = 1) {
+  return render(
+    <MemoryRouter initialEntries={["/submissions/s1"]}>
+      <Routes>
+        <Route
+          path="/submissions/:id"
+          element={<SubmissionDetail pollIntervalMs={pollIntervalMs} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("SubmissionDetail", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    clearToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("polls while processing, then shows the final report", async () => {
+    const processing = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "processing",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    const completed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "completed",
+      provider: "demo",
+      code: "def two_sum(nums, target):\n    return [0, 1]\n",
+      score: 100,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 2,
+        total_tests: 2,
+        score: 100,
+        logs: "2 passed in 0.01s",
+        metrics: { language: "python", duration_ms: 12 },
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(processing), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200 }));
+
+    renderPage();
+
+    // First fetch resolves to processing → auto re-fetch resolves to completed.
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not poll again once complete", async () => {
+    const completed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "completed",
+      provider: "demo",
+      code: "x = 1",
+      score: 100,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 1,
+        total_tests: 1,
+        score: 100,
+        logs: "1 passed",
+        metrics: {},
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(completed), { status: 200 }));
+
+    renderPage();
+
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    // Give a small window for any spurious re-fetches.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a failed submission", async () => {
+    const failed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "failed",
+      provider: "demo",
+      code: null,
+      score: 0,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 0,
+        total_tests: 0,
+        score: 0,
+        logs: "Evaluation error: LLM down",
+        metrics: { error: "LLM down" },
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(failed), { status: 200 }));
+
+    renderPage();
+
+    expect((await screen.findAllByText("failed")).length).toBeGreaterThan(0);
+    expect(screen.getByText("0%")).toBeInTheDocument();
+    expect((await screen.findAllByText(/LLM down/)).length).toBeGreaterThan(0);
+  });
+
+  it("shows an error when the submission cannot be loaded", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Submission not found" }), { status: 404 }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Submission not found");
+  });
+});

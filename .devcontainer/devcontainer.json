@@ -11,7 +11,8 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "forwardPorts": [8000, 5173, 5432, 6379],
-  "postCreateCommand": "cd backend && uv sync && cd ../frontend && npm install",
+  "postStartCommand": "bash -c '.devcontainer/start-backend.sh; .devcontainer/start-celery.sh'",
+  "postCreateCommand": ".devcontainer/setup.sh && cd backend && uv sync && cd ../frontend && npm install",
   "customizations": {
     "vscode": {
       "extensions": [

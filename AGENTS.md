@@ -92,6 +92,15 @@ docker compose logs -f       # View logs
 
 The AI agent (opencode) runs **inside a Dev Container**, not on a bare machine.
 
+### Dev Container Setup
+
+The devcontainer is configured with:
+- **opencode**: Installed automatically via `.devcontainer/setup.sh` on container creation
+- **gh CLI**: Installed via devcontainer feature, authenticated via `GITHUB_TOKEN` or `GH_TOKEN` environment variable
+- **Node.js 22**: Installed via devcontainer feature
+- **Python 3.14**: Installed via Dockerfile
+- **uv**: Installed via Dockerfile
+
 ### What the agent CAN do
 
 - Run backend commands (uv, python, pytest, ruff)
@@ -111,6 +120,11 @@ The AI agent (opencode) runs **inside a Dev Container**, not on a bare machine.
 - Frontend Dev: `localhost:5173`
 - Database: `localhost:5432`
 - Cache: `localhost:6379`
+
+### Authentication
+
+- **gh CLI**: Requires `GITHUB_TOKEN` or `GH_TOKEN` environment variable to be set in the devcontainer environment
+- **opencode**: Uses API keys configured in `opencode.json` or environment variables
 
 ## Environment Variables
 

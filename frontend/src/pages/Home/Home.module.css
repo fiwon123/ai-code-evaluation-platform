@@ -1,0 +1,363 @@
+.hero {
+  text-align: center;
+  padding: var(--space-20) var(--space-6) var(--space-12);
+  background: var(--color-bg-subtle);
+}
+
+.heroTitle {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  max-width: 800px;
+  margin: 0 auto var(--space-6);
+  background: linear-gradient(90deg, var(--color-text), var(--color-primary-hover));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.heroSubtitle {
+  font-size: var(--font-size-xl);
+  color: var(--color-text-secondary);
+  max-width: 640px;
+  margin: 0 auto var(--space-8);
+}
+
+.heroActions {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.heroBadgeRow {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
+  flex-wrap: wrap;
+}
+
+/* ---- Animated pipeline ---- */
+.pipeline {
+  max-width: 900px;
+  margin: var(--space-16) auto 0;
+}
+
+.pipelineTrack {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.pipelineGroup {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.pipelineStep {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  opacity: 0.55;
+  transform: scale(0.96);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.pipelineIcon {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-1);
+}
+
+.pipelineLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.pipelineDesc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.pipelineArrow {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xl);
+  padding: 0 var(--space-2);
+  flex-shrink: 0;
+}
+
+/* Sequential activation: 10s loop, 2s per step */
+@keyframes pipelineActivate {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+    border-color: var(--color-border);
+    background: var(--color-surface);
+  }
+  10% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.05);
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  }
+  30% {
+    opacity: 0.8;
+  }
+  55% {
+    opacity: 0.55;
+    transform: scale(0.96);
+    border-color: var(--color-border);
+    background: var(--color-surface);
+  }
+}
+
+.step0 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 0s;
+}
+
+.step1 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+.step2 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 4s;
+}
+
+.step3 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 6s;
+}
+
+.step4 {
+  animation: pipelineActivate 10s ease-in-out infinite;
+  animation-delay: 8s;
+}
+
+/* Arrow pulses while the step before it is active */
+@keyframes arrowPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateX(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(3px);
+    color: var(--color-primary);
+  }
+  30% {
+    opacity: 0.35;
+    transform: translateX(0);
+  }
+}
+
+.arrow0 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 0s;
+}
+
+.arrow1 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+.arrow2 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 4s;
+}
+
+.arrow3 {
+  animation: arrowPulse 10s ease-in-out infinite;
+  animation-delay: 6s;
+}
+
+/* Progress bar */
+.progressTrack {
+  margin-top: var(--space-6);
+  height: 6px;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 6px;
+  width: 0%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+  border-radius: var(--radius-full);
+  animation: progressFill 10s linear infinite;
+}
+
+@keyframes progressFill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.pipelineCaption {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* ---- Sections ---- */
+.section {
+  padding: var(--space-16) var(--space-6);
+}
+
+.sectionTitle {
+  text-align: center;
+  font-size: var(--font-size-3xl);
+  margin-bottom: var(--space-3);
+}
+
+.sectionSubtitle {
+  text-align: center;
+  color: var(--color-text-secondary);
+  max-width: 560px;
+  margin: 0 auto var(--space-12);
+}
+
+/* Features grid */
+.featuresGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.featureCard {
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.featureCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.featureIcon {
+  font-size: var(--font-size-2xl);
+  margin-bottom: var(--space-3);
+}
+
+.featureTitle {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-2);
+}
+
+.featureText {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* How it works */
+.stepsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-6);
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-4);
+}
+
+.stepTitle {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-2);
+}
+
+.stepText {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* CTA banner */
+.cta {
+  text-align: center;
+  background: linear-gradient(135deg, var(--color-bg-subtle) 0%, var(--color-bg) 100%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-16) var(--space-8);
+  max-width: var(--max-width);
+  margin: 0 auto var(--space-20);
+  box-shadow: var(--shadow-lg);
+}
+
+.ctaTitle {
+  font-size: var(--font-size-3xl);
+  margin-bottom: var(--space-4);
+}
+
+.ctaText {
+  color: var(--color-text-secondary);
+  max-width: 480px;
+  margin: 0 auto var(--space-8);
+}
+
+@media (max-width: 768px) {
+  .heroTitle {
+    font-size: 2.25rem;
+  }
+
+  .featuresGrid,
+  .stepsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .section {
+    padding: var(--space-10) var(--space-4);
+  }
+
+  .pipelineTrack {
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: stretch;
+  }
+
+  .pipelineGroup {
+    flex-direction: row;
+  }
+
+  .pipelineArrow {
+    transform: rotate(90deg);
+  }
+}
