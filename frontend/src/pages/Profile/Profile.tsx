@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Card from "../../components/Card/Card.tsx";
+import Pagination from "../../components/Pagination/Pagination.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
 import type { Challenge, Submission, SubmissionStatus } from "../../types.ts";
 import styles from "./Profile.module.css";
+
+const PAGE_SIZE = 10;
 
 function statusVariant(
   status: SubmissionStatus,
@@ -40,21 +43,44 @@ function formatRelative(iso: string): string {
 function Profile() {
   const { user } = useAuth();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [challengesPages, setChallengesPages] = useState(0);
+  const [challengesTotal, setChallengesTotal] = useState(0);
+  const [challengePage, setChallengePage] = useState(1);
+
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [submissionsPages, setSubmissionsPages] = useState(0);
+  const [submissionsTotal, setSubmissionsTotal] = useState(0);
+  const [submissionPage, setSubmissionPage] = useState(1);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+    const userId = user.id;
     let cancelled = false;
     async function load() {
       try {
-        const [allChallenges, mySubmissions] = await Promise.all([
-          challengesApi.list(),
-          submissionsApi.list(),
+        const [challengeResp, submissionResp] = await Promise.all([
+          challengesApi.list({
+            owner_id: userId,
+            page: challengePage,
+            page_size: PAGE_SIZE,
+          }),
+          submissionsApi.list({
+            page: submissionPage,
+            page_size: PAGE_SIZE,
+          }),
         ]);
         if (!cancelled) {
-          setChallenges(allChallenges);
-          setSubmissions(mySubmissions);
+          setChallenges(challengeResp.items);
+          setChallengesPages(challengeResp.pages);
+          setChallengesTotal(challengeResp.total);
+          setSubmissions(submissionResp.items);
+          setSubmissionsPages(submissionResp.pages);
+          setSubmissionsTotal(submissionResp.total);
         }
       } catch {
         if (!cancelled) {
@@ -70,7 +96,7 @@ function Profile() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user, challengePage, submissionPage]);
 
   const myChallenges = useMemo(
     () => challenges.filter((c) => c.owner_id === user?.id),
@@ -92,12 +118,12 @@ function Profile() {
         ? Math.round((completed.length / submissions.length) * 100)
         : 0;
     return {
-      totalChallenges: myChallenges.length,
-      totalSubmissions: submissions.length,
+      totalChallenges: challengesTotal,
+      totalSubmissions: submissionsTotal,
       avgScore,
       completionRate,
     };
-  }, [submissions, myChallenges]);
+  }, [submissions, challengesTotal, submissionsTotal]);
 
   if (loading || !user) {
     return <p className={styles.status}>Loading your dashboard…</p>;
@@ -164,21 +190,30 @@ function Profile() {
               <Link to="/challenges/new">Create your first challenge</Link>
             </Card>
           ) : (
-            <div className={styles.challengeList}>
-              {myChallenges.map((challenge) => (
-                <Card key={challenge.id} padding="compact" className={styles.challengeItem}>
-                  <Link to={`/challenges/${challenge.id}`} className={styles.challengeTitle}>
-                    {challenge.title}
-                  </Link>
-                  <div className={styles.challengeMeta}>
-                    <Badge variant="neutral">{challenge.language}</Badge>
-                    <span className={styles.metaDate}>
-                      {formatRelative(challenge.created_at)}
-                    </span>
-                  </div>
-                </Card>
-              ))}
-            </div>
+            <>
+              <div className={styles.challengeList}>
+                {myChallenges.map((challenge) => (
+                  <Card key={challenge.id} padding="compact" className={styles.challengeItem}>
+                    <Link to={`/challenges/${challenge.id}`} className={styles.challengeTitle}>
+                      {challenge.title}
+                    </Link>
+                    <div className={styles.challengeMeta}>
+                      <Badge variant="neutral">{challenge.language}</Badge>
+                      <span className={styles.metaDate}>
+                        {formatRelative(challenge.created_at)}
+                      </span>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+              <Pagination
+                page={challengePage}
+                pages={challengesPages}
+                total={challengesTotal}
+                pageSize={PAGE_SIZE}
+                onPageChange={setChallengePage}
+              />
+            </>
           )}
         </section>
 
@@ -194,30 +229,39 @@ function Profile() {
               <Link to="/challenges">Browse challenges</Link>
             </Card>
           ) : (
-            <div className={styles.submissionList}>
-              {submissions.slice(0, 10).map((submission) => (
-                <Card key={submission.id} padding="compact" className={styles.submissionItem}>
-                  <Link
-                    to={`/submissions/${submission.id}`}
-                    className={styles.submissionLink}
-                  >
-                    <span className={styles.submissionTop}>
-                      <Badge variant={statusVariant(submission.status)}>
-                        {submission.status}
-                      </Badge>
-                      <span className={styles.metaDate}>
-                        {formatRelative(submission.created_at)}
+            <>
+              <div className={styles.submissionList}>
+                {submissions.map((submission) => (
+                  <Card key={submission.id} padding="compact" className={styles.submissionItem}>
+                    <Link
+                      to={`/submissions/${submission.id}`}
+                      className={styles.submissionLink}
+                    >
+                      <span className={styles.submissionTop}>
+                        <Badge variant={statusVariant(submission.status)}>
+                          {submission.status}
+                        </Badge>
+                        <span className={styles.metaDate}>
+                          {formatRelative(submission.created_at)}
+                        </span>
                       </span>
-                    </span>
-                    <span className={styles.submissionScore}>
-                      {submission.score !== null
-                        ? `${submission.score}%`
-                        : "—"}
-                    </span>
-                  </Link>
-                </Card>
-              ))}
-            </div>
+                      <span className={styles.submissionScore}>
+                        {submission.score !== null
+                          ? `${submission.score}%`
+                          : "—"}
+                      </span>
+                    </Link>
+                  </Card>
+                ))}
+              </div>
+              <Pagination
+                page={submissionPage}
+                pages={submissionsPages}
+                total={submissionsTotal}
+                pageSize={PAGE_SIZE}
+                onPageChange={setSubmissionPage}
+              />
+            </>
           )}
         </section>
       </div>

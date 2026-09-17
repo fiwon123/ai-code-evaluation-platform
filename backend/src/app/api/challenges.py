@@ -1,7 +1,8 @@
+from math import ceil
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -9,6 +10,7 @@ from app.core.security import get_current_user
 from app.models.challenge import Challenge
 from app.models.user import User
 from app.schemas.challenge import ChallengeCreate, ChallengeRead, ChallengeUpdate
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -25,11 +27,58 @@ async def _get_challenge_or_404(db: AsyncSession, challenge_id: UUID) -> Challen
     return challenge
 
 
-@router.get("", response_model=list[ChallengeRead])
-async def list_challenges(db: AsyncSession = Depends(get_session)) -> list[Challenge]:
-    """List all challenges (public)."""
-    result = await db.execute(select(Challenge).order_by(Challenge.created_at.desc()))
-    return list(result.scalars().all())
+@router.get("", response_model=PaginatedResponse[ChallengeRead])
+async def list_challenges(
+    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(
+        default=None, max_length=255, description="Search title/description"
+    ),
+    language: str | None = Query(
+        default=None, max_length=50, description="Filter by language"
+    ),
+    owner_id: UUID | None = Query(
+        default=None, description="Filter by owner (public challenges)"
+    ),
+    db: AsyncSession = Depends(get_session),
+) -> PaginatedResponse[ChallengeRead]:
+    """List all challenges (public) with search, filter, and pagination."""
+    filters = []
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                Challenge.title.ilike(pattern),
+                Challenge.description.ilike(pattern),
+            )
+        )
+    if language:
+        filters.append(Challenge.language == language)
+    if owner_id:
+        filters.append(Challenge.user_id == owner_id)
+
+    base = select(Challenge)
+    if filters:
+        base = base.where(*filters)
+
+    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+
+    items_result = await db.execute(
+        base.order_by(Challenge.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    orm_items = list(items_result.scalars().all())
+    items = [ChallengeRead.model_validate(item) for item in orm_items]
+
+    return PaginatedResponse[ChallengeRead](
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=ceil(total / page_size) if total else 0,
+    )
 
 
 @router.post("", response_model=ChallengeRead, status_code=status.HTTP_201_CREATED)

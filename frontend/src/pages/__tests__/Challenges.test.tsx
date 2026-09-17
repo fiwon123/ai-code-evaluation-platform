@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Challenges from "../Challenges.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi } from "../../services/api.ts";
+import type { Challenge, PaginatedResponse } from "../../types.ts";
 
 vi.mock("../../context/AuthContext.tsx", () => ({
   useAuth: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock("../../services/api.ts", () => ({
 const mockUseAuth = vi.mocked(useAuth);
 const mockList = vi.mocked(challengesApi.list);
 
-const challenges = [
+const challenges: Challenge[] = [
   {
     id: "c1",
     title: "Two Sum",
@@ -51,6 +52,34 @@ const challenges = [
   },
 ];
 
+function toPaginated(items: Challenge[]): PaginatedResponse<Challenge> {
+  return {
+    items,
+    total: items.length,
+    page: 1,
+    page_size: 12,
+    pages: Math.max(1, Math.ceil(items.length / 12)),
+  };
+}
+
+function mockServerSideList() {
+  mockList.mockImplementation((requested) => {
+    let result = challenges;
+    const query = (requested?.search ?? "").toLowerCase();
+    if (query) {
+      result = result.filter(
+        (c) =>
+          c.title.toLowerCase().includes(query) ||
+          c.description.toLowerCase().includes(query),
+      );
+    }
+    if (requested?.language) {
+      result = result.filter((c) => c.language === requested.language);
+    }
+    return Promise.resolve(toPaginated(result));
+  });
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -69,7 +98,7 @@ describe("Challenges", () => {
       register: vi.fn(),
       logout: vi.fn(),
     });
-    mockList.mockResolvedValue(challenges as never);
+    mockServerSideList();
   });
 
   it("renders challenges as cards", async () => {
@@ -80,7 +109,7 @@ describe("Challenges", () => {
     expect(screen.getByText("You own this")).toBeInTheDocument();
   });
 
-  it("filters by search query", async () => {
+  it("passes the search query to the API (server-side filtering)", async () => {
     renderPage();
     await screen.findByText("Two Sum");
 
@@ -88,11 +117,17 @@ describe("Challenges", () => {
       target: { value: "fizz" },
     });
 
-    expect(screen.queryByText("Two Sum")).not.toBeInTheDocument();
-    expect(screen.getByText("FizzBuzz")).toBeInTheDocument();
+    await waitFor(() => {
+      const call = mockList.mock.calls.at(-1);
+      expect(call?.[0]?.search).toBe("fizz");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Two Sum")).not.toBeInTheDocument();
+      expect(screen.getByText("FizzBuzz")).toBeInTheDocument();
+    });
   });
 
-  it("filters by language", async () => {
+  it("filters by language via the API", async () => {
     renderPage();
     await screen.findByText("Two Sum");
 
@@ -100,12 +135,16 @@ describe("Challenges", () => {
       target: { value: "javascript" },
     });
 
+    await waitFor(() => {
+      const call = mockList.mock.calls.at(-1);
+      expect(call?.[0]?.language).toBe("javascript");
+    });
     expect(screen.queryByText("Two Sum")).not.toBeInTheDocument();
     expect(screen.getByText("FizzBuzz")).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no challenges", async () => {
-    mockList.mockResolvedValue([] as never);
+    mockList.mockResolvedValue(toPaginated([]) as never);
     renderPage();
     expect(
       await screen.findByText(/No challenges yet/i),

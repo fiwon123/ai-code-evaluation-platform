@@ -1,8 +1,9 @@
 from logging import getLogger
+from math import ceil
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,6 +12,7 @@ from app.core.security import get_current_user
 from app.models.challenge import Challenge
 from app.models.submission import Submission
 from app.models.user import User
+from app.schemas.pagination import PaginatedResponse
 from app.schemas.submission import SubmissionCreate, SubmissionRead, SubmissionUpdate
 
 logger = getLogger(__name__)
@@ -83,19 +85,58 @@ async def create_submission(
     return await _get_own_submission(db, submission.id, current_user)
 
 
-@router.get("", response_model=list[SubmissionRead])
+@router.get("", response_model=PaginatedResponse[SubmissionRead])
 async def list_submissions(
+    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    status_filter: str | None = Query(
+        default=None,
+        alias="status",
+        max_length=20,
+        description="Filter by submission status",
+    ),
+    challenge_id: UUID | None = Query(
+        default=None, description="Filter by challenge"
+    ),
+    provider: str | None = Query(
+        default=None, max_length=50, description="Filter by LLM provider"
+    ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> list[Submission]:
-    """List the current user's submissions, newest first."""
-    result = await db.execute(
+) -> PaginatedResponse[SubmissionRead]:
+    """List the current user's submissions, newest first, with pagination."""
+    filters = [Submission.user_id == current_user.id]
+    if status_filter:
+        filters.append(Submission.status == status_filter)
+    if challenge_id:
+        filters.append(Submission.challenge_id == challenge_id)
+    if provider:
+        filters.append(Submission.provider == provider)
+
+    base = (
         select(Submission)
         .options(selectinload(Submission.evaluation_result))
-        .where(Submission.user_id == current_user.id)
-        .order_by(Submission.created_at.desc())
+        .where(*filters)
     )
-    return list(result.scalars().all())
+
+    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+
+    items_result = await db.execute(
+        base.order_by(Submission.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    orm_items = list(items_result.scalars().all())
+    items = [SubmissionRead.model_validate(item) for item in orm_items]
+
+    return PaginatedResponse[SubmissionRead](
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=ceil(total / page_size) if total else 0,
+    )
 
 
 @router.get("/{submission_id}", response_model=SubmissionRead)

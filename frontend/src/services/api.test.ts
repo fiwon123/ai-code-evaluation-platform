@@ -189,6 +189,43 @@ describe("challengesApi", () => {
       expect.objectContaining({ method: "DELETE" }),
     );
   });
+
+  it("lists challenges with pagination and search query params", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [], total: 0, page: 1, page_size: 12, pages: 0 }),
+        { status: 200 },
+      ),
+    );
+
+    await challengesApi.list({ page: 2, page_size: 12, search: "fizz", language: "python" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/api/challenges?page=2&page_size=12&search=fizz&language=python",
+      ),
+      expect.anything(),
+    );
+  });
+
+  it("skips empty/undefined query params when listing challenges", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [], total: 0, page: 1, page_size: 20, pages: 0 }),
+        { status: 200 },
+      ),
+    );
+
+    await challengesApi.list({ page: 1, search: "" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/challenges?page=1"),
+      expect.anything(),
+    );
+    expect(
+      (fetchMock.mock.calls.at(-1) as [string])[0],
+    ).not.toContain("search");
+  });
 });
 
 describe("submissionsApi", () => {
@@ -238,6 +275,24 @@ describe("submissionsApi", () => {
       expect.objectContaining({
         headers: expect.objectContaining({ "Content-Type": "application/json" }),
       }),
+    );
+  });
+
+  it("lists submissions with status + challenge filter params", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [], total: 0, page: 1, page_size: 20, pages: 0 }),
+        { status: 200 },
+      ),
+    );
+
+    await submissionsApi.list({ status: "completed", challenge_id: "c1" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/api/submissions?status=completed&challenge_id=c1",
+      ),
+      expect.anything(),
     );
   });
 
