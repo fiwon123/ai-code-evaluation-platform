@@ -6,6 +6,7 @@ import Card from "../../components/Card/Card.tsx";
 import CodeBlock from "../../components/CodeBlock/CodeBlock.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
+import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
 import { challengesApi, submissionsApi, ApiError } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
 import styles from "./Demo.module.css";
@@ -36,7 +37,7 @@ const STEPS = [
 const KEYWORD_CHIPS = ["two sum", "fizzbuzz", "fibonacci", "palindrome"];
 
 const POLL_INTERVAL_MS = 1500;
-const POLL_MAX_ATTEMPTS = 40; // ~60s cap before we give up
+const POLL_TIMEOUT_MS = 60000; // ~60s cap before we give up
 
 function Demo() {
   const { user } = useAuth();
@@ -46,6 +47,10 @@ function Demo() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Submission | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const { liveSubmission, state: socketState } = useSubmissionSocket(
+    submissionId ?? undefined,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -89,35 +94,97 @@ function Demo() {
     setRunning(true);
     setError(null);
     setResult(null);
+    setSubmissionId(null);
     try {
       const submission = await submissionsApi.create({
         challenge_id: selectedId,
         provider: "demo",
       });
-      const finished = await poll(submission.id);
-      setResult(finished);
+      setSubmissionId(submission.id);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.detail : "Failed to run the demo.",
       );
-    } finally {
       setRunning(false);
     }
   }
 
-  async function poll(submissionId: string): Promise<Submission> {
-    for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
-      const data = await submissionsApi.get(submissionId);
-      if (data.status === "completed" || data.status === "failed") {
-        return data;
-      }
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  // Fast path: the WebSocket streams status changes as they happen.
+  useEffect(() => {
+    if (!submissionId || !running) {
+      return;
     }
-    throw new Error(
-      "Evaluation timed out after about 60 seconds — the Celery worker may " +
-        "not be running. Check that the worker is up and resubmit.",
-    );
-  }
+    if (
+      liveSubmission &&
+      (liveSubmission.status === "completed" || liveSubmission.status === "failed")
+    ) {
+      submissionsApi
+        .get(liveSubmission.id)
+        .then((full) => {
+          setResult(full);
+          setRunning(false);
+          setSubmissionId(null);
+        })
+        .catch(() => {
+          setError("Failed to load the evaluation result.");
+          setRunning(false);
+          setSubmissionId(null);
+        });
+    }
+  }, [liveSubmission, running, submissionId]);
+
+  // Fallback: poll while the socket is not open (e.g. no Redis, no auth token).
+  useEffect(() => {
+    if (!submissionId || !running || socketState === "open") {
+      return;
+    }
+    const targetId: string = submissionId;
+    let cancelled = false;
+    let timer: number | undefined;
+    async function poll() {
+      if (cancelled) {
+        return;
+      }
+      try {
+        const data = await submissionsApi.get(targetId);
+        if (cancelled) {
+          return;
+        }
+        if (data.status === "completed" || data.status === "failed") {
+          setResult(data);
+          setRunning(false);
+          setSubmissionId(null);
+          return;
+        }
+      } catch {
+        // Transient failure — keep polling until the timeout fires.
+      }
+      timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
+    }
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [running, socketState, submissionId]);
+
+  // Global safety net so the demo cannot run forever.
+  useEffect(() => {
+    if (!submissionId || !running) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setError(
+        "Evaluation timed out after about 60 seconds — the Celery worker may " +
+          "not be running. Check that the worker is up and resubmit.",
+      );
+      setRunning(false);
+      setSubmissionId(null);
+    }, POLL_TIMEOUT_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [running, submissionId]);
 
   const inProgress = running && result === null;
 

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_session
+from app.core.events import apublish_submission_event
 from app.core.security import get_current_user
 from app.models.challenge import Challenge
 from app.models.submission import Submission
@@ -161,5 +162,6 @@ async def update_submission_status(
 
     submission.status = payload.status
     await db.commit()
+    await apublish_submission_event(submission.id, payload.status)
 
     return await _get_own_submission(db, submission_id, current_user)

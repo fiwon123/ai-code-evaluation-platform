@@ -4,6 +4,7 @@ import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
+import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
 import { submissionsApi, ApiError } from "../services/api.ts";
 import type { Submission } from "../types.ts";
 import styles from "./SubmissionDetail.module.css";
@@ -31,7 +32,10 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { liveSubmission, state: socketState } = useSubmissionSocket(id);
 
+  // Initial load, plus fallback polling that runs only while the WebSocket is
+  // not open (the socket is the fast path; polling covers unavailable sockets).
   useEffect(() => {
     if (!id) {
       return;
@@ -48,7 +52,11 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
         }
         setSubmission(data);
         setLoading(false);
-        if (data.status === "pending" || data.status === "processing") {
+        setError(null);
+        if (
+          (data.status === "pending" || data.status === "processing") &&
+          socketState !== "open"
+        ) {
           pollTimer = window.setTimeout(() => void load(), pollIntervalMs);
         }
       } catch (err) {
@@ -68,7 +76,30 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
         window.clearTimeout(pollTimer);
       }
     };
-  }, [id]);
+  }, [id, pollIntervalMs, socketState]);
+
+  // Merge live socket data into the displayed submission. A snapshot carries
+  // the full record; a status update patches the status in place. When the
+  // status flips to terminal via the socket, fetch the final record once so
+  // the report (code, evaluation result) is complete.
+  useEffect(() => {
+    if (!liveSubmission) {
+      return;
+    }
+    setSubmission((prev) => (prev ? { ...prev, ...liveSubmission } : liveSubmission));
+    setLoading(false);
+    if (
+      (liveSubmission.status === "completed" || liveSubmission.status === "failed") &&
+      !liveSubmission.evaluation_result
+    ) {
+      submissionsApi
+        .get(liveSubmission.id)
+        .then((full) => setSubmission(full))
+        .catch(() => {
+          // Keep the live data — the fallback poll/refetch will surface errors.
+        });
+    }
+  }, [liveSubmission]);
 
   if (loading) {
     return <p>Loading submission…</p>;
