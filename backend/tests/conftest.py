@@ -92,7 +92,11 @@ async def db_client() -> AsyncGenerator[AsyncClient]:
             yield session
 
     async def override_get_redis() -> AsyncMock:
-        return mock_redis_client()
+        redis = AsyncMock()
+        redis.ping = AsyncMock(return_value=True)
+        redis.incr = AsyncMock(return_value=1)
+        redis.expire = AsyncMock(return_value=True)
+        return redis
 
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[get_redis] = override_get_redis

@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     docker_readonly_rootfs: bool = True  # immutable container filesystem
     docker_max_output_bytes: int = 65536  # cap on captured logs per evaluation
 
+    # Rate limiting (fixed-window counter backed by Redis)
+    rate_limit_enabled: bool = True
+    rate_limit_anonymous_limit: int = 60  # requests per window for anonymous clients
+    rate_limit_authenticated_limit: int = 120  # requests per window for logged-in users
+    rate_limit_window_seconds: int = 60
+
     @field_validator("database_url")
     @classmethod
     def ensure_psycopg_driver(cls, value: str) -> str:
