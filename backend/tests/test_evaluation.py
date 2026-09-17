@@ -2,6 +2,9 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+from app.config import settings
 from app.services.evaluation import (
     EvaluationOutcome,
     _parse_summary,
@@ -120,6 +123,107 @@ class TestEvaluateCode:
         assert outcome.total == 0
         assert outcome.score == 0.0
         assert not outcome.success
+
+
+class TestEvaluateCodeDockerPath:
+    """evaluate_code() routing: Docker sandbox when enabled, else subprocess."""
+
+    def test_uses_docker_when_enabled_and_available(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", True)
+
+        class FakeSandbox:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def is_available(self):
+                return True
+
+            def run(self, code, test_code, timeout=None):
+                return EvaluationOutcome(
+                    passed=3, total=3, score=100.0, logs="", metrics={"backend": "docker"}
+                )
+
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", FakeSandbox)
+        outcome = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
+        assert outcome.metrics["backend"] == "docker"
+        assert outcome.passed == 3
+
+    def test_falls_back_when_docker_unavailable(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", True)
+
+        class UnavailableSandbox:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def is_available(self):
+                return False
+
+            def run(self, *args, **kwargs):
+                raise AssertionError("run must not be called when unavailable")
+
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", UnavailableSandbox)
+        outcome = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
+        assert outcome.passed == 3
+        assert outcome.metrics.get("backend") is None
+
+    def test_disabled_docker_uses_subprocess(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", False)
+
+        class ShouldNotInstantiate:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("sandbox must not be constructed when disabled")
+
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", ShouldNotInstantiate)
+        outcome = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
+        assert outcome.passed == 3
+
+    def test_non_python_language_skips_docker(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", True)
+        constructed = []
+
+        class ShouldNotConstruct:
+            def __init__(self, *args, **kwargs):
+                constructed.append(True)
+
+            def is_available(self):
+                return True
+
+            def run(self, *args, **kwargs):
+                raise AssertionError("run must not be called for non-python")
+
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", ShouldNotConstruct)
+        outcome = evaluate_code(
+            code="console.log(1)",
+            test_code="",
+            language="javascript",
+            workdir=tmp_path,
+        )
+        assert "not supported" in outcome.metrics["error"]
+        assert constructed == []
+
+    def test_sandbox_failure_propagates_when_enabled(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", True)
+
+        class BrokenSandbox:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def is_available(self):
+                return True
+
+            def run(self, *args, **kwargs):
+                from app.services.docker_sandbox import DockerSandboxError
+
+                raise DockerSandboxError("sandbox image missing")
+
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", BrokenSandbox)
+        from app.services.docker_sandbox import DockerSandboxError
+
+        with patch("app.services.evaluation._evaluate_code_subprocess") as subprocess_mock:
+            with pytest.raises(DockerSandboxError, match="sandbox image missing"):
+                evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
+            # Sandbox guarantees untrusted code stays isolated: no host fallback.
+            subprocess_mock.assert_not_called()
 
 
 class TestRunPytest:

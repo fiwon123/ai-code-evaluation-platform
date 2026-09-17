@@ -1,7 +1,11 @@
-"""Run pytest test suites against generated code in an isolated directory.
+"""Run pytest test suites against generated code in an isolated sandbox.
 
-Execution is sandboxed by running in a fresh temporary directory as a plain
-subprocess with a hard timeout — no Docker required (per project decision).
+Execution happens inside an air-gapped Docker container (``eval-sandbox``
+image) whenever Docker sandboxing is enabled and a daemon is reachable.
+``docker_enabled`` is a hard switch: when it is on, evaluations that reach
+Docker never silently fall back to host execution — untrusted code must stay
+sandboxed. A plain subprocess path remains for environments without Docker
+(CI, local dev without a daemon), controlled by the same flag.
 """
 
 from __future__ import annotations
@@ -12,6 +16,8 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from app.config import settings
 
 
 @dataclass
@@ -68,9 +74,35 @@ def evaluate_code(
     test_code: str,
     language: str = "python",
     workdir: Path | None = None,
-    timeout: int = 30,
+    timeout: int | None = None,
 ) -> EvaluationOutcome:
     """Execute a test suite against generated code.
+
+    Uses the Docker sandbox when ``settings.docker_enabled`` is on and a
+    daemon is reachable; otherwise falls back to a plain subprocess in a
+    temporary directory (workdir is created/reused and cleaned up).
+    """
+    if timeout is None:
+        timeout = settings.evaluation_timeout
+
+    if settings.docker_enabled and language == "python":
+        from app.services.docker_sandbox import DockerSandbox
+
+        sandbox = DockerSandbox(timeout=timeout)
+        if sandbox.is_available():
+            return sandbox.run(code=code, test_code=test_code, timeout=timeout)
+
+    return _evaluate_code_subprocess(code, test_code, language, workdir, timeout)
+
+
+def _evaluate_code_subprocess(
+    code: str,
+    test_code: str,
+    language: str = "python",
+    workdir: Path | None = None,
+    timeout: int = 30,
+) -> EvaluationOutcome:
+    """Subprocess fallback: run pytest in a temp dir with a hard timeout.
 
     ``workdir`` is created (or reused) and cleaned up afterwards; default is a
     fresh temporary directory under ``/tmp/evaluations/``.
@@ -86,7 +118,7 @@ def evaluate_code(
             }
         )
 
-    workdir = workdir or Path("/tmp/evaluations")
+    workdir = workdir or Path(settings.evaluation_dir)
     workdir.mkdir(parents=True, exist_ok=True)
 
     solution_file = workdir / "solution.py"

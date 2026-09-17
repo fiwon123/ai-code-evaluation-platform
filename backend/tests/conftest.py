@@ -14,6 +14,20 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base
 
 
+@pytest.fixture(autouse=True)
+def _disable_docker_sandbox(monkeypatch):
+    """Default tests to the subprocess evaluation path.
+
+    Docker sandboxing needs a daemon and the ``eval-sandbox`` image, neither
+    of which is guaranteed in CI. Tests that exercise the Docker path enable
+    it explicitly with ``monkeypatch``/mocked clients.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "docker_enabled", False)
+    yield
+
+
 @pytest.fixture
 def mock_db_session() -> AsyncMock:
     """Mock database session for tests that don't need a real DB."""

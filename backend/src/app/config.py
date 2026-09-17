@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     evaluation_timeout: int = 30  # seconds for test execution
     evaluation_dir: str = "/tmp/evaluations"
 
+    # Docker sandbox (isolated code execution)
+    docker_enabled: bool = True  # master switch; falls back to subprocess when off/unavailable
+    docker_image: str = "eval-sandbox:latest"  # pytest pre-installed sandbox image
+    docker_memory_limit: str = "128m"  # per-container RAM limit
+    docker_cpu_limit: float = 0.5  # per-container CPU limit (fraction of a core)
+    docker_timeout: int = 30  # seconds before container execution is killed
+    docker_network_disabled: bool = True  # air-gapped sandboxes
+    docker_readonly_rootfs: bool = True  # immutable container filesystem
+    docker_max_output_bytes: int = 65536  # cap on captured logs per evaluation
+
     @field_validator("database_url")
     @classmethod
     def ensure_psycopg_driver(cls, value: str) -> str:

@@ -1,0 +1,16 @@
+# eval-sandbox — sandbox image for isolated code evaluation.
+#
+# Built once per environment, then used by the DockerSandbox service to run
+# pytest against untrusted AI-generated code in air-gapped, resource-limited,
+# read-only containers. Kept intentionally minimal: only pytest is installed,
+# and the container gets no network access at runtime.
+FROM python:3.14-slim
+
+RUN pip install --no-cache-dir pytest
+
+# Evaluation files (solution.py, test_solution.py) are injected here at
+# runtime via `docker put_archive` by the DockerSandbox service.
+WORKDIR /code
+
+# NOTE: no ENTRYPOINT — DockerSandbox passes an explicit pytest command.
+CMD ["sleep", "infinity"]

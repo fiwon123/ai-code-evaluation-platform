@@ -5,6 +5,9 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - ..:/workspace:cached
+      # Mount the host Docker socket so the Celery worker can create
+      # isolated eval-sandbox containers for code evaluation.
+      - /var/run/docker.sock:/var/run/docker.sock
     command: tail -f /dev/null
     ports:
       - "8000:8000"
@@ -12,11 +15,24 @@ services:
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - DOCKER_ENABLED=true
+      - DOCKER_IMAGE=eval-sandbox:latest
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      sandbox:
+        condition: service_completed_successfully
+
+  # Builds the eval-sandbox image (pytest pre-installed) used to isolate
+  # untrusted code execution. One-shot: builds the image, then exits.
+  sandbox:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.sandbox
+    image: eval-sandbox:latest
+    command: ["true"]
 
   frontend:
     image: mcr.microsoft.com/devcontainers/javascript-node:22
