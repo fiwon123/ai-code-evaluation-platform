@@ -234,14 +234,24 @@ function ChallengeDetail() {
             )}
 
             {isOwner && (
-              <button
-                type="button"
-                className={styles.deleteButton}
-                onClick={() => void handleDelete()}
-                disabled={deleting}
-              >
-                {deleting ? "Deleting…" : "Delete challenge"}
-              </button>
+              <div className={styles.ownerActions}>
+                <Link
+                  to={`/challenges/${challenge.id}/edit`}
+                  className={styles.editLink}
+                >
+                  <Button variant="secondary" className={styles.submitButton}>
+                    Edit challenge
+                  </Button>
+                </Link>
+                <button
+                  type="button"
+                  className={styles.deleteButton}
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting…" : "Delete challenge"}
+                </button>
+              </div>
             )}
           </Card>
         </aside>

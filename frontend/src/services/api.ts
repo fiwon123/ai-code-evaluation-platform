@@ -3,6 +3,7 @@ import type {
   Challenge,
   ChallengeCreatePayload,
   ChallengeListParams,
+  ChallengeUpdatePayload,
   LoginPayload,
   PaginatedResponse,
   RegisterPayload,
@@ -118,6 +119,8 @@ export const challengesApi = {
   create: (payload: ChallengeCreatePayload) =>
     api.post<Challenge>("/api/challenges", payload),
   get: (id: string) => api.get<Challenge>(`/api/challenges/${id}`),
+  update: (id: string, payload: ChallengeUpdatePayload) =>
+    api.patch<Challenge>(`/api/challenges/${id}`, payload),
   remove: (id: string) => api.del<void>(`/api/challenges/${id}`),
 };
 

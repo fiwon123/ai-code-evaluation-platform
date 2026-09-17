@@ -190,7 +190,7 @@ describe("challengesApi", () => {
     );
   });
 
-  it("lists challenges with pagination and search query params", async () => {
+it("lists challenges with pagination and search query params", async () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({ items: [], total: 0, page: 1, page_size: 12, pages: 0 }),
@@ -225,6 +225,31 @@ describe("challengesApi", () => {
     expect(
       (fetchMock.mock.calls.at(-1) as [string])[0],
     ).not.toContain("search");
+  });
+
+  it("updates a challenge with a PATCH request", async () => {
+    const challenge = {
+      id: "c1",
+      title: "Two Sum II",
+      description: "d",
+      prompt: "p",
+      test_code: "",
+      language: "python",
+      owner_id: "u1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-02T00:00:00Z",
+    };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(challenge), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const result = await challengesApi.update("c1", { title: "Two Sum II" });
+
+    expect(result.title).toBe("Two Sum II");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/challenges/c1"),
+      expect.objectContaining({ method: "PATCH" }),
+    );
   });
 });
 

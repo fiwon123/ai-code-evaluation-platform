@@ -58,6 +58,8 @@ export interface ChallengeListParams {
   owner_id?: string;
 }
 
+export type ChallengeUpdatePayload = Partial<ChallengeCreatePayload>;
+
 export type SubmissionStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface EvaluationResult {
