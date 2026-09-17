@@ -126,3 +126,36 @@ class TestSubmissionEvaluation:
         session.expire_all()
         fresh = session.get(Submission, orphan.id)
         assert fresh.status == "failed"
+
+    def test_sandbox_failure_marks_failed(self, monkeypatch):
+        """A broken sandbox must fail the submission — never run untrusted code on the host."""
+        from app.config import settings
+        from app.services.docker_sandbox import DockerSandboxError
+
+        monkeypatch.setattr(settings, "docker_enabled", True)
+
+        class BrokenSandbox:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def is_available(self):
+                return True
+
+            def run(self, *args, **kwargs):
+                raise DockerSandboxError("sandbox image missing")
+
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", BrokenSandbox)
+
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        result = _run_submission_evaluation(session, submission_id)
+
+        session.expire_all()
+        submission = session.get(Submission, submission_id)
+        assert submission.status == "failed"
+        assert submission.score == 0.0
+        assert result["status"] == "failed"
+        assert "sandbox image missing" in result["error"]
+        evaluation = session.get(EvaluationResult, submission.evaluation_result.id)
+        assert "sandbox image missing" in evaluation.logs
