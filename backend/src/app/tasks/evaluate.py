@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
 from app.core.database import sync_session
+from app.core.events import publish_submission_event
 from app.models.challenge import Challenge
 from app.models.evaluation_result import EvaluationResult
 from app.models.submission import Submission
@@ -29,10 +30,12 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict:
     if challenge is None:
         submission.status = "failed"
         session.commit()
+        publish_submission_event(submission.id, "failed", error="challenge not found")
         return {"status": "failed", "error": "challenge not found"}
 
     submission.status = "processing"
     session.commit()
+    publish_submission_event(submission.id, "processing")
 
     provider_name = submission.provider or "demo"
     workdir = Path("/tmp/evaluations") / str(submission.id)
@@ -42,6 +45,7 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict:
         code = provider.generate_code(challenge.prompt, challenge.language)
         submission.code = code
         session.commit()
+        publish_submission_event(submission.id, "code_generated")
 
         outcome = evaluate_code(
             code=code,
@@ -64,6 +68,7 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict:
         submission.status = "failed"
         submission.score = 0.0
         session.commit()
+        publish_submission_event(submission.id, "failed", error=str(exc))
         return {"status": "failed", "error": str(exc)}
 
     result = EvaluationResult(
@@ -78,6 +83,7 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict:
     submission.status = "completed"
     submission.score = outcome.score
     session.commit()
+    publish_submission_event(submission.id, "completed", score=outcome.score)
 
     return {
         "status": "completed",

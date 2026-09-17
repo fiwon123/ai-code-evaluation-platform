@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import api_router
 from app.api.health import router as health_router
+from app.api.websocket import router as websocket_router
 from app.config import settings
 
 
@@ -39,6 +40,9 @@ def create_app() -> FastAPI:
     # Routes
     application.include_router(health_router)
     application.include_router(api_router, prefix="/api")
+    # WebSockets are mounted separately so the HTTP rate-limiter dependency
+    # (and its JWT/request parsing) never applies to socket handshakes.
+    application.include_router(websocket_router, prefix="/api")
 
     return application
 
