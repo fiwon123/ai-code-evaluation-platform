@@ -51,10 +51,11 @@ function Demo() {
     let cancelled = false;
     async function load() {
       try {
-        const data = await challengesApi.list();
-        if (!cancelled && data.length > 0) {
-          setChallenges(data);
-          setSelectedId(data[0].id);
+        const data = await challengesApi.list({ page: 1, page_size: 50 });
+        const items = data.items;
+        if (!cancelled && items.length > 0) {
+          setChallenges(items);
+          setSelectedId(items[0].id);
         }
       } catch {
         // Demo still renders; the runner will explain when challenges load fails.

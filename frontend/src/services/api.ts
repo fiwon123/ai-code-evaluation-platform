@@ -2,15 +2,32 @@ import type {
   AuthResponse,
   Challenge,
   ChallengeCreatePayload,
+  ChallengeListParams,
   LoginPayload,
+  PaginatedResponse,
   RegisterPayload,
   Submission,
   SubmissionCreatePayload,
+  SubmissionListParams,
   User,
 } from "../types.ts";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const TOKEN_KEY = "access_token";
+
+function buildQueryString(params?: object): string {
+  if (!params) {
+    return "";
+  }
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") {
+      searchParams.set(key, String(value));
+    }
+  }
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : "";
+}
 
 export class ApiError extends Error {
   status: number;
@@ -94,7 +111,10 @@ export const authApi = {
 };
 
 export const challengesApi = {
-  list: () => api.get<Challenge[]>("/api/challenges"),
+  list: (params?: ChallengeListParams) =>
+    api.get<PaginatedResponse<Challenge>>(
+      `/api/challenges${buildQueryString(params)}`,
+    ),
   create: (payload: ChallengeCreatePayload) =>
     api.post<Challenge>("/api/challenges", payload),
   get: (id: string) => api.get<Challenge>(`/api/challenges/${id}`),
@@ -104,6 +124,9 @@ export const challengesApi = {
 export const submissionsApi = {
   create: (payload: SubmissionCreatePayload) =>
     api.post<Submission>("/api/submissions", payload),
-  list: () => api.get<Submission[]>("/api/submissions"),
+  list: (params?: SubmissionListParams) =>
+    api.get<PaginatedResponse<Submission>>(
+      `/api/submissions${buildQueryString(params)}`,
+    ),
   get: (id: string) => api.get<Submission>(`/api/submissions/${id}`),
 };

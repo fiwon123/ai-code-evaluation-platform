@@ -42,6 +42,22 @@ export interface ChallengeCreatePayload {
   language?: string;
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
+
+export interface ChallengeListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  language?: string;
+  owner_id?: string;
+}
+
 export type SubmissionStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface EvaluationResult {
@@ -68,4 +84,12 @@ export interface Submission {
 export interface SubmissionCreatePayload {
   challenge_id: string;
   provider: string;
+}
+
+export interface SubmissionListParams {
+  page?: number;
+  page_size?: number;
+  status?: SubmissionStatus;
+  challenge_id?: string;
+  provider?: string;
 }

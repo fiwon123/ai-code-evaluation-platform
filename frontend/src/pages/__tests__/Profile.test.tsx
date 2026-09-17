@@ -111,8 +111,25 @@ describe("Profile", () => {
       register: vi.fn(),
       logout: vi.fn(),
     });
-    mockChallengesList.mockResolvedValue(challenges as never);
-    mockSubmissionsList.mockResolvedValue(submissions as never);
+    mockChallengesList.mockImplementation((params) => {
+      const items = params?.owner_id
+        ? challenges.filter((c) => c.owner_id === params.owner_id)
+        : challenges;
+      return Promise.resolve({
+        items,
+        total: items.length,
+        page: 1,
+        page_size: 10,
+        pages: 1,
+      } as never);
+    });
+    mockSubmissionsList.mockResolvedValue({
+      items: submissions,
+      total: submissions.length,
+      page: 1,
+      page_size: 10,
+      pages: 1,
+    } as never);
   });
 
   it("shows user identity and member since date", async () => {
