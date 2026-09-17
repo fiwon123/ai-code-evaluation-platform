@@ -93,6 +93,14 @@ describe("ChallengeDetail", () => {
     expect(screen.getByText(/Find indices summing to target/)).toBeInTheDocument();
   });
 
+  it("links to the edit page for owners", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+    expect(
+      screen.getByRole("link", { name: "Edit challenge" }),
+    ).toHaveAttribute("href", "/challenges/c1/edit");
+  });
+
   it("submits an evaluation and navigates to the result", async () => {
     const navigate = vi.fn();
     mockNavigate.mockReturnValue(navigate);

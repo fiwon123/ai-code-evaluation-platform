@@ -8,6 +8,7 @@ import Challenges from "./pages/Challenges.tsx";
 import Contact from "./pages/Contact/Contact.tsx";
 import CreateChallenge from "./pages/CreateChallenge.tsx";
 import Demo from "./pages/Demo/Demo.tsx";
+import EditChallenge from "./pages/EditChallenge.tsx";
 import Features from "./pages/Features/Features.tsx";
 import Home from "./pages/Home/Home.tsx";
 import Login from "./pages/Login.tsx";
@@ -34,6 +35,7 @@ function App() {
           <Route path="/challenges/:id" element={<ChallengeDetail />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/challenges/new" element={<CreateChallenge />} />
+            <Route path="/challenges/:id/edit" element={<EditChallenge />} />
             <Route path="/submissions/:id" element={<SubmissionDetail />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
