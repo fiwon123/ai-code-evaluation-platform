@@ -1,3 +1,8 @@
+# Resource limits on every service prevent runaway processes from exhausting
+# the host machine (e.g., heavy evaluations, build spikes). Ceilings are
+# intentionally generous so normal dev workflows (uv sync, npm install,
+# uvicorn, Vite) run comfortably while still bounding resource use.
+# Note: limits apply to running containers with `docker compose up` (Compose v2).
 services:
   backend:
     build:
@@ -24,6 +29,11 @@ services:
         condition: service_healthy
       sandbox:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
 
   # Builds the eval-sandbox image (pytest pre-installed) used to isolate
   # untrusted code execution. One-shot: builds the image, then exits.
@@ -33,6 +43,11 @@ services:
       dockerfile: backend/Dockerfile.sandbox
     image: eval-sandbox:latest
     command: ["true"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   frontend:
     image: mcr.microsoft.com/devcontainers/javascript-node:22
@@ -43,6 +58,11 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -59,6 +79,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   redis:
     image: redis:7
@@ -69,6 +94,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 volumes:
   postgres_data:
