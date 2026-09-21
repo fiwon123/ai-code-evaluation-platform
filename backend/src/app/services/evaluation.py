@@ -13,9 +13,11 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from app.config import settings
 
@@ -28,7 +30,7 @@ class EvaluationOutcome:
     total: int = 0
     score: float = 0.0
     logs: str = ""
-    metrics: dict = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
 
     @property
     def success(self) -> bool:
@@ -46,11 +48,14 @@ _ERRORED_RE = re.compile(r"(\d+) error")
 _NO_TESTS_RE = re.compile(r"no tests ran")
 
 
-def _parse_summary(output: str) -> tuple[int, int]:
+def parse_summary(output: str) -> tuple[int, int]:
     """Parse pytest's summary line into (passed, total) counts."""
-    passed = int(_PASSED_RE.search(output).group(1)) if _PASSED_RE.search(output) else 0
-    failed = int(_FAILED_RE.search(output).group(1)) if _FAILED_RE.search(output) else 0
-    errored = int(_ERRORED_RE.search(output).group(1)) if _ERRORED_RE.search(output) else 0
+    passed_match = _PASSED_RE.search(output)
+    failed_match = _FAILED_RE.search(output)
+    errored_match = _ERRORED_RE.search(output)
+    passed = int(passed_match.group(1)) if passed_match else 0
+    failed = int(failed_match.group(1)) if failed_match else 0
+    errored = int(errored_match.group(1)) if errored_match else 0
     total = passed + failed + errored
     return passed, total
 
@@ -104,8 +109,10 @@ def _evaluate_code_subprocess(
 ) -> EvaluationOutcome:
     """Subprocess fallback: run pytest in a temp dir with a hard timeout.
 
-    ``workdir`` is created (or reused) and cleaned up afterwards; default is a
-    fresh temporary directory under ``/tmp/evaluations/``.
+    When ``workdir`` is None a fresh, unique temporary directory is created
+    under ``settings.evaluation_dir`` so concurrent evaluations never share
+    (and clobber) a single directory. The working directory is removed after
+    the run.
     """
     started = time.monotonic()
 
@@ -118,7 +125,9 @@ def _evaluate_code_subprocess(
             }
         )
 
-    workdir = workdir or Path(settings.evaluation_dir)
+    workdir = workdir or Path(
+        tempfile.mkdtemp(prefix="eval-", dir=settings.evaluation_dir)
+    )
     workdir.mkdir(parents=True, exist_ok=True)
 
     solution_file = workdir / "solution.py"
@@ -143,7 +152,7 @@ def _evaluate_code_subprocess(
         shutil.rmtree(workdir, ignore_errors=True)
 
     output = result.stdout + result.stderr
-    passed, total = _parse_summary(output)
+    passed, total = parse_summary(output)
     score = round((passed / total) * 100, 1) if total else 0.0
 
     return EvaluationOutcome(

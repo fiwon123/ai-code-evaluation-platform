@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from app.config import settings
-from app.services.evaluation import EvaluationOutcome, _parse_summary
+from app.services.evaluation import EvaluationOutcome, parse_summary
 
 if TYPE_CHECKING:
     import docker
@@ -167,7 +167,7 @@ class DockerSandbox:
                 },
             )
 
-        passed, total = _parse_summary(output)
+        passed, total = parse_summary(output)
         score = round((passed / total) * 100, 1) if total else 0.0
 
         return EvaluationOutcome(

@@ -7,8 +7,8 @@ import pytest
 from app.config import settings
 from app.services.evaluation import (
     EvaluationOutcome,
-    _parse_summary,
     evaluate_code,
+    parse_summary,
     run_pytest,
 )
 
@@ -39,19 +39,19 @@ TWO_SUM_TESTS = (
 
 class TestParseSummary:
     def test_all_passed(self):
-        passed, total = _parse_summary("3 passed in 0.05s")
+        passed, total = parse_summary("3 passed in 0.05s")
         assert (passed, total) == (3, 3)
 
     def test_passed_and_failed(self):
-        passed, total = _parse_summary("== 2 passed, 1 failed in 0.05s ==")
+        passed, total = parse_summary("== 2 passed, 1 failed in 0.05s ==")
         assert (passed, total) == (2, 3)
 
     def test_errored(self):
-        passed, total = _parse_summary("== 1 error in 0.05s ==")
+        passed, total = parse_summary("== 1 error in 0.05s ==")
         assert (passed, total) == (0, 1)
 
     def test_no_tests(self):
-        passed, total = _parse_summary("no tests ran")
+        passed, total = parse_summary("no tests ran")
         assert (passed, total) == (0, 0)
 
 
