@@ -32,6 +32,7 @@ vi.mock("../../services/api.ts", () => ({
 const mockUseAuth = vi.mocked(useAuth);
 const mockNavigate = vi.mocked(useNavigate);
 const mockChallengesGet = vi.mocked(challengesApi.get);
+const mockChallengesRemove = vi.mocked(challengesApi.remove);
 const mockSubmissionsCreate = vi.mocked(submissionsApi.create);
 
 const challenge = {
@@ -151,5 +152,26 @@ describe("ChallengeDetail", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "LLM provider unavailable",
     );
+  });
+
+  it("deletes the challenge through the confirm dialog", async () => {
+    const navigate = vi.fn();
+    mockNavigate.mockReturnValue(navigate);
+    mockChallengesGet.mockResolvedValue(challenge as never);
+    mockChallengesRemove.mockResolvedValue(undefined);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Delete challenge/ }));
+    expect(
+      screen.getByRole("dialog", { name: "Delete challenge?" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => {
+      expect(mockChallengesRemove).toHaveBeenCalledWith("c1");
+    });
+    expect(navigate).toHaveBeenCalledWith("/challenges");
   });
 });

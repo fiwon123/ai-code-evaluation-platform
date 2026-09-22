@@ -1,4 +1,4 @@
-import type { ReactNode, ButtonHTMLAttributes } from "react";
+import { forwardRef, type ReactNode, type ButtonHTMLAttributes } from "react";
 import Spinner from "../Spinner/Spinner.tsx";
 import styles from "./Button.module.css";
 
@@ -12,16 +12,19 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
 }
 
-function Button({
-  variant = "primary",
-  size = "md",
-  loading = false,
-  loadingText,
-  className = "",
-  children,
-  disabled,
-  ...props
-}: ButtonProps) {
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = "primary",
+    size = "md",
+    loading = false,
+    loadingText,
+    className = "",
+    children,
+    disabled,
+    ...props
+  },
+  ref,
+) {
   const classes = [
     styles.button,
     styles[variant],
@@ -34,6 +37,7 @@ function Button({
 
   return (
     <button
+      ref={ref}
       className={classes}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
@@ -43,6 +47,6 @@ function Button({
       {loading && loadingText ? loadingText : children}
     </button>
   );
-}
+});
 
 export default Button;

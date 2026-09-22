@@ -4,6 +4,7 @@ import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
+import ConfirmDialog from "../components/ConfirmDialog/ConfirmDialog.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../services/api.ts";
@@ -38,6 +39,7 @@ function ChallengeDetail() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [provider, setProvider] = useState("demo");
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -73,10 +75,11 @@ function ChallengeDetail() {
   const isOwner = challenge != null && user?.id === challenge.owner_id;
 
   async function handleDelete() {
-    if (!challenge || !confirm(`Delete challenge "${challenge.title}"?`)) {
+    if (!challenge) {
       return;
     }
     setDeleting(true);
+    setConfirmDeleteOpen(false);
     try {
       await challengesApi.remove(challenge.id);
       navigate("/challenges");
@@ -251,9 +254,8 @@ function ChallengeDetail() {
                   type="button"
                   variant="danger"
                   className={styles.deleteButton}
-                  onClick={() => void handleDelete()}
-                  loading={deleting}
-                  loadingText="Deleting…"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={deleting}
                 >
                   Delete challenge
                 </Button>
@@ -262,6 +264,22 @@ function ChallengeDetail() {
           </Card>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete challenge?"
+        variant="danger"
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      >
+        <p>
+          This will permanently delete{" "}
+          <strong>{challenge?.title ?? "this challenge"}</strong> and cannot be
+          undone.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }
