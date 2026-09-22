@@ -23,7 +23,7 @@
 
 .warning {
   background: var(--color-warning-light);
-  color: #b45309;
+  color: var(--color-warning-strong);
 }
 
 .danger {
