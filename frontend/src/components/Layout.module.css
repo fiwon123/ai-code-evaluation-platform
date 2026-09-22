@@ -4,7 +4,7 @@
   height: var(--header-height);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-index-sticky);
   box-shadow: var(--shadow-sm);
 }
 
@@ -127,7 +127,7 @@
 .dropdownBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 110;
+  z-index: var(--z-index-dropdown);
 }
 
 .dropdown {
@@ -140,7 +140,7 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   padding: var(--space-2);
-  z-index: 120;
+  z-index: var(--z-index-dropdown);
   display: flex;
   flex-direction: column;
 }
