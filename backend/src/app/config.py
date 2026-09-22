@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Docker sandbox (isolated code execution)
     docker_enabled: bool = True  # master switch; falls back to subprocess when off/unavailable
-    docker_image: str = "eval-sandbox:latest"  # pytest pre-installed sandbox image
+    docker_image: str = "eval-sandbox:latest"  # multi-language sandbox image (python/js/ts/java/go)
     docker_memory_limit: str = "128m"  # per-container RAM limit
     docker_cpu_limit: float = 0.5  # per-container CPU limit (fraction of a core)
     docker_timeout: int = 30  # seconds before container execution is killed

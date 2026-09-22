@@ -39,7 +39,39 @@ class TestMockProvider:
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="not supported"):
-            MockProvider().generate_code("anything", language="javascript")
+            MockProvider().generate_code("anything", language="ruby")
+
+    def test_generates_javascript_solution(self):
+        code = MockProvider().generate_code(
+            "Write a function twoSum for a two sum problem",
+            language="javascript",
+        )
+        assert "function twoSum" in code
+        assert "module.exports" in code
+
+    def test_generates_typescript_solution(self):
+        code = MockProvider().generate_code("twoSum", language="typescript")
+        assert "export function twoSum" in code
+
+    def test_generates_java_solution(self):
+        code = MockProvider().generate_code("two sum", language="java")
+        assert "public class Solution" in code
+        assert "public static int[] twoSum" in code
+
+    def test_generates_go_solution(self):
+        code = MockProvider().generate_code("two sum", language="go")
+        assert code.startswith("package main")
+        assert "func TwoSum" in code
+
+    def test_camelcase_prompt_matches(self):
+        # Frontend prompts use camelCase ("isPrime") — must resolve to is_prime.
+        code = MockProvider().generate_code("Write isPrime check", language="javascript")
+        assert "function isPrime" in code
+
+    def test_unknown_prompt_returns_language_fallback(self):
+        code = MockProvider().generate_code("novel algorithm", language="go")
+        assert code.startswith("package main")
+        assert "func Solution" in code
 
 
 class TestStripCodeFences:
@@ -125,7 +157,7 @@ class TestAnthropicProvider:
             transport=httpx.MockTransport(_anthropic_handler),
         )
         with pytest.raises(ValueError, match="not supported"):
-            provider.generate_code("anything", language="go")
+            provider.generate_code("anything", language="ruby")
         provider.close()
 
 

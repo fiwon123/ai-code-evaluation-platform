@@ -129,12 +129,12 @@ class TestRun:
         assert kwargs["image"] == "eval-sandbox:latest"
         assert kwargs["command"] == [
             "pytest",
+            "test_solution.py",
             "-q",
             "--no-header",
             "--tb=short",
             "-p",
             "no:cacheprovider",
-            "/code/test_solution.py",
         ]
         assert kwargs["working_dir"] == "/code"
         assert kwargs["user"] == "nobody"
@@ -218,3 +218,52 @@ class TestRun:
             "x = 1", "def test_a():\n    assert True\n"
         )
         assert isinstance(outcome, EvaluationOutcome)
+
+
+class TestRunPerLanguage:
+    def test_javascript_command_and_env(self):
+        containers = FakeContainers(container=FakeContainer(logs="# pass 2\n# fail 0\n# tests 2"))
+        sandbox = DockerSandbox(client=FakeClient(containers=containers))
+        outcome = sandbox.run("console.log(1)", "", language="javascript")
+        assert outcome.passed == 2
+        assert outcome.total == 2
+        kwargs = containers.create_calls[0]
+        assert kwargs["command"] == ["node", "--test", "test_solution.js"]
+
+    def test_go_command_tar_and_env(self):
+        containers = FakeContainers(container=FakeContainer(logs="--- PASS: TestTwoSum\nok"))
+        sandbox = DockerSandbox(client=FakeClient(containers=containers))
+        outcome = sandbox.run("package main", "", language="go")
+        assert outcome.passed == 1
+        assert outcome.total == 1
+        kwargs = containers.create_calls[0]
+        assert kwargs["command"] == ["go", "test", "-v", "."]
+        assert kwargs["environment"]["GOCACHE"] == "/tmp/go-build"
+        # go.mod must be packaged alongside the solution and test files.
+        path, data = containers.container.put_archive_calls[0]
+        assert path == "/code"
+        with tarfile.open(fileobj=BytesIO(data), mode="r") as tar:
+            assert set(tar.getnames()) == {"solution.go", "solution_test.go", "go.mod"}
+
+    def test_java_command_includes_compile_step(self):
+        containers = FakeContainers(container=FakeContainer(logs="2 tests successful"))
+        sandbox = DockerSandbox(client=FakeClient(containers=containers))
+        outcome = sandbox.run("public class Solution {}", "", language="java")
+        assert outcome.passed == 2
+        assert outcome.total == 2
+        kwargs = containers.create_calls[0]
+        assert kwargs["command"][0] == "sh"
+        assert "javac" in kwargs["command"][-1]
+        assert "junit-platform-console-standalone.jar" in kwargs["command"][-1]
+
+    def test_metrics_record_actual_language(self):
+        containers = FakeContainers(container=FakeContainer(logs="# pass 1\n# fail 0"))
+        outcome = DockerSandbox(client=FakeClient(containers=containers)).run(
+            "x", "", language="typescript"
+        )
+        assert outcome.metrics["language"] == "typescript"
+
+    def test_unsupported_language_raises_before_client_use(self):
+        sandbox = DockerSandbox(client=FakeClient())
+        with pytest.raises(ValueError, match="not supported"):
+            sandbox.run("x", "", language="ruby")

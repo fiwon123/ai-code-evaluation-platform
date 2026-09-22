@@ -82,7 +82,7 @@ class TestEvaluateCode:
         fake = subprocess.CompletedProcess(
             args=[], returncode=1, stdout="2 passed, 1 failed in 0.5s", stderr=""
         )
-        with patch("app.services.evaluation.run_pytest", return_value=fake):
+        with patch("app.services.evaluation.run_tests", return_value=fake):
             outcome = evaluate_code(
                 code="x = 1",
                 test_code="def test_a(): assert True",
@@ -105,15 +105,14 @@ class TestEvaluateCode:
         assert outcome.total == 0
         assert not outcome.success
 
-    def test_unsupported_language(self, tmp_path):
-        outcome = evaluate_code(
-            code="console.log(1)",
-            test_code="test",
-            language="javascript",
-            workdir=tmp_path,
-        )
-        assert "not supported" in outcome.metrics["error"]
-        assert outcome.total == 0
+    def test_unsupported_language_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="not supported"):
+            evaluate_code(
+                code="x = 1",
+                test_code="test",
+                language="ruby",
+                workdir=tmp_path,
+            )
 
     def test_no_tests_defined(self, tmp_path):
         outcome = evaluate_code(
@@ -167,7 +166,7 @@ class TestEvaluateCodeDockerPath:
             def is_available(self):
                 return True
 
-            def run(self, code, test_code, timeout=None):
+            def run(self, code, test_code, timeout=None, language="python"):
                 return EvaluationOutcome(
                     passed=3, total=3, score=100.0, logs="", metrics={"backend": "docker"}
                 )
@@ -206,7 +205,34 @@ class TestEvaluateCodeDockerPath:
         outcome = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
         assert outcome.passed == 3
 
-    def test_non_python_language_skips_docker(self, monkeypatch, tmp_path):
+    def test_non_python_language_uses_docker(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", True)
+
+        class FakeSandbox:
+            def __init__(self, *args, **kwargs):
+                self.runs = []
+
+            def is_available(self):
+                return True
+
+            def run(self, code, test_code, timeout=None, language="python"):
+                self.runs.append(language)
+                return EvaluationOutcome(
+                    passed=3, total=3, score=100.0, logs="", metrics={"backend": "docker"}
+                )
+
+        fake = FakeSandbox()
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", lambda *a, **k: fake)
+        outcome = evaluate_code(
+            code="console.log(1)",
+            test_code="",
+            language="javascript",
+            workdir=tmp_path,
+        )
+        assert outcome.metrics["backend"] == "docker"
+        assert fake.runs == ["javascript"]
+
+    def test_unsupported_language_skips_docker(self, monkeypatch, tmp_path):
         monkeypatch.setattr(settings, "docker_enabled", True)
         constructed = []
 
@@ -218,16 +244,16 @@ class TestEvaluateCodeDockerPath:
                 return True
 
             def run(self, *args, **kwargs):
-                raise AssertionError("run must not be called for non-python")
+                raise AssertionError("run must not be called for unsupported languages")
 
         monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", ShouldNotConstruct)
-        outcome = evaluate_code(
-            code="console.log(1)",
-            test_code="",
-            language="javascript",
-            workdir=tmp_path,
-        )
-        assert "not supported" in outcome.metrics["error"]
+        with pytest.raises(ValueError, match="not supported"):
+            evaluate_code(
+                code="x = 1",
+                test_code="",
+                language="ruby",
+                workdir=tmp_path,
+            )
         assert constructed == []
 
     def test_sandbox_failure_propagates_when_enabled(self, monkeypatch, tmp_path):
@@ -263,8 +289,8 @@ class TestRunPytest:
                 test_code=TWO_SUM_TESTS,
                 workdir=tmp_path,
             )
-        assert "pytest executable not found" in outcome.logs
-        assert outcome.metrics["error"] == "pytest missing"
+        assert "'pytest' executable not found" in outcome.logs
+        assert outcome.metrics["error"] == "executable missing"
 
     def test_outcome_helpers(self):
         outcome = EvaluationOutcome(passed=2, total=3)
@@ -277,3 +303,49 @@ class TestRunPytest:
         (tmp_path / "test_solution.py").write_text("from solution import two_sum\n")
         result = run_pytest(tmp_path, timeout=10)
         assert isinstance(result.returncode, int)
+
+
+class TestEvaluateCodeRealRuntimes:
+    """Real subprocess execution for runtimes present on the test host."""
+
+    JS_SOLUTION = (
+        "function twoSum(nums, target) {\n"
+        "  const seen = new Map();\n"
+        "  for (let i = 0; i < nums.length; i++) {\n"
+        "    const complement = target - nums[i];\n"
+        "    if (seen.has(complement)) return [seen.get(complement), i];\n"
+        "    seen.set(nums[i], i);\n"
+        "  }\n"
+        "  return [];\n"
+        "}\n"
+        "module.exports = { twoSum };\n"
+    )
+
+    JS_TESTS = (
+        "const { twoSum } = require('./solution.js');\n"
+        "const test = require('node:test');\n"
+        "const assert = require('node:assert');\n"
+        "\n"
+        "test('basic', () => {\n"
+        "  assert.deepStrictEqual(twoSum([2, 7, 11, 15], 9), [0, 1]);\n"
+        "});\n"
+        "test('no solution', () => {\n"
+        "  assert.deepStrictEqual(twoSum([1, 2, 3], 99), []);\n"
+        "});\n"
+    )
+
+    def test_javascript_end_to_end(self, tmp_path):
+        if subprocess.run(["which", "node"], capture_output=True).returncode != 0:
+            pytest.skip("node is not installed on this host")
+        outcome = evaluate_code(
+            code=self.JS_SOLUTION,
+            test_code=self.JS_TESTS,
+            language="javascript",
+            workdir=tmp_path,
+            timeout=15,
+        )
+        assert outcome.passed == 2
+        assert outcome.total == 2
+        assert outcome.score == 100.0
+        assert outcome.passed_all
+        assert outcome.metrics["language"] == "javascript"

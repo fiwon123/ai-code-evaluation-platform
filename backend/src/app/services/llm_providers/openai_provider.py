@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 
 from app.services.llm_providers.base import (
-    SYSTEM_PROMPT,
     LLMProvider,
+    get_system_prompt,
     strip_code_fences,
 )
 
@@ -37,7 +37,7 @@ class OpenAIProvider(LLMProvider):
             json={
                 "model": self._model,
                 "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": get_system_prompt(language)},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.2,
