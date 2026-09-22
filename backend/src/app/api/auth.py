@@ -10,7 +10,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import User
-from app.schemas.auth import TokenResponse
+from app.schemas.auth import ChangePasswordRequest, TokenResponse
 from app.schemas.user import LoginRequest, UserCreate, UserRead
 
 router = APIRouter()
@@ -82,3 +82,25 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_session)) 
 async def me(current_user: User = Depends(get_current_user)) -> User:
     """Return the currently authenticated user."""
     return current_user
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    payload: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Change the authenticated user's password.
+
+    The current password must match; the new password replaces the stored
+    hash. Existing JWTs remain valid (tokens carry the user id, not the
+    password hash).
+    """
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    await db.commit()

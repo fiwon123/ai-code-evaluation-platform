@@ -1,4 +1,4 @@
-from app.schemas.auth import TokenResponse
+from app.schemas.auth import ChangePasswordRequest, TokenResponse
 from app.schemas.challenge import ChallengeCreate, ChallengeRead, ChallengeUpdate
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.submission import (
@@ -17,6 +17,7 @@ from app.schemas.user import (
 
 __all__ = [
     "AdminUserUpdate",
+    "ChangePasswordRequest",
     "ChallengeCreate",
     "ChallengeRead",
     "ChallengeUpdate",

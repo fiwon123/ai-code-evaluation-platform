@@ -6,6 +6,7 @@ from httpx import AsyncClient
 REGISTER_URL = "/api/auth/register"
 LOGIN_URL = "/api/auth/login"
 ME_URL = "/api/auth/me"
+CHANGE_PASSWORD_URL = "/api/auth/change-password"
 
 
 async def create_user(client: AsyncClient, **overrides) -> dict:
@@ -149,3 +150,81 @@ async def test_me_invalid_token(db_client: AsyncClient) -> None:
         headers={"Authorization": "Bearer not-a-real-token"},
     )
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_password_requires_auth(db_client: AsyncClient) -> None:
+    response = await db_client.post(
+        CHANGE_PASSWORD_URL,
+        json={"current_password": "password123", "new_password": "newpassword456"},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_password_success(db_client: AsyncClient) -> None:
+    created = await create_user(db_client)
+    headers = {"Authorization": f"Bearer {created['access_token']}"}
+
+    response = await db_client.post(
+        CHANGE_PASSWORD_URL,
+        json={"current_password": "password123", "new_password": "newpassword456"},
+        headers=headers,
+    )
+    assert response.status_code == 204
+
+    # Old password no longer works; new one does.
+    old_login = await db_client.post(
+        LOGIN_URL,
+        json={"identifier": created["user"]["email"], "password": "password123"},
+    )
+    assert old_login.status_code == 401
+
+    new_login = await db_client.post(
+        LOGIN_URL,
+        json={"identifier": created["user"]["email"], "password": "newpassword456"},
+    )
+    assert new_login.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_change_password_wrong_current_password(db_client: AsyncClient) -> None:
+    created = await create_user(db_client)
+    headers = {"Authorization": f"Bearer {created['access_token']}"}
+
+    response = await db_client.post(
+        CHANGE_PASSWORD_URL,
+        json={"current_password": "wrongpassword", "new_password": "newpassword456"},
+        headers=headers,
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Current password is incorrect"
+
+
+@pytest.mark.asyncio
+async def test_change_password_weak_new_password(db_client: AsyncClient) -> None:
+    created = await create_user(db_client)
+    headers = {"Authorization": f"Bearer {created['access_token']}"}
+
+    response = await db_client.post(
+        CHANGE_PASSWORD_URL,
+        json={"current_password": "password123", "new_password": "short"},
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_change_password_keeps_existing_token_valid(db_client: AsyncClient) -> None:
+    created = await create_user(db_client)
+    headers = {"Authorization": f"Bearer {created['access_token']}"}
+
+    await db_client.post(
+        CHANGE_PASSWORD_URL,
+        json={"current_password": "password123", "new_password": "newpassword456"},
+        headers=headers,
+    )
+
+    # The token issued before the password change is still accepted.
+    me = await db_client.get(ME_URL, headers=headers)
+    assert me.status_code == 200

@@ -72,6 +72,10 @@ async def client(
 @pytest_asyncio.fixture
 async def db_sessionmaker():
     """In-memory SQLite sessionmaker shared by the db_client fixture."""
+    # Importing the models registers every table on Base.metadata; this must
+    # happen before create_all (the app's routers would do it lazily, but the
+    # fixture needs the schema immediately).
+    import app.models  # noqa: F401
 
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
