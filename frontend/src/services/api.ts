@@ -30,6 +30,29 @@ function buildQueryString(params?: object): string {
   return qs ? `?${qs}` : "";
 }
 
+/** Endpoints that legitimately return 401 for bad credentials (no redirect). */
+const AUTH_CREDENTIAL_ENDPOINTS = new Set(["/api/auth/login", "/api/auth/register"]);
+
+function isCredentialEndpoint(path: string): boolean {
+  const basePath = path.split("?")[0];
+  return AUTH_CREDENTIAL_ENDPOINTS.has(basePath);
+}
+
+/** Log the user out and send them to the login page when a session is rejected. */
+function handleUnauthorized(path: string): void {
+  // Login/register legitimately return 401 for wrong credentials; the page
+  // shows the error inline instead of redirecting.
+  if (isCredentialEndpoint(path)) {
+    return;
+  }
+  clearToken();
+  const isAlreadyOnLogin =
+    typeof window !== "undefined" && window.location.pathname.startsWith("/login");
+  if (!isAlreadyOnLogin) {
+    window.location.assign("/login");
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   detail: string;
@@ -113,6 +136,10 @@ async function fetchJson(path: string, options?: RequestInit): Promise<Response>
     },
   });
 
+  if (response.status === 401) {
+    handleUnauthorized(path);
+  }
+
   if (!response.ok) {
     let detail = `API error: ${response.status} ${response.statusText}`;
     let validationErrors: Record<string, string> | undefined;
@@ -153,12 +180,13 @@ async function requestNoContent(
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
-  patch: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
-  del: (path: string) => requestNoContent(path, { method: "DELETE" }),
+  get: <T>(path: string, options?: RequestInit) => request<T>(path, options),
+  post: <T>(path: string, body?: unknown, options?: RequestInit) =>
+    request<T>(path, { ...options, method: "POST", body: JSON.stringify(body ?? {}) }),
+  patch: <T>(path: string, body: unknown, options?: RequestInit) =>
+    request<T>(path, { ...options, method: "PATCH", body: JSON.stringify(body) }),
+  del: (path: string, options?: RequestInit) =>
+    requestNoContent(path, { ...options, method: "DELETE" }),
 };
 
 export const authApi = {
@@ -170,9 +198,10 @@ export const authApi = {
 };
 
 export const challengesApi = {
-  list: (params?: ChallengeListParams) =>
+  list: (params?: ChallengeListParams, options?: RequestInit) =>
     api.get<PaginatedResponse<Challenge>>(
       `/api/challenges${buildQueryString(params)}`,
+      options,
     ),
   create: (payload: ChallengeCreatePayload) =>
     api.post<Challenge>("/api/challenges", payload),
@@ -185,9 +214,10 @@ export const challengesApi = {
 export const submissionsApi = {
   create: (payload: SubmissionCreatePayload) =>
     api.post<Submission>("/api/submissions", payload),
-  list: (params?: SubmissionListParams) =>
+  list: (params?: SubmissionListParams, options?: RequestInit) =>
     api.get<PaginatedResponse<Submission>>(
       `/api/submissions${buildQueryString(params)}`,
+      options,
     ),
   get: (id: string) => api.get<Submission>(`/api/submissions/${id}`),
 };

@@ -131,8 +131,8 @@ function Demo() {
           setRunning(false);
           setSubmissionId(null);
         })
-        .catch(() => {
-          setError("Failed to load the evaluation result.");
+        .catch((err) => {
+          setError(extractError(err));
           setRunning(false);
           setSubmissionId(null);
         });

@@ -9,11 +9,15 @@ export type FieldErrors = Record<string, string>;
  * - API errors use the server-provided detail (already human-readable).
  * - Network failures (fetch threw TypeError "Failed to fetch") get a
  *   clear, actionable message instead of a bare "Failed to fetch".
+ * - Aborted requests (AbortController) are treated as silent cancellations.
  * - Everything else falls back to the error message or a generic string.
  */
 export function extractError(err: unknown): string {
   if (err instanceof ApiError) {
     return err.detail;
+  }
+  if (err instanceof DOMException && err.name === "AbortError") {
+    return "Request cancelled.";
   }
   if (err instanceof TypeError && err.message === "Failed to fetch") {
     return "Unable to reach the server. Please check your connection and try again.";

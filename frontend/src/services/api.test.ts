@@ -5,11 +5,22 @@ import {
   authApi,
   challengesApi,
   clearToken,
+  getToken,
   setToken,
   submissionsApi,
 } from "./api.ts";
 
 const fetchMock = vi.fn();
+
+/** Silence jsdom's "navigation not implemented" by intercepting location.assign. */
+function stubLocationAssign(): ReturnType<typeof vi.fn> {
+  const assign = vi.fn();
+  Object.defineProperty(window, "location", {
+    configurable: true,
+    value: { ...window.location, assign },
+  });
+  return assign;
+}
 
 describe("api service", () => {
   beforeEach(() => {
@@ -124,6 +135,56 @@ describe("api service", () => {
 
     await expect(api.get("/api/challenges")).rejects.toSatisfy(
       (err: unknown) => err instanceof ApiError && err.detail.includes("500"),
+    );
+  });
+
+  it("clears the token and redirects to /login on 401 from a protected endpoint", async () => {
+    const assign = stubLocationAssign();
+    setToken("expired-jwt");
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Invalid token" }), { status: 401 }),
+    );
+
+    await expect(api.get("/api/challenges")).rejects.toBeInstanceOf(ApiError);
+    expect(getToken()).toBeNull();
+    expect(assign).toHaveBeenCalledWith("/login");
+  });
+
+  it("does not redirect when /api/auth/login returns 401 (bad credentials)", async () => {
+    const assign = stubLocationAssign();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Incorrect identifier or password" }), { status: 401 }),
+    );
+
+    await expect(authApi.login({ identifier: "alice", password: "wrong" })).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect when already on the login page", async () => {
+    const assign = stubLocationAssign();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...window.location, pathname: "/login", assign },
+    });
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Invalid token" }), { status: 401 }),
+    );
+
+    await expect(api.get("/api/challenges")).rejects.toBeInstanceOf(ApiError);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("passes an AbortSignal through to fetch for cancellation", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+    const controller = new AbortController();
+
+    await api.get("/api/challenges", { signal: controller.signal });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/challenges",
+      expect.objectContaining({ signal: controller.signal }),
     );
   });
 });
