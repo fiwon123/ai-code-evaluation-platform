@@ -125,8 +125,10 @@ def _evaluate_code_subprocess(
             }
         )
 
+    evaluation_dir = Path(settings.evaluation_dir)
+    evaluation_dir.mkdir(parents=True, exist_ok=True)
     workdir = workdir or Path(
-        tempfile.mkdtemp(prefix="eval-", dir=settings.evaluation_dir)
+        tempfile.mkdtemp(prefix="eval-", dir=evaluation_dir)
     )
     workdir.mkdir(parents=True, exist_ok=True)
 

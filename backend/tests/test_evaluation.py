@@ -1,4 +1,5 @@
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -123,6 +124,34 @@ class TestEvaluateCode:
         assert outcome.total == 0
         assert outcome.score == 0.0
         assert not outcome.success
+
+    def test_workdir_is_created_when_parent_missing(self, tmp_path):
+        # The subprocess path must create the configured evaluation_dir
+        # (and the unique per-run workdir) when neither exists yet.
+        base = tmp_path / "evaluations" / "nested"
+        with patch("app.services.evaluation.settings.evaluation_dir", str(base)):
+            outcome = evaluate_code(
+                code=TWO_SUM_CODE,
+                test_code=TWO_SUM_TESTS,
+            )
+        assert outcome.passed == 3
+        assert base.exists()
+
+    def test_concurrent_default_workdirs_do_not_clobber(self):
+        # Without an explicit workdir each run gets its own temp dir; running
+        # several in parallel must not overwrite each other's files.
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [
+                executor.submit(
+                    evaluate_code,
+                    code=TWO_SUM_CODE,
+                    test_code=TWO_SUM_TESTS,
+                    timeout=10,
+                )
+                for _ in range(3)
+            ]
+            outcomes = [future.result() for future in futures]
+        assert all(outcome.passed == 3 and outcome.total == 3 for outcome in outcomes)
 
 
 class TestEvaluateCodeDockerPath:
