@@ -60,6 +60,11 @@ function Layout() {
                     <Link to="/profile" className={styles.link} onClick={closeMenus}>
                       Profile
                     </Link>
+                    {user.is_admin && (
+                      <Link to="/admin" className={styles.link} onClick={closeMenus}>
+                        Admin
+                      </Link>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -123,6 +128,16 @@ function Layout() {
                     >
                       Profile
                     </Link>
+                    {user.is_admin && (
+                      <Link
+                        to="/admin"
+                        className={styles.dropdownItem}
+                        role="menuitem"
+                        onClick={closeMenus}
+                      >
+                        Admin
+                      </Link>
+                    )}
                     <Link
                       to="/challenges/new"
                       className={styles.dropdownItem}

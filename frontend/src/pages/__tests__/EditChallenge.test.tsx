@@ -60,7 +60,7 @@ function renderPage() {
 
 function mockOwnerUser() {
   mockUseAuth.mockReturnValue({
-    user: { id: "u1", email: "a@b.co", username: "alice", created_at: "" },
+    user: { id: "u1", email: "a@b.co", username: "alice", is_admin: false, is_active: true, created_at: "" },
     token: "t",
     initializing: false,
     login: vi.fn(),
@@ -123,7 +123,7 @@ describe("EditChallenge", () => {
 
   it("blocks editing when the user is not the owner", async () => {
     mockUseAuth.mockReturnValue({
-      user: { id: "u2", email: "b@c.co", username: "bob", created_at: "" },
+      user: { id: "u2", email: "b@c.co", username: "bob", is_admin: false, is_active: true, created_at: "" },
       token: "t",
       initializing: false,
       login: vi.fn(),

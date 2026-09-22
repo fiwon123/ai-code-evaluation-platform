@@ -35,6 +35,8 @@ const user = {
   id: "u1",
   email: "alice@example.com",
   username: "alice",
+  is_admin: false,
+  is_active: true,
   created_at: "2026-01-15T00:00:00Z",
 };
 
