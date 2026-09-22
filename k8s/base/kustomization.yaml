@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base resources for the AI Code Evaluation Platform.
+# Overlays (dev / staging / production) patch replicas, resources, image tags,
+# and environment-specific configuration on top of these.
+namespace: ai-eval
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - backend.yaml
+  - frontend.yaml
+  - worker.yaml
+  - postgres.yaml
+  - redis.yaml
+  - ingress.yaml
+  - hpa.yaml
+
+# Common labels applied to every generated resource.
+commonLabels:
+  app.kubernetes.io/part-of: ai-evaluation-platform

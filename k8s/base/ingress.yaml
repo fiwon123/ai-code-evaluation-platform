@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-eval-ingress
+  labels:
+    app.kubernetes.io/name: ai-evaluation-platform
+  annotations:
+    # Host the SPA and proxy /api to the backend through the same gate.
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ai-eval.local
+      http:
+        paths:
+          # API -> backend service
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-eval-backend
+                port:
+                  number: 80
+          # Everything else -> frontend (nginx SPA + its own /api proxy)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-eval-frontend
+                port:
+                  number: 80
