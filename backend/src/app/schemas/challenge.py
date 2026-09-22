@@ -1,9 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-LANGUAGES = {"python", "javascript", "typescript", "java", "go"}
+LANGUAGES = frozenset({"python", "javascript", "typescript", "java", "go"})
 
 
 class ChallengeCreate(BaseModel):
@@ -13,7 +13,14 @@ class ChallengeCreate(BaseModel):
     description: str = Field(min_length=1)
     prompt: str = Field(min_length=1)
     test_code: str = ""
-    language: str = Field(default="python", pattern=r"^[a-z]+$")
+    language: str = Field(default="python")
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: str) -> str:
+        if value not in LANGUAGES:
+            raise ValueError(f"Unsupported language '{value}' — supported: {sorted(LANGUAGES)}")
+        return value
 
 
 class ChallengeUpdate(BaseModel):
@@ -23,7 +30,14 @@ class ChallengeUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1)
     prompt: str | None = Field(default=None, min_length=1)
     test_code: str | None = None
-    language: str | None = Field(default=None, pattern=r"^[a-z]+$")
+    language: str | None = Field(default=None)
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: str | None) -> str | None:
+        if value is not None and value not in LANGUAGES:
+            raise ValueError(f"Unsupported language '{value}' — supported: {sorted(LANGUAGES)}")
+        return value
 
 
 class ChallengeRead(BaseModel):
