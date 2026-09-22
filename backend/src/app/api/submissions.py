@@ -21,19 +21,22 @@ logger = getLogger(__name__)
 router = APIRouter()
 
 
-def dispatch_evaluation(submission_id: UUID) -> None:
+def dispatch_evaluation(submission_id: UUID) -> bool:
     """Enqueue the background evaluation task.
 
-    The task module may not be importable in early iterations or when the
-    Celery broker is unavailable — degrade to a logged warning so the
-    submission is still created and returned as pending.
+    Returns ``True`` when the task was accepted by the broker. When the
+    broker or the task module is unavailable the failure is logged and
+    ``False`` returned so callers can surface the error instead of leaving
+    the submission stuck in ``pending`` forever.
     """
     try:
         from app.tasks.evaluate import evaluate_submission
 
         evaluate_submission.delay(str(submission_id))
+        return True
     except Exception:
         logger.exception("Failed to dispatch evaluation for submission %s", submission_id)
+        return False
 
 
 async def _get_own_submission(
@@ -75,11 +78,21 @@ async def create_submission(
         challenge_id=payload.challenge_id,
         status="pending",
         provider=payload.provider,
+        language=challenge.language,
     )
     db.add(submission)
     await db.commit()
 
-    dispatch_evaluation(submission.id)
+    if not dispatch_evaluation(submission.id):
+        submission.status = "failed"
+        await db.commit()
+        await apublish_submission_event(
+            submission.id, "failed", error="evaluation dispatch unavailable"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Evaluation service is unavailable. Please try again later.",
+        )
 
     return await _get_own_submission(db, submission.id, current_user)
 
