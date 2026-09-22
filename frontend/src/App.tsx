@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
+import AdminRoute from "./components/AdminRoute.tsx";
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary.tsx";
 import Layout from "./components/Layout.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
@@ -9,6 +10,10 @@ import { AuthProvider } from "./context/AuthContext.tsx";
 import styles from "./App.module.css";
 
 const About = lazy(() => import("./pages/About/About.tsx"));
+const AdminChallenges = lazy(() => import("./pages/Admin/AdminChallenges.tsx"));
+const AdminDashboard = lazy(() => import("./pages/Admin/AdminDashboard.tsx"));
+const AdminSubmissions = lazy(() => import("./pages/Admin/AdminSubmissions.tsx"));
+const AdminUsers = lazy(() => import("./pages/Admin/AdminUsers.tsx"));
 const ChallengeDetail = lazy(() => import("./pages/ChallengeDetail.tsx"));
 const Challenges = lazy(() => import("./pages/Challenges.tsx"));
 const Contact = lazy(() => import("./pages/Contact/Contact.tsx"));
@@ -67,6 +72,18 @@ function App() {
                     element={<SubmissionDetail />}
                   />
                   <Route path="/profile" element={<Profile />} />
+                </Route>
+                <Route element={<AdminRoute />}>
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/admin/users" element={<AdminUsers />} />
+                  <Route
+                    path="/admin/challenges"
+                    element={<AdminChallenges />}
+                  />
+                  <Route
+                    path="/admin/submissions"
+                    element={<AdminSubmissions />}
+                  />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Route>

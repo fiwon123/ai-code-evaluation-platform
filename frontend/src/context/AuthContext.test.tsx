@@ -34,7 +34,7 @@ describe("AuthContext", () => {
         JSON.stringify({
           access_token: "jwt-token",
           token_type: "bearer",
-          user: { id: "u1", email: "a@b.co", username: "alice", created_at: "2026-01-01T00:00:00Z" },
+          user: { id: "u1", email: "a@b.co", username: "alice", is_admin: false, is_active: true, created_at: "2026-01-01T00:00:00Z" },
         }),
         { status: 201, headers: { "Content-Type": "application/json" } },
       ),
@@ -58,7 +58,7 @@ describe("AuthContext", () => {
         JSON.stringify({
           access_token: "jwt-token",
           token_type: "bearer",
-          user: { id: "u1", email: "a@b.co", username: "alice", created_at: "2026-01-01T00:00:00Z" },
+          user: { id: "u1", email: "a@b.co", username: "alice", is_admin: false, is_active: true, created_at: "2026-01-01T00:00:00Z" },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -84,7 +84,7 @@ describe("AuthContext", () => {
     localStorage.setItem("access_token", "stored-jwt");
     fetchMock.mockResolvedValue(
       new Response(
-        JSON.stringify({ id: "u1", email: "a@b.co", username: "alice", created_at: "2026-01-01T00:00:00Z" }),
+        JSON.stringify({ id: "u1", email: "a@b.co", username: "alice", is_admin: false, is_active: true, created_at: "2026-01-01T00:00:00Z" }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     );

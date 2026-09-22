@@ -2,6 +2,8 @@ export interface User {
   id: string;
   email: string;
   username: string;
+  is_admin: boolean;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -102,4 +104,26 @@ export interface SubmissionListParams {
   status?: SubmissionStatus;
   challenge_id?: string;
   provider?: string;
+}
+
+export interface AdminUserUpdate {
+  is_admin?: boolean;
+  is_active?: boolean;
+}
+
+export interface AdminListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  status?: SubmissionStatus;
+}
+
+export interface PlatformStats {
+  total_users: number;
+  total_challenges: number;
+  total_submissions: number;
+  completed_submissions: number;
+  failed_submissions: number;
+  pending_submissions: number;
+  average_score: number | null;
 }

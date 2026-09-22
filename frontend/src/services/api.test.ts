@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
+  adminApi,
   api,
   authApi,
   challengesApi,
@@ -204,7 +205,7 @@ describe("authApi", () => {
     const body = {
       access_token: "jwt",
       token_type: "bearer",
-      user: { id: "1", email: "a@b.co", username: "alice", created_at: "2026-01-01T00:00:00Z" },
+      user: { id: "1", email: "a@b.co", username: "alice", is_admin: false, is_active: true, created_at: "2026-01-01T00:00:00Z" },
     };
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify(body), { status: 201, headers: { "Content-Type": "application/json" } }),
@@ -451,6 +452,115 @@ describe("submissionsApi", () => {
       expect.objectContaining({
         headers: expect.objectContaining({ "Content-Type": "application/json" }),
       }),
+    );
+  });
+});
+
+describe("adminApi", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    clearToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("fetches platform stats via GET /api/admin/stats", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ total_users: 3, total_challenges: 2, total_submissions: 5 }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await adminApi.stats();
+    expect(result.total_users).toBe(3);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/admin/stats"),
+      expect.anything(),
+    );
+  });
+
+  it("lists users via GET /api/admin/users with search params", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20, pages: 0 }), {
+        status: 200,
+      }),
+    );
+
+    await adminApi.listUsers({ page: 2, page_size: 20, search: "ali" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/admin/users?page=2&page_size=20&search=ali"),
+      expect.anything(),
+    );
+  });
+
+  it("updates a user via PATCH /api/admin/users/:id", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "u1" }), { status: 200 }));
+
+    await adminApi.updateUser("u1", { is_admin: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/admin/users/u1"),
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ is_admin: true }),
+      }),
+    );
+  });
+
+  it("deactivates a user via POST /api/admin/users/:id/deactivate", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "u1" }), { status: 200 }));
+
+    await adminApi.deactivateUser("u1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/admin/users/u1/deactivate"),
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("lists challenges via GET /api/admin/challenges", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20, pages: 0 }), {
+        status: 200,
+      }),
+    );
+
+    await adminApi.listChallenges({ page: 1, page_size: 20 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/admin/challenges"),
+      expect.anything(),
+    );
+  });
+
+  it("removes a challenge via DELETE /api/admin/challenges/:id", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await adminApi.removeChallenge("c1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/admin/challenges/c1"),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("lists submissions via GET /api/admin/submissions with a status filter", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20, pages: 0 }), {
+        status: 200,
+      }),
+    );
+
+    await adminApi.listSubmissions({ page: 1, page_size: 20, status: "failed" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/admin/submissions?page=1&page_size=20&status=failed"),
+      expect.anything(),
     );
   });
 });

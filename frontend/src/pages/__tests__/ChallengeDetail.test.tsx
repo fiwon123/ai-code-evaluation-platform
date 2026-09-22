@@ -74,7 +74,7 @@ function renderPage() {
 describe("ChallengeDetail", () => {
   beforeEach(() => {
     mockUseAuth.mockReturnValue({
-      user: { id: "u1", email: "a@b.co", username: "alice", created_at: "" },
+      user: { id: "u1", email: "a@b.co", username: "alice", is_admin: false, is_active: true, created_at: "" },
       token: "t",
       initializing: false,
       login: vi.fn(),

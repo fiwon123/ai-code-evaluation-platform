@@ -1,4 +1,6 @@
 import type {
+  AdminListParams,
+  AdminUserUpdate,
   AuthResponse,
   Challenge,
   ChallengeCreatePayload,
@@ -7,6 +9,7 @@ import type {
   ChangePasswordPayload,
   LoginPayload,
   PaginatedResponse,
+  PlatformStats,
   RegisterPayload,
   Submission,
   SubmissionCreatePayload,
@@ -229,4 +232,29 @@ export const submissionsApi = {
       options,
     ),
   get: (id: string) => api.get<Submission>(`/api/submissions/${id}`),
+};
+
+export const adminApi = {
+  stats: (options?: RequestInit) =>
+    api.get<PlatformStats>("/api/admin/stats", options),
+  listUsers: (params?: AdminListParams, options?: RequestInit) =>
+    api.get<PaginatedResponse<User>>(
+      `/api/admin/users${buildQueryString(params)}`,
+      options,
+    ),
+  updateUser: (id: string, payload: AdminUserUpdate) =>
+    api.patch<User>(`/api/admin/users/${id}`, payload),
+  deactivateUser: (id: string) =>
+    api.post<User>(`/api/admin/users/${id}/deactivate`),
+  listChallenges: (params?: AdminListParams, options?: RequestInit) =>
+    api.get<PaginatedResponse<Challenge>>(
+      `/api/admin/challenges${buildQueryString(params)}`,
+      options,
+    ),
+  removeChallenge: (id: string) => api.del(`/api/admin/challenges/${id}`),
+  listSubmissions: (params?: AdminListParams, options?: RequestInit) =>
+    api.get<PaginatedResponse<Submission>>(
+      `/api/admin/submissions${buildQueryString(params)}`,
+      options,
+    ),
 };
