@@ -5,6 +5,7 @@ import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import { SelectInput, TextInput } from "../components/Input/Input.tsx";
 import Pagination from "../components/Pagination/Pagination.tsx";
+import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi } from "../services/api.ts";
 import type { Challenge } from "../types.ts";
@@ -77,7 +78,21 @@ function Challenges() {
   }, [challenges]);
 
   if (loading) {
-    return <p className={styles.status}>Loading challenges…</p>;
+    return (
+      <div className={styles.grid} aria-label="Loading challenges" role="status">
+        {Array.from({ length: 6 }, (_, i) => (
+          <Card key={i} className={styles.card}>
+            <div className={styles.cardTop}>
+              <Skeleton variant="text" width="4rem" height="1.25rem" />
+              <Skeleton variant="text" width="5rem" height="0.75rem" />
+            </div>
+            <Skeleton variant="text" width="60%" height="1.25rem" />
+            <Skeleton variant="text" width="100%" height="0.75rem" />
+            <Skeleton variant="text" width="90%" height="0.75rem" />
+          </Card>
+        ))}
+      </div>
+    );
   }
 
   if (error) {

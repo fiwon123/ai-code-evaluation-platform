@@ -144,8 +144,8 @@ export default function CreateChallenge() {
           )}
 
           <div className={styles.actions}>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Creating…" : "Create challenge"}
+            <Button type="submit" loading={submitting} loadingText="Creating…">
+              Create challenge
             </Button>
             <Button type="button" variant="ghost" onClick={() => navigate("/challenges")}>
               Cancel

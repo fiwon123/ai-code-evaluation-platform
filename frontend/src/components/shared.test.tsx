@@ -32,6 +32,22 @@ describe("shared components", () => {
       );
       expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     });
+
+    it("shows a spinner and disables the button while loading", () => {
+      const { container } = render(<Button loading>Save</Button>);
+      const button = screen.getByRole("button", { name: "Save" });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("aria-busy", "true");
+      expect(container.querySelector("span")).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+    });
+
+    it("swaps the label while loading when loadingText is provided", () => {
+      render(<Button loading loadingText="Saving…">Save</Button>);
+      expect(screen.getByRole("button", { name: "Saving…" })).toBeInTheDocument();
+    });
   });
 
   describe("Card", () => {

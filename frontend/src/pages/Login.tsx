@@ -80,8 +80,14 @@ function Login() {
               {error}
             </p>
           )}
-          <Button type="submit" disabled={submitting} size="lg" className={styles.submit}>
-            {submitting ? "Logging in…" : "Log in"}
+          <Button
+            type="submit"
+            loading={submitting}
+            loadingText="Logging in…"
+            size="lg"
+            className={styles.submit}
+          >
+            Log in
           </Button>
         </form>
         <p className={styles.footerText}>

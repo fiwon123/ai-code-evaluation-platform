@@ -115,11 +115,12 @@ function Register() {
           )}
           <Button
             type="submit"
-            disabled={submitting}
+            loading={submitting}
+            loadingText="Creating account…"
             size="lg"
             className={styles.submit}
           >
-            {submitting ? "Creating account…" : "Create account"}
+            Create account
           </Button>
         </form>
         <p className={styles.footerText}>
