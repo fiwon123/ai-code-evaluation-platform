@@ -30,4 +30,25 @@ class UserRead(BaseModel):
     id: UUID
     email: str
     username: str
+    is_admin: bool = False
+    is_active: bool = True
     created_at: datetime
+
+
+class AdminUserUpdate(BaseModel):
+    """Admin payload for updating a user's role or status."""
+
+    is_admin: bool | None = None
+    is_active: bool | None = None
+
+
+class PlatformStats(BaseModel):
+    """Platform-wide statistics for the admin dashboard."""
+
+    total_users: int
+    total_challenges: int
+    total_submissions: int
+    completed_submissions: int
+    failed_submissions: int
+    pending_submissions: int
+    average_score: float | None = None

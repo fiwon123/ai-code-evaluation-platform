@@ -7,15 +7,23 @@ from app.schemas.submission import (
     SubmissionRead,
     SubmissionUpdate,
 )
-from app.schemas.user import LoginRequest, UserCreate, UserRead
+from app.schemas.user import (
+    AdminUserUpdate,
+    LoginRequest,
+    PlatformStats,
+    UserCreate,
+    UserRead,
+)
 
 __all__ = [
+    "AdminUserUpdate",
     "ChallengeCreate",
     "ChallengeRead",
     "ChallengeUpdate",
     "EvaluationResultRead",
     "LoginRequest",
     "PaginatedResponse",
+    "PlatformStats",
     "SubmissionCreate",
     "SubmissionRead",
     "SubmissionUpdate",
