@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChallengeDetail from "../ChallengeDetail.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
+import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
 
 vi.mock("react-router-dom", async (importOriginal) => {
   const mod = await importOriginal<typeof import("react-router-dom")>();
@@ -59,11 +60,13 @@ const submission = {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/challenges/c1"]}>
-      <Routes>
-        <Route path="/challenges/:id" element={<ChallengeDetail />} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={["/challenges/c1"]}>
+        <Routes>
+          <Route path="/challenges/:id" element={<ChallengeDetail />} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 

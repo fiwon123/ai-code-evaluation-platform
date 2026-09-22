@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import Register from "../Register.tsx";
+import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
 
 const { mockUseAuth } = vi.hoisted(() => ({
   mockUseAuth: vi.fn(),
@@ -24,12 +25,14 @@ function mockAuth(overrides: Record<string, unknown> = {}) {
 
 function renderRegister() {
   return render(
-    <MemoryRouter initialEntries={["/register"]}>
-      <Routes>
-        <Route path="/register" element={<Register />} />
-        <Route path="/challenges" element={<div>Challenges page</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={["/register"]}>
+        <Routes>
+          <Route path="/register" element={<Register />} />
+          <Route path="/challenges" element={<div>Challenges page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 

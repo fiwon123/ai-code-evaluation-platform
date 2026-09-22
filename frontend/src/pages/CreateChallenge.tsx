@@ -13,9 +13,11 @@ import {
 } from "../components/Input/Input.tsx";
 import { extractError } from "../utils/errors.ts";
 import { LANGUAGES, languageGuide } from "../utils/language.ts";
+import { useToast } from "../components/Toast/ToastContext.tsx";
 
 export default function CreateChallenge() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -44,6 +46,7 @@ export default function CreateChallenge() {
         test_code: testCode,
         language,
       });
+      showToast("Challenge created successfully.", "success");
       navigate(`/challenges/${challenge.id}`);
     } catch (err) {
       setError(extractError(err));

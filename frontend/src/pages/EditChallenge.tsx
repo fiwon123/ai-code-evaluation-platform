@@ -15,11 +15,13 @@ import {
 } from "../components/Input/Input.tsx";
 import { extractError } from "../utils/errors.ts";
 import { LANGUAGES, languageGuide } from "../utils/language.ts";
+import { useToast } from "../components/Toast/ToastContext.tsx";
 
 export default function EditChallenge() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -89,6 +91,7 @@ export default function EditChallenge() {
         test_code: testCode,
         language,
       });
+      showToast("Challenge updated successfully.", "success");
       navigate(`/challenges/${id}`);
     } catch (err) {
       setError(extractError(err));
