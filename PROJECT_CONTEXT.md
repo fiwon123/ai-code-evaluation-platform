@@ -88,3 +88,37 @@ frontend/      # React 19, Vite 8, TypeScript
 - LLM provider is configurable per challenge/submission
 - Generated code is stored temporarily in `/tmp/evaluations/` during execution
 - Security: executed code runs in sandboxed Docker containers with resource limits
+
+## Kubernetes Workflow
+
+Local Kubernetes development uses a deliberate toolchain (v0.6.0):
+
+- **Kind** (`k8s/kind-config.yaml`, `scripts/k8s-setup.sh` / `k8s-teardown.sh`) — lightweight local cluster; no VM needed. Host port mappings: 80/443 (ingress), 8000 (backend), 5173 (frontend).
+- **Kustomize** (`k8s/base` + `k8s/overlays/{dev,staging,production}`, `scripts/k8s-deploy.sh`) — the DEFAULT manifest strategy; parameters, probes, and postgres PVC via `volumeClaimTemplates`.
+- **Helm** (`k8s/helm/ai-eval-platform/`) — the expansion path for complex/HA deployments. See the chart README for the Kustomize-vs-Helm decision table.
+- **DevSpace** (`devspace.yaml`, `scripts/k8s-dev.sh`) — the Kubernetes inner dev loop (file sync, port forwarding, hot reload). Requires a running Kind cluster (`make k8s-setup`).
+
+Commands: `make k8s-setup`, `make k8s-deploy [OVERLAY=dev]`, `make k8s-dev`, `make k8s-teardown`, `make k8s-status`. Docker Compose remains the primary local path; K8s is optional.
+
+### DevSpace vs Skaffold
+
+**DevSpace** was chosen over Skaffold for the Kubernetes inner dev loop:
+
+| Capability | DevSpace | Skaffold |
+|------------|----------|----------|
+| Bidirectional file sync (dev → cluster) | First-class (`dev.sync`) | Indirect/limited |
+| Hot reload + terminal in the cluster | Built-in (`dev.terminal`, entrypoint override) | Requires manual port-forward + attach |
+| DevImage (prebuilt toolchain dev overlay) | First-class (`dev.devImage`) | Not built-in |
+| Deploying via raw `kubectl` / Kustomize | Native (`deployments[].kubectl.kustomize`) | Native (`kubectl` deployer) |
+| Profiles / patching | Rich YAML `patches` + `vars` | Basic profiles |
+
+Rationale: Skaffold is oriented toward *image build + deploy orchestration*;
+DevSpace is oriented toward *iterating inside the cluster* (sync, ports,
+terminals) — which matches this project's "edit backend/src or frontend/src,
+hot-reload against a real cluster" workflow. Example: `make k8s-dev` syncs
+source files into a running pod and launches `uvicorn --reload` / `vite dev`
+in-cluster while forwarding 8000/5173 to localhost.
+
+That said, Skaffold's single-command `skaffold dev` is closer to the Compose
+dev loop; teams that want image-centric dev may prefer it. DevSpace is the
+project default for inner-loop DX.
