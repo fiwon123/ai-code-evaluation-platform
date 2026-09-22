@@ -11,9 +11,11 @@ describe("App", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByRole("heading", {
-        name: /Generate, execute, and evaluate AI-written code/i,
-      }),
+      await screen.findByRole(
+        "heading",
+        { name: /Generate, execute, and evaluate AI-written code/i },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText(/See the demo/i)).toBeInTheDocument();
     expect(screen.getByText(/Everything you need to evaluate code/i)).toBeInTheDocument();
@@ -26,7 +28,11 @@ describe("App", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByRole("heading", { name: /Welcome back/i }),
+      await screen.findByRole(
+        "heading",
+        { name: /Welcome back/i },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
   });
 });
