@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import styles from "./EditChallenge.module.css";
-import { challengesApi, ApiError } from "../services/api.ts";
+import { challengesApi } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
@@ -12,6 +12,7 @@ import {
   TextAreaInput,
   useFieldId,
 } from "../components/Input/Input.tsx";
+import { extractError } from "../utils/errors.ts";
 import { LANGUAGES, languageGuide } from "../utils/language.ts";
 
 export default function EditChallenge() {
@@ -57,12 +58,10 @@ export default function EditChallenge() {
         setLanguage(challenge.language ?? "python");
         setIsOwner(challenge.owner_id === user?.id);
       } catch (err) {
-        if (!cancelled) {
-          setLoadError(
-            err instanceof ApiError ? err.detail : "Failed to load challenge.",
-          );
-        }
-      } finally {
+          if (!cancelled) {
+            setLoadError(extractError(err));
+          }
+        } finally {
         if (!cancelled) {
           setLoading(false);
         }
@@ -91,11 +90,7 @@ export default function EditChallenge() {
       });
       navigate(`/challenges/${id}`);
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.detail
-          : "Failed to update challenge. Please try again.",
-      );
+      setError(extractError(err));
       setSubmitting(false);
     }
   }

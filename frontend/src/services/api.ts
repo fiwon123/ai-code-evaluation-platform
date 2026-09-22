@@ -33,13 +33,55 @@ function buildQueryString(params?: object): string {
 export class ApiError extends Error {
   status: number;
   detail: string;
+  /** Field-level validation messages (from Pydantic 422 responses). */
+  validationErrors?: Record<string, string>;
 
-  constructor(status: number, detail: string) {
+  constructor(
+    status: number,
+    detail: string,
+    validationErrors?: Record<string, string>,
+  ) {
     super(detail);
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+    this.validationErrors = validationErrors;
   }
+}
+
+interface ValidationErrorItem {
+  loc?: (string | number)[];
+  msg?: string;
+}
+
+function parseValidationErrors(
+  detail: unknown,
+): { summary: string; fieldErrors: Record<string, string> } {
+  const fieldErrors: Record<string, string> = {};
+  const messages: string[] = [];
+
+  if (Array.isArray(detail)) {
+    for (const item of detail) {
+      if (typeof item !== "object" || item === null) {
+        continue;
+      }
+      const err = item as ValidationErrorItem;
+      const field = Array.isArray(err.loc)
+        ? String(err.loc[err.loc.length - 1] ?? "")
+        : "";
+      const msg =
+        typeof err.msg === "string" ? err.msg : "Invalid value";
+      if (field && field !== "body") {
+        fieldErrors[field] = msg;
+      }
+      messages.push(field ? `${field}: ${msg}` : msg);
+    }
+  }
+
+  return {
+    summary: messages.length > 0 ? messages.join(". ") : "Invalid request",
+    fieldErrors,
+  };
 }
 
 export function getToken(): string | null {
@@ -73,18 +115,22 @@ async function fetchJson(path: string, options?: RequestInit): Promise<Response>
 
   if (!response.ok) {
     let detail = `API error: ${response.status} ${response.statusText}`;
+    let validationErrors: Record<string, string> | undefined;
     try {
       const body = (await response.json()) as { detail?: unknown };
       if (body.detail) {
-        detail =
-          typeof body.detail === "string"
-            ? body.detail
-            : JSON.stringify(body.detail);
+        if (typeof body.detail === "string") {
+          detail = body.detail;
+        } else {
+          const parsed = parseValidationErrors(body.detail);
+          detail = parsed.summary;
+          validationErrors = parsed.fieldErrors;
+        }
       }
     } catch {
       // Non-JSON error body — fall back to the status text.
     }
-    throw new ApiError(response.status, detail);
+    throw new ApiError(response.status, detail, validationErrors);
   }
 
   return response;

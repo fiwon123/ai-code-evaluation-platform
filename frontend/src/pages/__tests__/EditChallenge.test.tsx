@@ -150,7 +150,7 @@ describe("EditChallenge", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Failed to update challenge.",
+      "Title too short",
     );
   });
 

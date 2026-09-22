@@ -76,7 +76,7 @@ describe("Register", () => {
 
   it("shows an error message when registration fails", async () => {
     mockAuth({
-      register: vi.fn().mockRejectedValue(new Error("duplicate")),
+      register: vi.fn().mockRejectedValue(new Error("Email or username already registered")),
     });
     renderRegister();
 
@@ -93,8 +93,37 @@ describe("Register", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "Registration failed. Please try again.",
+        "Email or username already registered",
       ),
+    );
+  });
+
+  it("shows per-field validation errors from the server", async () => {
+    const { ApiError } = await import("../../services/api.ts");
+    mockAuth({
+      register: vi.fn().mockRejectedValue(
+        new ApiError(
+          422,
+          "password: String should have at least 8 characters",
+          { password: "String should have at least 8 characters" },
+        ),
+      ),
+    });
+    renderRegister();
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "alice@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("String should have at least 8 characters")).toBeInTheDocument(),
     );
   });
 

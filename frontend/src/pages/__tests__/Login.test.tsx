@@ -55,7 +55,7 @@ describe("Login", () => {
 
   it("shows an error message when credentials are rejected", async () => {
     mockAuth({
-      login: vi.fn().mockRejectedValue(new Error("invalid")),
+      login: vi.fn().mockRejectedValue(new Error("Invalid credentials")),
     });
     renderLogin();
 
@@ -69,7 +69,7 @@ describe("Login", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "Login failed. Please try again.",
+        "Invalid credentials",
       ),
     );
   });
