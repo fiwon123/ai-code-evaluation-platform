@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CreateChallenge from "../CreateChallenge.tsx";
+import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
 
 vi.mock("react-router-dom", async (importOriginal) => {
   const mod = await importOriginal<typeof import("react-router-dom")>();
@@ -26,11 +27,13 @@ const mockNavigate = vi.mocked(useNavigate);
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/challenges/new"]}>
-      <Routes>
-        <Route path="/challenges/new" element={<CreateChallenge />} />
-      </Routes>
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter initialEntries={["/challenges/new"]}>
+        <Routes>
+          <Route path="/challenges/new" element={<CreateChallenge />} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 

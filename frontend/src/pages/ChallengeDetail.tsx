@@ -9,6 +9,7 @@ import { challengesApi, submissionsApi } from "../services/api.ts";
 import type { Challenge } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
+import { useToast } from "../components/Toast/ToastContext.tsx";
 import styles from "./ChallengeDetail.module.css";
 
 const PROVIDERS = [
@@ -33,6 +34,7 @@ function ChallengeDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,6 +80,7 @@ function ChallengeDetail() {
     setDeleting(true);
     try {
       await challengesApi.remove(challenge.id);
+      showToast("Challenge deleted.", "success");
       navigate("/challenges");
     } catch (err) {
       setError(extractError(err));

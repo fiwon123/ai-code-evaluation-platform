@@ -6,11 +6,13 @@ import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
 import Logo from "../components/Logo/Logo.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { extractError, extractFieldErrors } from "../utils/errors.ts";
+import { useToast } from "../components/Toast/ToastContext.tsx";
 import styles from "./Register.module.css";
 
 function Register() {
   const { user, initializing, register } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -29,6 +31,7 @@ function Register() {
     setSubmitting(true);
     try {
       await register(email, username, password);
+      showToast("Account created. Welcome!", "success");
       navigate("/challenges");
     } catch (err) {
       setError(extractError(err));

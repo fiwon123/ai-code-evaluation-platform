@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
+import { ToastProvider } from "./components/Toast/ToastContext.tsx";
 import { AuthProvider } from "./context/AuthContext.tsx";
 import About from "./pages/About/About.tsx";
 import ChallengeDetail from "./pages/ChallengeDetail.tsx";
@@ -21,7 +22,8 @@ import SubmissionDetail from "./pages/SubmissionDetail.tsx";
 function App() {
   return (
     <AuthProvider>
-      <Routes>
+      <ToastProvider>
+        <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
           <Route path="/features" element={<Features />} />
@@ -41,7 +43,8 @@ function App() {
           </Route>
           <Route path="*" element={<NotFound />} />
         </Route>
-      </Routes>
+        </Routes>
+      </ToastProvider>
     </AuthProvider>
   );
 }
