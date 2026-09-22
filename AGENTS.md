@@ -96,7 +96,7 @@ The AI agent (opencode) runs **inside a Dev Container**, not on a bare machine.
 
 The devcontainer is configured with:
 - **opencode**: Installed automatically via `.devcontainer/setup.sh` on container creation
-- **gh CLI**: Installed via devcontainer feature, authenticated via `GITHUB_TOKEN` or `GH_TOKEN` environment variable
+- **gh CLI**: Installed via devcontainer feature, auto-authenticated from the host's `GITHUB_TOKEN` (forwarded via `remoteEnv`, re-run by `setup.sh` on every container start; auth config persisted in the `gh_config` Docker volume)
 - **Node.js 22**: Installed via devcontainer feature
 - **Python 3.14**: Installed via Dockerfile
 - **uv**: Installed via Dockerfile
@@ -123,7 +123,8 @@ The devcontainer is configured with:
 
 ### Authentication
 
-- **gh CLI**: Requires `GITHUB_TOKEN` or `GH_TOKEN` environment variable to be set in the devcontainer environment
+- **gh CLI**: Requires `GITHUB_TOKEN` (or `GH_TOKEN`) to be set on the host machine. The devcontainer forwards it via `remoteEnv` (`${localEnv:GITHUB_TOKEN}` / `${localEnv:GH_TOKEN}`) and `setup.sh` re-authenticates gh on every container start. Auth config is persisted in the `gh_config` Docker volume across rebuilds.
+- **Security note**: The forwarded token is visible to every process inside the devcontainer and a copy is stored in plaintext in `hosts.yml` within the `gh_config` volume. Use a fine-grained, least-privilege PAT — ideally an expiring one — rather than a broad long-lived token.
 - **opencode**: Uses API keys configured in `opencode.json` or environment variables
 
 ## Environment Variables

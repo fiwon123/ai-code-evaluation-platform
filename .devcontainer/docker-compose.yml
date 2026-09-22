@@ -13,6 +13,8 @@ services:
       # Mount the host Docker socket so the Celery worker can create
       # isolated eval-sandbox containers for code evaluation.
       - /var/run/docker.sock:/var/run/docker.sock
+      # Persist gh CLI auth config (~/.config/gh) across container rebuilds.
+      - gh_config:/root/.config/gh
     command: tail -f /dev/null
     ports:
       - "8000:8000"
@@ -135,3 +137,5 @@ services:
 
 volumes:
   postgres_data:
+  # Persists gh CLI authentication across devcontainer rebuilds.
+  gh_config:
