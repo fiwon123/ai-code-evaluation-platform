@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 
 from app.services.llm_providers.base import (
-    SYSTEM_PROMPT,
     LLMProvider,
+    get_system_prompt,
     strip_code_fences,
 )
 
@@ -40,7 +40,7 @@ class AnthropicProvider(LLMProvider):
             json={
                 "model": self._model,
                 "max_tokens": 2048,
-                "system": SYSTEM_PROMPT,
+                "system": get_system_prompt(language),
                 "messages": [{"role": "user", "content": prompt}],
             },
         )

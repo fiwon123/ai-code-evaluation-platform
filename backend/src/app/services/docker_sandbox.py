@@ -1,10 +1,14 @@
 """Isolated Docker sandbox for executing untrusted evaluation code.
 
 Each evaluation runs inside a one-shot, air-gapped container built from the
-``eval-sandbox`` image (pytest pre-installed). The container gets a
-read-only root filesystem, a tmpfs scratch space, a hard CPU/RAM cap, no
-network access, and no Linux capabilities. Logs are capped and the
+``eval-sandbox`` image (per-language runtimes pre-installed). The container
+gets a read-only root filesystem, a tmpfs scratch space, a hard CPU/RAM cap,
+no network access, and no Linux capabilities. Logs are capped and the
 container is always removed afterwards.
+
+Language-specific details (filenames, commands, environment, output parsing)
+are resolved through :mod:`app.services.language_runner`, keeping the sandbox
+behaviour identical to the subprocess fallback.
 
 The Docker client is created lazily so this module can be imported without
 a reachable daemon; callers should check :meth:`DockerSandbox.is_available`
@@ -20,7 +24,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from app.config import settings
-from app.services.evaluation import EvaluationOutcome, parse_summary
+from app.services.evaluation import EvaluationOutcome
+from app.services.language_runner import LanguageRunner, get_runner
 
 if TYPE_CHECKING:
     import docker
@@ -59,11 +64,24 @@ class DockerSandbox:
         except Exception:  # noqa: BLE001 - any failure means "not available"
             return False
 
-    def _build_code_tar(self, code: str, test_code: str) -> bytes:
-        """Package solution + tests into an in-memory tar for ``put_archive``."""
+    def _build_code_tar(
+        self,
+        code: str,
+        test_code: str,
+        runner: LanguageRunner | None = None,
+    ) -> bytes:
+        """Package solution + tests (+ extra files) into an in-memory tar."""
+        from app.services.language_runner import PYTHON_RUNNER
+
+        runner = runner or PYTHON_RUNNER
         stream = io.BytesIO()
         with tarfile.open(fileobj=stream, mode="w") as tar:
-            for name, content in (("solution.py", code), ("test_solution.py", test_code)):
+            files: list[tuple[str, str]] = [
+                (runner.solution_filename, code),
+                (runner.test_filename, test_code),
+                *runner.extra_files.items(),
+            ]
+            for name, content in files:
                 data = content.encode("utf-8")
                 info = tarfile.TarInfo(name=name)
                 info.size = len(data)
@@ -73,27 +91,34 @@ class DockerSandbox:
         return stream.getvalue()
 
     @staticmethod
-    def _pytest_args() -> list[str]:
-        """Command executed inside the container (non-root, cache-free pytest)."""
-        return [
-            "pytest",
-            "-q",
-            "--no-header",
-            "--tb=short",
-            "-p",
-            "no:cacheprovider",
-            "/code/test_solution.py",
-        ]
+    def _run_environment(runner: LanguageRunner) -> dict[str, str]:
+        """Base environment shared by every sandboxed run, plus runner extras."""
+        env = {
+            "HOME": "/tmp",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONUNBUFFERED": "1",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        }
+        env.update(runner.env)
+        return env
 
-    def run(self, code: str, test_code: str, timeout: int | None = None) -> EvaluationOutcome:
+    def run(
+        self,
+        code: str,
+        test_code: str,
+        language: str = "python",
+        timeout: int | None = None,
+    ) -> EvaluationOutcome:
         """Execute ``code`` against ``test_code`` inside the sandbox.
 
-        Returns an :class:`EvaluationOutcome` with pytest counts, logs, and
-        metrics. Raises :class:`DockerSandboxError` when the container cannot
-        be created or started (e.g. missing image or daemon failure).
+        Returns an :class:`EvaluationOutcome` with test counts, logs, and
+        metrics. Raises :class:`ValueError` for unsupported languages and
+        :class:`DockerSandboxError` when the container cannot be created or
+        started (e.g. missing image or daemon failure).
         """
         started = time.monotonic()
         timeout = timeout or self.timeout
+        runner = get_runner(language)
 
         if not self.is_available():
             raise DockerSandboxError("Docker daemon is not reachable")
@@ -103,7 +128,7 @@ class DockerSandbox:
         try:
             container = client.containers.create(
                 image=self.image,
-                command=self._pytest_args(),
+                command=runner.command,
                 working_dir="/code",
                 user="nobody",
                 network_disabled=self.network_disabled,
@@ -114,12 +139,7 @@ class DockerSandbox:
                 pids_limit=64,
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges"],
-                environment={
-                    "HOME": "/tmp",
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                    "PYTHONUNBUFFERED": "1",
-                    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-                },
+                environment=self._run_environment(runner),
                 detach=True,
             )
         except Exception as exc:  # noqa: BLE001 - surface any create failure
@@ -128,7 +148,7 @@ class DockerSandbox:
             ) from exc
 
         try:
-            container.put_archive("/code", self._build_code_tar(code, test_code))
+            container.put_archive("/code", self._build_code_tar(code, test_code, runner))
             container.start()
         except Exception as exc:  # noqa: BLE001
             raise DockerSandboxError(f"Failed to start sandbox container: {exc}") from exc
@@ -163,11 +183,12 @@ class DockerSandbox:
                     "backend": "docker",
                     "error": "timeout",
                     "duration_ms": elapsed_ms,
+                    "language": runner.language,
                     "image": self.image,
                 },
             )
 
-        passed, total = parse_summary(output)
+        passed, total = runner.parse(output)
         score = round((passed / total) * 100, 1) if total else 0.0
 
         return EvaluationOutcome(
@@ -177,7 +198,7 @@ class DockerSandbox:
             logs=output,
             metrics={
                 "backend": "docker",
-                "language": "python",
+                "language": runner.language,
                 "returncode": returncode,
                 "duration_ms": elapsed_ms,
                 "image": self.image,

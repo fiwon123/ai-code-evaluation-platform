@@ -1,16 +1,41 @@
 # eval-sandbox — sandbox image for isolated code evaluation.
 #
 # Built once per environment, then used by the DockerSandbox service to run
-# pytest against untrusted AI-generated code in air-gapped, resource-limited,
-# read-only containers. Kept intentionally minimal: only pytest is installed,
-# and the container gets no network access at runtime.
+# test suites against untrusted AI-generated code in air-gapped, resource-
+# limited, read-only containers. Multi-language runtimes are pre-installed:
+#
+#   - Python       pytest (via pip)
+#   - JavaScript   Node.js test runner (node --test)
+#   - TypeScript   tsx (tsx --test)
+#   - Java         javac + JUnit Platform console launcher
+#   - Go           go test -v
+#
+# The container gets no network access at runtime; the Go module cache and
+# GOPATH are redirected to /tmp (tmpfs) and GOPROXY is disabled so `go test`
+# never attempts to download dependencies.
 FROM python:3.14-slim
 
-RUN pip install --no-cache-dir pytest
+# Node.js (for JavaScript + TypeScript via tsx), OpenJDK 17 (Java), Go 1.21+.
+# Uncomment the toolchain you need for a smaller image, but the default image
+# ships all five supported languages.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nodejs \
+        npm \
+        openjdk-17-jdk-headless \
+        golang-go \
+    && rm -rf /var/lib/apt/lists/*
 
-# Evaluation files (solution.py, test_solution.py) are injected here at
-# runtime via `docker put_archive` by the DockerSandbox service.
+RUN pip install --no-cache-dir pytest \
+    && npm install --global tsx
+
+# JUnit Platform console launcher (Java test runner) — version-tracked so the
+# image build is reproducible.
+ADD https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.1/junit-platform-console-standalone-1.10.1.jar \
+    /opt/junit/junit-platform-console-standalone.jar
+
+# Evaluation files (solution.py, test_solution.py, Solution.java, solution.go
+# ...) are injected here at runtime via `docker put_archive`.
 WORKDIR /code
 
-# NOTE: no ENTRYPOINT — DockerSandbox passes an explicit pytest command.
+# NOTE: no ENTRYPOINT — DockerSandbox passes an explicit per-language command.
 CMD ["sleep", "infinity"]

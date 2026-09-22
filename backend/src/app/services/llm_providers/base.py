@@ -1,14 +1,46 @@
 from abc import ABC, abstractmethod
 
-SUPPORTED_LANGUAGES = {"python"}
+SUPPORTED_LANGUAGES = {"python", "javascript", "typescript", "java", "go"}
 
-# Shared system prompt used by every provider: the model must emit only
-# source code, never prose or markdown fences.
-SYSTEM_PROMPT = (
-    "You are a coding assistant. Write a complete, correct Python solution "
-    "for the problem described by the user. Output ONLY the source code with "
-    "no markdown fences, no explanations, and no tests."
-)
+# Language-aware system prompts: each model must emit only source code, never
+# prose or markdown fences. Go additionally requires an explicit `package`
+# clause so `go test` can compile the solution.
+_SYSTEM_PROMPTS: dict[str, str] = {
+    "python": (
+        "You are a coding assistant. Write a complete, correct Python solution "
+        "for the problem described by the user. Output ONLY the source code with "
+        "no markdown fences, no explanations, and no tests."
+    ),
+    "javascript": (
+        "You are a coding assistant. Write a complete, correct JavaScript "
+        "(Node.js) solution for the problem described by the user. Export any "
+        "functions the tests will import. Output ONLY the source code with "
+        "no markdown fences, no explanations, and no tests."
+    ),
+    "typescript": (
+        "You are a coding assistant. Write a complete, correct TypeScript "
+        "solution for the problem described by the user. Export any functions "
+        "the tests will import. Output ONLY the source code with "
+        "no markdown fences, no explanations, and no tests."
+    ),
+    "java": (
+        "You are a coding assistant. Write a complete, correct Java solution for "
+        "the problem described by the user. Put the solution in a public class "
+        "named `Solution`. Output ONLY the source code with no markdown fences, "
+        "no explanations, and no tests."
+    ),
+    "go": (
+        "You are a coding assistant. Write a complete, correct Go solution for "
+        "the problem described by the user. The file must start with "
+        "`package main`. Output ONLY the source code with no markdown fences, "
+        "no explanations, and no tests."
+    ),
+}
+
+
+def get_system_prompt(language: str) -> str:
+    """Return the system prompt for ``language`` (falls back to Python's)."""
+    return _SYSTEM_PROMPTS.get(language, _SYSTEM_PROMPTS["python"])
 
 
 class LLMProvider(ABC):
