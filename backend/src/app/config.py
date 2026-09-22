@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
+    environment: str = "development"  # development | test | production
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
     redis_url: str = "redis://localhost:6379"
     jwt_secret_key: str = "dev-secret-key-change-in-production"
@@ -45,6 +46,21 @@ class Settings(BaseSettings):
             return value.replace("postgres://", "postgresql+psycopg://", 1)
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
+
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def reject_default_secret_in_production(
+        cls, value: str, info: ValidationInfo
+    ) -> str:
+        """Refuse to boot in production with the well-known dev secret."""
+        if (
+            info.data.get("environment") == "production"
+            and value == "dev-secret-key-change-in-production"
+        ):
+            raise ValueError(
+                "JWT_SECRET_KEY must be changed from the default in production"
+            )
         return value
 
 

@@ -2,6 +2,14 @@ from abc import ABC, abstractmethod
 
 SUPPORTED_LANGUAGES = {"python"}
 
+# Shared system prompt used by every provider: the model must emit only
+# source code, never prose or markdown fences.
+SYSTEM_PROMPT = (
+    "You are a coding assistant. Write a complete, correct Python solution "
+    "for the problem described by the user. Output ONLY the source code with "
+    "no markdown fences, no explanations, and no tests."
+)
+
 
 class LLMProvider(ABC):
     """Interface for LLM code generation providers."""

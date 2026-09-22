@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import httpx
 
-from app.services.llm_providers.base import LLMProvider, strip_code_fences
-
-SYSTEM_PROMPT = (
-    "You are a coding assistant. Write a complete, correct Python solution "
-    "for the problem described by the user. Output ONLY the source code with "
-    "no markdown fences, no explanations, and no tests."
+from app.services.llm_providers.base import (
+    SYSTEM_PROMPT,
+    LLMProvider,
+    strip_code_fences,
 )
 
 

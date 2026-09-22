@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from app.services.llm_providers.base import LLMProvider
-
-if TYPE_CHECKING:
-    pass
 
 # Named solutions keyed by prompt keyword (case-insensitive).
 # Each solution must define a single function; tests import from solution.py.
