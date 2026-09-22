@@ -31,6 +31,7 @@ class Submission(UUIDMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(20), default="pending")
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     code: Mapped[str | None] = mapped_column(Text, nullable=True)
     score: Mapped[float | None] = mapped_column(nullable=True)
 

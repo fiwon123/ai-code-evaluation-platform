@@ -78,6 +78,7 @@ export interface Submission {
   challenge_id: string;
   status: SubmissionStatus;
   provider: string | null;
+  language: string | null;
   code: string | null;
   score: number | null;
   evaluation_result: EvaluationResult | null;

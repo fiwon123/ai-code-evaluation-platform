@@ -7,6 +7,7 @@ import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, submissionsApi, ApiError } from "../services/api.ts";
 import type { Challenge } from "../types.ts";
+import { extensionForLanguage } from "../utils/language.ts";
 import styles from "./ChallengeDetail.module.css";
 
 const PROVIDERS = [
@@ -156,8 +157,8 @@ function ChallengeDetail() {
             {challenge.test_code ? (
               <CodeBlock
                 code={challenge.test_code}
-                language="python"
-                filename="test_solution.py"
+                language={challenge.language ?? "python"}
+                filename={`test_solution.${extensionForLanguage(challenge.language ?? "python")}`}
               />
             ) : (
               <p className={styles.muted}>No test code provided.</p>

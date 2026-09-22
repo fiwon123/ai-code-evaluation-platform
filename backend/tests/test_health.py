@@ -28,3 +28,11 @@ async def test_health_reports_db_and_redis(client: AsyncClient) -> None:
     data = response.json()
     assert "db" in data
     assert "redis" in data
+
+
+@pytest.mark.asyncio
+async def test_health_reports_celery(client: AsyncClient) -> None:
+    response = await client.get("/health")
+    data = response.json()
+    assert "celery" in data
+    assert data["celery"] in ("ok", "unreachable")

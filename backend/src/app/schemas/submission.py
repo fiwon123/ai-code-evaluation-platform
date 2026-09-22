@@ -42,6 +42,7 @@ class SubmissionRead(BaseModel):
     challenge_id: UUID
     status: str
     provider: str | None
+    language: str | None
     code: str | None
     score: float | None
     created_at: datetime
