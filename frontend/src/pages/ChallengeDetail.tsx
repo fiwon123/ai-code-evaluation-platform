@@ -4,6 +4,7 @@ import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
+import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../services/api.ts";
 import type { Challenge } from "../types.ts";
@@ -104,7 +105,13 @@ function ChallengeDetail() {
   }
 
   if (loading) {
-    return <p className={styles.status}>Loading challenge…</p>;
+    return (
+      <div className={styles.page} role="status" aria-label="Loading challenge">
+        <Skeleton variant="text" width="40%" height="2rem" />
+        <Skeleton variant="rect" width="100%" height="180px" />
+        <Skeleton variant="rect" width="100%" height="120px" />
+      </div>
+    );
   }
 
   if (error || !challenge) {
@@ -206,10 +213,11 @@ function ChallengeDetail() {
                 )}
                 <Button
                   type="submit"
-                  disabled={submitting}
+                  loading={submitting}
+                  loadingText="Submitting…"
                   className={styles.submitButton}
                 >
-                  {submitting ? "Submitting…" : "Generate & evaluate"}
+                  Generate & evaluate
                 </Button>
                 <p className={styles.hint}>
                   Tip: the demo provider works instantly with prompts containing
@@ -244,9 +252,10 @@ function ChallengeDetail() {
                   variant="danger"
                   className={styles.deleteButton}
                   onClick={() => void handleDelete()}
-                  disabled={deleting}
+                  loading={deleting}
+                  loadingText="Deleting…"
                 >
-                  {deleting ? "Deleting…" : "Delete challenge"}
+                  Delete challenge
                 </Button>
               </div>
             )}

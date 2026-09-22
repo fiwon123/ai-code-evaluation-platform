@@ -4,6 +4,7 @@ import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
+import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
 import { submissionsApi } from "../services/api.ts";
 import type { Submission } from "../types.ts";
@@ -88,7 +89,12 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
   }, [liveSubmission]);
 
   if (loading) {
-    return <p className={styles.muted}>Loading submission…</p>;
+    return (
+      <div role="status" aria-label="Loading submission">
+        <Skeleton variant="text" width="40%" height="1.5rem" />
+        <Skeleton variant="rect" width="100%" height="180px" />
+      </div>
+    );
   }
 
   if (error || !submission) {

@@ -31,10 +31,12 @@ describe("ProtectedRoute", () => {
     expect(screen.getByText("Login page")).toBeInTheDocument();
   });
 
-  it("shows a placeholder while initializing", () => {
+  it("shows a spinner while initializing", () => {
     mockUseAuth.mockReturnValue({ user: null, initializing: true });
     renderRoute();
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveAccessibleName(
+      "Checking authentication",
+    );
   });
 
   it("renders the outlet when authenticated", () => {

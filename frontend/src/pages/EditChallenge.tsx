@@ -5,6 +5,7 @@ import { challengesApi } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
+import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import {
   Field,
   TextInput,
@@ -96,7 +97,12 @@ export default function EditChallenge() {
   }
 
   if (loading) {
-    return <p className={styles.status}>Loading challenge…</p>;
+    return (
+      <div className={styles.page} role="status" aria-label="Loading challenge">
+        <Skeleton variant="text" width="50%" height="2rem" />
+        <Skeleton variant="rect" width="100%" height="360px" />
+      </div>
+    );
   }
 
   if (loadError) {
@@ -208,8 +214,8 @@ export default function EditChallenge() {
           )}
 
           <div className={styles.actions}>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : "Save changes"}
+            <Button type="submit" loading={submitting} loadingText="Saving…">
+              Save changes
             </Button>
             <Button
               type="button"

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Card from "../../components/Card/Card.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
+import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
@@ -117,7 +118,12 @@ function Profile() {
   }, [submissions, challengesTotal, submissionsTotal]);
 
   if (loading || !user) {
-    return <p className={styles.status}>Loading your dashboard…</p>;
+    return (
+      <div className={styles.page} role="status" aria-label="Loading dashboard">
+        <Skeleton variant="rect" width="100%" height="140px" />
+        <Skeleton variant="rect" width="100%" height="220px" />
+      </div>
+    );
   }
 
   if (error) {
