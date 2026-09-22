@@ -1,4 +1,4 @@
-.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install
+.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
 
 # Install all dependencies
 install:
@@ -63,3 +63,32 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	cd frontend && npm run clean 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Kubernetes (optional — requires Docker + the K8s toolchain on PATH)
+#
+# Docker Compose remains the primary local path. These targets are the
+# convenience wrappers; the scripts under scripts/ are the source of truth.
+# See k8s/ for manifests and k8s/helm/ for the Helm chart.
+# ---------------------------------------------------------------------------
+
+# Tool check and cluster setup: `make k8s-setup`
+k8s-setup:
+	scripts/k8s-setup.sh
+
+# Deploy all manifests to the Kind cluster: `make k8s-deploy [OVERLAY=dev]`
+k8s-deploy:
+	scripts/k8s-deploy.sh $(OVERLAY)
+
+# Inner dev loop with DevSpace in the Kind cluster: `make k8s-dev`
+k8s-dev:
+	scripts/k8s-dev.sh
+
+# Tear down the Kind cluster: `make k8s-teardown`
+k8s-teardown:
+	scripts/k8s-teardown.sh
+
+# Show cluster + workload status: `make k8s-status`
+k8s-status:
+	@kubectl get nodes -o wide
+	@kubectl get pods -A
