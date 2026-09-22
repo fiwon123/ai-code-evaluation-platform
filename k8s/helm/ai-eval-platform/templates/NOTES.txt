@@ -1,0 +1,20 @@
+You have deployed the AI Code Evaluation Platform (v{{ .Chart.Version }}).
+
+Components:
+  Backend:     {{ include "ai-eval-platform.fullname" . }}-backend   ({{ .Values.backend.replicas }} replicas)
+  Frontend:    {{ include "ai-eval-platform.fullname" . }}-frontend  ({{ .Values.frontend.replicas }} replicas)
+  Worker:      {{ include "ai-eval-platform.fullname" . }}-worker    ({{ .Values.worker.replicas }} replicas)
+  Postgres:    enabled={{ .Values.postgres.enabled }}
+  Redis:       enabled={{ .Values.redis.enabled }}
+  Autoscaling: enabled={{ .Values.autoscaling.enabled }}
+
+Get started:
+  kubectl get pods,svc,ing -n {{ .Release.Namespace }}
+  kubectl port-forward svc/{{ include "ai-eval-platform.fullname" . }}-backend 8000:80
+  {{ if .Values.ingress.enabled -}}
+  Open http://{{ .Values.ingress.host }} (add to /etc/hosts for Kind: 127.0.0.1 {{ .Values.ingress.host }})
+  {{- end }}
+
+Local development: prefer `make k8s-setup` + `make k8s-deploy` (Kustomize),
+which is the DEFAULT manifest strategy for this project. Helm is the
+expansion path for complex deployments (HA, external secrets, custom domains).

@@ -1,0 +1,59 @@
+# Production values — HA deploys. Secrets MUST be supplied at install time
+# (--set secrets.* or external-secrets); the chart's defaults are dev-only.
+# Deploy with: helm install ai-eval ./k8s/helm/ai-eval-platform \
+#                -f k8s/helm/ai-eval-platform/values-production.yaml \
+#                --set secrets.jwtSecretKey=... --set secrets.databaseUrl=...
+
+image:
+  backendTag: latest
+  frontendTag: latest
+  pullPolicy: Always
+
+backend:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+frontend:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+worker:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+postgres:
+  storage: 50Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+config:
+  environment: production
+
+ingress:
+  enabled: true
+  host: eval.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: 16m

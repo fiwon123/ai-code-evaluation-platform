@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-eval-platform.fullname" . }}-config
+  labels:
+    {{- include "ai-eval-platform.labels" . | nindent 4 }}
+    {{- include "ai-eval-platform.selectorLabels" . | nindent 4 }}
+data:
+  ENVIRONMENT: {{ .Values.config.environment | quote }}
+  LLM_PROVIDER: {{ .Values.config.llmProvider | quote }}
+  CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+  ACCESS_TOKEN_EXPIRE_MINUTES: {{ .Values.config.accessTokenExpireMinutes | quote }}
+  REDIS_URL: {{ .Values.config.redisUrl | quote }}
+  EVALUATION_TIMEOUT: {{ .Values.config.evaluation.timeout | quote }}
+  EVALUATION_DIR: {{ .Values.config.evaluation.dir | quote }}
+  DOCKER_ENABLED: {{ .Values.config.evaluation.dockerEnabled | quote }}
+  DOCKER_IMAGE: {{ .Values.config.evaluation.image | quote }}
+  DOCKER_MEMORY_LIMIT: {{ .Values.config.evaluation.memoryLimit | quote }}
+  DOCKER_CPU_LIMIT: {{ .Values.config.evaluation.cpuLimit | quote }}
+  DOCKER_TIMEOUT: {{ .Values.config.evaluation.timeoutSeconds | quote }}
+  DOCKER_NETWORK_DISABLED: {{ .Values.config.evaluation.networkDisabled | quote }}
+  DOCKER_READONLY_ROOTFS: {{ .Values.config.evaluation.readonlyRootfs | quote }}
+  DOCKER_MAX_OUTPUT_BYTES: {{ .Values.config.evaluation.maxOutputBytes | quote }}
+  RATE_LIMIT_ENABLED: {{ .Values.config.rateLimit.enabled | quote }}
+  RATE_LIMIT_ANONYMOUS_LIMIT: {{ .Values.config.rateLimit.anonymousLimit | quote }}
+  RATE_LIMIT_AUTHENTICATED_LIMIT: {{ .Values.config.rateLimit.authenticatedLimit | quote }}
+  RATE_LIMIT_WINDOW_SECONDS: {{ .Values.config.rateLimit.windowSeconds | quote }}
