@@ -74,6 +74,7 @@ export interface EvaluationResult {
 
 export interface Submission {
   id: string;
+  user_id: string;
   challenge_id: string;
   status: SubmissionStatus;
   provider: string | null;
@@ -81,6 +82,7 @@ export interface Submission {
   score: number | null;
   evaluation_result: EvaluationResult | null;
   created_at: string;
+  updated_at: string;
 }
 
 export interface SubmissionCreatePayload {
