@@ -50,17 +50,13 @@ class Settings(BaseSettings):
 
     @field_validator("jwt_secret_key")
     @classmethod
-    def reject_default_secret_in_production(
-        cls, value: str, info: ValidationInfo
-    ) -> str:
+    def reject_default_secret_in_production(cls, value: str, info: ValidationInfo) -> str:
         """Refuse to boot in production with the well-known dev secret."""
         if (
             info.data.get("environment") == "production"
             and value == "dev-secret-key-change-in-production"
         ):
-            raise ValueError(
-                "JWT_SECRET_KEY must be changed from the default in production"
-            )
+            raise ValueError("JWT_SECRET_KEY must be changed from the default in production")
         return value
 
 

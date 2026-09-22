@@ -26,14 +26,10 @@ async def paginate(
     Returns ``(orm_items, total, pages)`` where ``pages`` is the total
     number of pages for ``page_size`` (0 when there are no rows).
     """
-    count_result = await db.execute(
-        select(func.count()).select_from(statement.subquery())
-    )
+    count_result = await db.execute(select(func.count()).select_from(statement.subquery()))
     total = count_result.scalar_one()
 
-    items_result = await db.execute(
-        statement.offset((page - 1) * page_size).limit(page_size)
-    )
+    items_result = await db.execute(statement.offset((page - 1) * page_size).limit(page_size))
     orm_items = list(items_result.scalars().all())
 
     pages = ceil(total / page_size) if total else 0

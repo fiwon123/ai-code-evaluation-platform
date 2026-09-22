@@ -33,9 +33,7 @@ def dispatch_evaluation(submission_id: UUID) -> None:
 
         evaluate_submission.delay(str(submission_id))
     except Exception:
-        logger.exception(
-            "Failed to dispatch evaluation for submission %s", submission_id
-        )
+        logger.exception("Failed to dispatch evaluation for submission %s", submission_id)
 
 
 async def _get_own_submission(
@@ -96,12 +94,8 @@ async def list_submissions(
         max_length=20,
         description="Filter by submission status",
     ),
-    challenge_id: UUID | None = Query(
-        default=None, description="Filter by challenge"
-    ),
-    provider: str | None = Query(
-        default=None, max_length=50, description="Filter by LLM provider"
-    ),
+    challenge_id: UUID | None = Query(default=None, description="Filter by challenge"),
+    provider: str | None = Query(default=None, max_length=50, description="Filter by LLM provider"),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> PaginatedResponse[SubmissionRead]:
@@ -121,9 +115,7 @@ async def list_submissions(
         .order_by(Submission.created_at.desc())
     )
 
-    orm_items, total, pages = await paginate(
-        db, base, page=page, page_size=page_size
-    )
+    orm_items, total, pages = await paginate(db, base, page=page, page_size=page_size)
     items = [SubmissionRead.model_validate(item) for item in orm_items]
 
     return PaginatedResponse[SubmissionRead](

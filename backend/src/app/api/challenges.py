@@ -34,12 +34,8 @@ async def list_challenges(
     search: str | None = Query(
         default=None, max_length=255, description="Search title/description"
     ),
-    language: str | None = Query(
-        default=None, max_length=50, description="Filter by language"
-    ),
-    owner_id: UUID | None = Query(
-        default=None, description="Filter by owner (public challenges)"
-    ),
+    language: str | None = Query(default=None, max_length=50, description="Filter by language"),
+    owner_id: UUID | None = Query(default=None, description="Filter by owner (public challenges)"),
     db: AsyncSession = Depends(get_session),
 ) -> PaginatedResponse[ChallengeRead]:
     """List all challenges (public) with search, filter, and pagination."""
@@ -62,9 +58,7 @@ async def list_challenges(
         base = base.where(*filters)
     base = base.order_by(Challenge.created_at.desc())
 
-    orm_items, total, pages = await paginate(
-        db, base, page=page, page_size=page_size
-    )
+    orm_items, total, pages = await paginate(db, base, page=page, page_size=page_size)
     items = [ChallengeRead.model_validate(item) for item in orm_items]
 
     return PaginatedResponse[ChallengeRead](

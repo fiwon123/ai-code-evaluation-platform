@@ -45,10 +45,7 @@ SOLUTIONS: dict[str, str] = {
         "    cleaned = ''.join(c.lower() for c in s if c.isalnum())\n"
         "    return cleaned == cleaned[::-1]\n"
     ),
-    "reverse": (
-        "def reverse_string(s):\n"
-        "    return s[::-1]\n"
-    ),
+    "reverse": ("def reverse_string(s):\n    return s[::-1]\n"),
     "factorial": (
         "def factorial(n):\n"
         "    if n < 0:\n"
@@ -67,26 +64,13 @@ SOLUTIONS: dict[str, str] = {
         "            return False\n"
         "    return True\n"
     ),
-    "sum": (
-        "def sum_list(nums):\n"
-        "    return sum(nums)\n"
-    ),
-    "sort": (
-        "def sort_list(items):\n"
-        "    return sorted(items)\n"
-    ),
-    "max": (
-        "def find_max(nums):\n"
-        "    if not nums:\n"
-        "        return None\n"
-        "    return max(nums)\n"
-    ),
+    "sum": ("def sum_list(nums):\n    return sum(nums)\n"),
+    "sort": ("def sort_list(items):\n    return sorted(items)\n"),
+    "max": ("def find_max(nums):\n    if not nums:\n        return None\n    return max(nums)\n"),
 }
 
 DEFAULT_SOLUTION = (
-    "def solution(*args):\n"
-    "    \"\"\"Default fallback for unrecognized prompts.\"\"\"\n"
-    "    return None\n"
+    'def solution(*args):\n    """Default fallback for unrecognized prompts."""\n    return None\n'
 )
 
 

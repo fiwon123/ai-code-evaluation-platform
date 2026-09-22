@@ -35,9 +35,7 @@ class TestProductionSecretGuard:
             Settings(environment="production")
 
     def test_production_accepts_custom_secret(self):
-        settings = Settings(
-            environment="production", jwt_secret_key="correct-horse-battery-staple"
-        )
+        settings = Settings(environment="production", jwt_secret_key="correct-horse-battery-staple")
         assert settings.jwt_secret_key == "correct-horse-battery-staple"
 
     def test_test_environment_accepts_default_secret(self):

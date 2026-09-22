@@ -136,9 +136,7 @@ class TestProviderErrorPaths:
         provider = OpenAIProvider(
             api_key="test-key",
             transport=httpx.MockTransport(
-                lambda request: httpx.Response(
-                    429, json={"error": {"message": "rate limited"}}
-                )
+                lambda request: httpx.Response(429, json={"error": {"message": "rate limited"}})
             ),
         )
         with pytest.raises(httpx.HTTPStatusError):

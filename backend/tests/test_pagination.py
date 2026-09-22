@@ -33,9 +33,7 @@ async def widget_session():
     async with engine.begin() as conn:
         await conn.run_sync(_Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
         session.add_all([_Widget(name=f"w{i}") for i in range(25)])
         await session.commit()
@@ -46,9 +44,7 @@ async def widget_session():
 
 async def _paged(widget_session, page, page_size):
     statement = select(_Widget).order_by(_Widget.id)
-    return await paginate(
-        widget_session, statement, page=page, page_size=page_size
-    )
+    return await paginate(widget_session, statement, page=page, page_size=page_size)
 
 
 class TestPaginate:
@@ -76,14 +72,10 @@ class TestPaginate:
         assert total == 25
 
     async def test_empty_table(self):
-        engine = create_async_engine(
-            "sqlite+aiosqlite:///:memory:", poolclass=StaticPool
-        )
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
         async with engine.begin() as conn:
             await conn.run_sync(_Base.metadata.create_all)
-        session_factory = async_sessionmaker(
-            engine, class_=AsyncSession, expire_on_commit=False
-        )
+        session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with session_factory() as session:
             items, total, pages = await _paged(session, page=1, page_size=20)
             assert items == []
