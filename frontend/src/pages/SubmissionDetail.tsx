@@ -7,25 +7,11 @@ import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
 import { submissionsApi, ApiError } from "../services/api.ts";
 import type { Submission } from "../types.ts";
+import { statusVariant } from "../utils/formatting.ts";
 import styles from "./SubmissionDetail.module.css";
 
 const POLL_INTERVAL_MS = 1500;
 const DEFAULT_POLL_INTERVAL_MS = POLL_INTERVAL_MS;
-
-function statusVariant(status: Submission["status"]): "primary" | "success" | "warning" | "danger" | "neutral" {
-  switch (status) {
-    case "completed":
-      return "success";
-    case "failed":
-      return "danger";
-    case "processing":
-      return "warning";
-    case "pending":
-      return "primary";
-    default:
-      return "neutral";
-  }
-}
 
 function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollIntervalMs?: number }) {
   const { id } = useParams<{ id: string }>();
@@ -102,13 +88,15 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
   }, [liveSubmission]);
 
   if (loading) {
-    return <p>Loading submission…</p>;
+    return <p className={styles.muted}>Loading submission…</p>;
   }
 
   if (error || !submission) {
     return (
       <div>
-        <p role="alert">{error ?? "Submission not found."}</p>
+        <p role="alert" className={styles.errorText}>
+          {error ?? "Submission not found."}
+        </p>
         <p>
           <Link to="/challenges">Back to challenges</Link>
         </p>

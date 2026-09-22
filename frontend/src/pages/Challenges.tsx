@@ -8,24 +8,11 @@ import Pagination from "../components/Pagination/Pagination.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi } from "../services/api.ts";
 import type { Challenge } from "../types.ts";
+import { formatRelativeTime } from "../utils/formatting.ts";
 import styles from "./Challenges.module.css";
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
 
 function Challenges() {
   const { user } = useAuth();
@@ -172,7 +159,7 @@ function Challenges() {
                 <Card className={styles.card}>
                   <div className={styles.cardTop}>
                     <Badge variant="neutral">{challenge.language}</Badge>
-                    <span className={styles.date}>{formatDate(challenge.created_at)}</span>
+                    <span className={styles.date}>{formatRelativeTime(challenge.created_at)}</span>
                   </div>
                   <h3 className={styles.cardTitle}>{challenge.title}</h3>
                   <p className={`${styles.cardDesc} lineClamp2`}>
