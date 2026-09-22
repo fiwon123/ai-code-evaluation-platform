@@ -1,0 +1,34 @@
+# Dev values — matches the Kind local-cluster workflow (make k8s-setup).
+# Deploy with: helm install ai-eval ./k8s/helm/ai-eval-platform \
+#                -f k8s/helm/ai-eval-platform/values-dev.yaml
+
+image:
+  backendTag: dev
+  frontendTag: dev
+  pullPolicy: IfNotPresent
+
+backend:
+  replicas: 1
+
+frontend:
+  replicas: 1
+
+worker:
+  replicas: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+
+config:
+  environment: development
+
+ingress:
+  enabled: true
+  host: ai-eval.local
+
+# Local Kind secrets (safe dev defaults).
+secrets:
+  jwtSecretKey: "dev-secret-key-change-in-production"
+  postgresPassword: "postgres"
