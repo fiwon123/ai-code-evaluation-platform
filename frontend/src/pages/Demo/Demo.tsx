@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext.tsx";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
 import { challengesApi, submissionsApi, ApiError } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
+import { extensionForLanguage } from "../../utils/language.ts";
 import styles from "./Demo.module.css";
 
 const STEPS = [
@@ -51,6 +52,12 @@ function Demo() {
   const { liveSubmission, state: socketState } = useSubmissionSocket(
     submissionId ?? undefined,
   );
+
+  // The run result belongs to the challenge selected when it was submitted.
+  const selectedChallenge = challenges.find(
+    (c) => c.id === (result?.challenge_id ?? selectedId),
+  );
+  const resultLanguage = selectedChallenge?.language ?? "python";
 
   useEffect(() => {
     let cancelled = false;
@@ -318,7 +325,11 @@ function Demo() {
               {result.code && (
                 <div className={styles.resultCode}>
                   <p className={styles.resultCodeLabel}>Generated code</p>
-                  <CodeBlock code={result.code} language="python" />
+                  <CodeBlock
+                    code={result.code}
+                    language={resultLanguage}
+                    filename={`solution.${extensionForLanguage(resultLanguage)}`}
+                  />
                 </div>
               )}
               <p className={styles.resultMeta}>

@@ -11,8 +11,7 @@ import {
   TextAreaInput,
   useFieldId,
 } from "../components/Input/Input.tsx";
-
-const LANGUAGES = ["python", "javascript", "typescript", "java", "go"];
+import { LANGUAGES, languageGuide } from "../utils/language.ts";
 
 export default function CreateChallenge() {
   const navigate = useNavigate();
@@ -25,6 +24,7 @@ export default function CreateChallenge() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const guide = languageGuide(language);
   const titleId = useFieldId("title");
   const languageId = useFieldId("language");
   const descriptionId = useFieldId("description");
@@ -122,20 +122,20 @@ export default function CreateChallenge() {
               id={promptId}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Write a Python function two_sum(nums, target) that returns the indices of the two numbers that add up to target."
+              placeholder={guide.prompt}
               rows={5}
             />
           </Field>
 
           <Field
             id={testCodeId}
-            label="Test code (pytest)"
+            label={guide.testLabel}
           >
             <TextAreaInput
               id={testCodeId}
               value={testCode}
               onChange={(e) => setTestCode(e.target.value)}
-              placeholder={'def test_two_sum():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]'}
+              placeholder={guide.testCode}
               rows={6}
             />
           </Field>

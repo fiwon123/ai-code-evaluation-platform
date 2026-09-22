@@ -7,6 +7,7 @@ import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
 import { submissionsApi, ApiError } from "../services/api.ts";
 import type { Submission } from "../types.ts";
+import { extensionForLanguage } from "../utils/language.ts";
 import { statusVariant } from "../utils/formatting.ts";
 import styles from "./SubmissionDetail.module.css";
 
@@ -151,7 +152,11 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
           <Card>
             <h2 className={styles.sectionTitle}>Generated code</h2>
             {submission.code ? (
-              <CodeBlock code={submission.code} language="python" />
+              <CodeBlock
+                code={submission.code}
+                language={submission.language ?? "python"}
+                filename={`solution.${extensionForLanguage(submission.language ?? "python")}`}
+              />
             ) : (
               <p className={styles.muted}>No code was generated.</p>
             )}
