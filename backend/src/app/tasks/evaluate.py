@@ -53,7 +53,8 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict[st
             test_code=challenge.test_code,
             language=challenge.language,
             workdir=workdir,
-            timeout=30,
+            # No explicit timeout: evaluate_code applies the per-language
+            # budget (java/go get extra headroom for compilation).
         )
     except Exception as exc:  # noqa: BLE001 - worker must never crash silently
         logger.exception("Evaluation failed for submission %s", submission.id)

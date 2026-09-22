@@ -114,6 +114,43 @@ class TestEvaluateCode:
                 workdir=tmp_path,
             )
 
+    def test_uses_per_language_timeout_default(self, tmp_path):
+        captured = {}
+
+        def fake_run(workdir, runner=None, timeout=30):
+            captured["timeout"] = timeout
+            return subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="2 passed in 0.5s", stderr=""
+            )
+
+        with patch("app.services.evaluation.run_tests", side_effect=fake_run):
+            evaluate_code(
+                code="package main",
+                test_code="",
+                language="go",
+                workdir=tmp_path,
+            )
+        assert captured["timeout"] > 30  # go runner extends the default
+
+    def test_explicit_timeout_overrides_runner_default(self, tmp_path):
+        captured = {}
+
+        def fake_run(workdir, runner=None, timeout=30):
+            captured["timeout"] = timeout
+            return subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="2 passed in 0.5s", stderr=""
+            )
+
+        with patch("app.services.evaluation.run_tests", side_effect=fake_run):
+            evaluate_code(
+                code="package main",
+                test_code="",
+                language="go",
+                workdir=tmp_path,
+                timeout=120,
+            )
+        assert captured["timeout"] == 120
+
     def test_no_tests_defined(self, tmp_path):
         outcome = evaluate_code(
             code=TWO_SUM_CODE,

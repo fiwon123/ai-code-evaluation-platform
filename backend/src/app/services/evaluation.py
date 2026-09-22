@@ -113,7 +113,9 @@ def evaluate_code(
     runner = get_runner(language)
 
     if timeout is None:
-        timeout = settings.evaluation_timeout
+        # Per-language budget: compilation-heavy runtimes (java/go) get a
+        # longer window than the global evaluation_timeout default.
+        timeout = runner.timeout or settings.evaluation_timeout
 
     if settings.docker_enabled:
         from app.services.docker_sandbox import DockerSandbox

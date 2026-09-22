@@ -81,6 +81,21 @@ class TestCommands:
         assert GO_RUNNER.env["GOFLAGS"] == "-mod=mod"
 
 
+class TestTimeouts:
+    def test_python_uses_global_default(self):
+        assert PYTHON_RUNNER.timeout == 30
+
+    def test_javascript_and_typescript_share_python_default(self):
+        assert JAVASCRIPT_RUNNER.timeout == 30
+        assert TYPESCRIPT_RUNNER.timeout == 30
+
+    def test_java_gets_compilation_headroom(self):
+        assert JAVA_RUNNER.timeout > PYTHON_RUNNER.timeout
+
+    def test_go_gets_compilation_headroom(self):
+        assert GO_RUNNER.timeout > PYTHON_RUNNER.timeout
+
+
 class TestExtraFiles:
     def test_go_ships_go_mod(self):
         assert "go.mod" in GO_RUNNER.extra_files

@@ -117,8 +117,10 @@ class DockerSandbox:
         started (e.g. missing image or daemon failure).
         """
         started = time.monotonic()
-        timeout = timeout or self.timeout
         runner = get_runner(language)
+        # Per-language budget when no explicit timeout is given (java/go
+        # need extra headroom for compilation).
+        timeout = timeout or runner.timeout or self.timeout
 
         if not self.is_available():
             raise DockerSandboxError("Docker daemon is not reachable")
