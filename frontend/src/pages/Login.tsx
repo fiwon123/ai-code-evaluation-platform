@@ -5,7 +5,7 @@ import Card from "../components/Card/Card.tsx";
 import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
 import Logo from "../components/Logo/Logo.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
-import { ApiError } from "../services/api.ts";
+import { extractError, extractFieldErrors } from "../utils/errors.ts";
 import styles from "./Login.module.css";
 
 function Login() {
@@ -14,6 +14,7 @@ function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const identifierId = useFieldId("identifier");
   const passwordId = useFieldId("password");
@@ -21,14 +22,14 @@ function Login() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldErrors({});
     setSubmitting(true);
     try {
       await login(identifier, password);
       navigate("/challenges");
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.detail : "Login failed. Please try again.",
-      );
+      setError(extractError(err));
+      setFieldErrors(extractFieldErrors(err));
     } finally {
       setSubmitting(false);
     }
@@ -51,7 +52,7 @@ function Login() {
           <p className={styles.subtitle}>Log in to your account</p>
         </div>
         <form onSubmit={(e) => void handleSubmit(e)} className={styles.form}>
-          <Field label="Email or username" id={identifierId}>
+          <Field label="Email or username" id={identifierId} error={fieldErrors.identifier}>
             <TextInput
               id={identifierId}
               value={identifier}
@@ -59,9 +60,10 @@ function Login() {
               required
               autoComplete="username"
               placeholder="you@example.com"
+              invalid={Boolean(fieldErrors.identifier)}
             />
           </Field>
-          <Field label="Password" id={passwordId}>
+          <Field label="Password" id={passwordId} error={fieldErrors.password}>
             <TextInput
               id={passwordId}
               type="password"
@@ -70,6 +72,7 @@ function Login() {
               required
               autoComplete="current-password"
               placeholder="••••••••"
+              invalid={Boolean(fieldErrors.password)}
             />
           </Field>
           {error && (

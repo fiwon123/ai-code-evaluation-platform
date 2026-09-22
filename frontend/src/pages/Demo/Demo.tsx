@@ -7,8 +7,9 @@ import CodeBlock from "../../components/CodeBlock/CodeBlock.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
-import { challengesApi, submissionsApi, ApiError } from "../../services/api.ts";
+import { challengesApi, submissionsApi } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
+import { extractError } from "../../utils/errors.ts";
 import { extensionForLanguage } from "../../utils/language.ts";
 import styles from "./Demo.module.css";
 
@@ -109,9 +110,7 @@ function Demo() {
       });
       setSubmissionId(submission.id);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.detail : "Failed to run the demo.",
-      );
+      setError(extractError(err));
       setRunning(false);
     }
   }

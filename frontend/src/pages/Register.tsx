@@ -5,7 +5,7 @@ import Card from "../components/Card/Card.tsx";
 import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
 import Logo from "../components/Logo/Logo.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
-import { ApiError } from "../services/api.ts";
+import { extractError, extractFieldErrors } from "../utils/errors.ts";
 import styles from "./Register.module.css";
 
 function Register() {
@@ -15,6 +15,7 @@ function Register() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const emailId = useFieldId("email");
   const usernameId = useFieldId("username");
@@ -24,16 +25,14 @@ function Register() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldErrors({});
     setSubmitting(true);
     try {
       await register(email, username, password);
       navigate("/challenges");
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.detail
-          : "Registration failed. Please try again.",
-      );
+      setError(extractError(err));
+      setFieldErrors(extractFieldErrors(err));
     } finally {
       setSubmitting(false);
     }
@@ -58,7 +57,7 @@ function Register() {
           </p>
         </div>
         <form onSubmit={(e) => void handleSubmit(e)} className={styles.form}>
-          <Field label="Email" id={emailId}>
+          <Field label="Email" id={emailId} error={fieldErrors.email}>
             <TextInput
               id={emailId}
               type="email"
@@ -67,9 +66,10 @@ function Register() {
               required
               autoComplete="email"
               placeholder="you@example.com"
+              invalid={Boolean(fieldErrors.email)}
             />
           </Field>
-          <Field label="Username" id={usernameId}>
+          <Field label="Username" id={usernameId} error={fieldErrors.username}>
             <TextInput
               id={usernameId}
               value={username}
@@ -79,9 +79,10 @@ function Register() {
               maxLength={50}
               autoComplete="username"
               placeholder="johndoe"
+              invalid={Boolean(fieldErrors.username)}
             />
           </Field>
-          <Field label="Password" id={passwordId}>
+          <Field label="Password" id={passwordId} error={fieldErrors.password}>
             <TextInput
               id={passwordId}
               type="password"
@@ -92,6 +93,7 @@ function Register() {
               maxLength={72}
               autoComplete="new-password"
               placeholder="At least 8 characters"
+              invalid={Boolean(fieldErrors.password)}
             />
             <div className={styles.passwordHint}>
               <span

@@ -5,8 +5,9 @@ import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
-import { submissionsApi, ApiError } from "../services/api.ts";
+import { submissionsApi } from "../services/api.ts";
 import type { Submission } from "../types.ts";
+import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
 import { statusVariant } from "../utils/formatting.ts";
 import styles from "./SubmissionDetail.module.css";
@@ -48,9 +49,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
         }
       } catch (err) {
         if (!cancelled) {
-          setError(
-            err instanceof ApiError ? err.detail : "Failed to load submission.",
-          );
+          setError(extractError(err));
           setLoading(false);
         }
       }

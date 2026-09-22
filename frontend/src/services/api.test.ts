@@ -79,6 +79,46 @@ describe("api service", () => {
     });
   });
 
+  it("parses Pydantic 422 validation errors into a readable message + field map", async () => {
+    const detail = [
+      {
+        type: "string_too_short",
+        loc: ["body", "password"],
+        msg: "String should have at least 8 characters",
+        input: "test123",
+        ctx: { min_length: 8 },
+      },
+      {
+        type: "string_pattern_mismatch",
+        loc: ["body", "email"],
+        msg: "String should match pattern",
+        input: "nope",
+      },
+    ];
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail }), { status: 422 }),
+    );
+
+    const err = await api
+      .post("/api/auth/register", { email: "nope", password: "test123" })
+      .then(
+        () => {
+          throw new Error("expected rejection");
+        },
+        (e: unknown) => e,
+      );
+
+    expect(err).toBeInstanceOf(ApiError);
+    const apiErr = err as ApiError;
+    expect(apiErr.status).toBe(422);
+    expect(apiErr.detail).toContain("password: String should have at least 8 characters");
+    expect(apiErr.detail).toContain("email: String should match pattern");
+    expect(apiErr.validationErrors).toEqual({
+      password: "String should have at least 8 characters",
+      email: "String should match pattern",
+    });
+  });
+
   it("falls back to status text when the error body is not JSON", async () => {
     fetchMock.mockResolvedValue(new Response("boom", { status: 500, statusText: "Internal Server Error" }));
 

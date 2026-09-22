@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import styles from "./CreateChallenge.module.css";
-import { challengesApi, ApiError } from "../services/api.ts";
+import { challengesApi } from "../services/api.ts";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import {
@@ -11,6 +11,7 @@ import {
   TextAreaInput,
   useFieldId,
 } from "../components/Input/Input.tsx";
+import { extractError } from "../utils/errors.ts";
 import { LANGUAGES, languageGuide } from "../utils/language.ts";
 
 export default function CreateChallenge() {
@@ -45,11 +46,7 @@ export default function CreateChallenge() {
       });
       navigate(`/challenges/${challenge.id}`);
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.detail
-          : "Failed to create challenge. Please try again.",
-      );
+      setError(extractError(err));
     } finally {
       setSubmitting(false);
     }

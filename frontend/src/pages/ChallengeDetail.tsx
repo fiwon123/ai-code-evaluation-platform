@@ -5,8 +5,9 @@ import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
-import { challengesApi, submissionsApi, ApiError } from "../services/api.ts";
+import { challengesApi, submissionsApi } from "../services/api.ts";
 import type { Challenge } from "../types.ts";
+import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
 import styles from "./ChallengeDetail.module.css";
 
@@ -54,9 +55,7 @@ function ChallengeDetail() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(
-            err instanceof ApiError ? err.detail : "Failed to load challenge.",
-          );
+          setError(extractError(err));
         }
       } finally {
         if (!cancelled) {
@@ -81,9 +80,7 @@ function ChallengeDetail() {
       await challengesApi.remove(challenge.id);
       navigate("/challenges");
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.detail : "Failed to delete challenge.",
-      );
+      setError(extractError(err));
       setDeleting(false);
     }
   }
@@ -101,9 +98,7 @@ function ChallengeDetail() {
       });
       navigate(`/submissions/${submission.id}`);
     } catch (err) {
-      setSubmitError(
-        err instanceof ApiError ? err.detail : "Failed to submit evaluation.",
-      );
+      setSubmitError(extractError(err));
       setSubmitting(false);
     }
   }

@@ -149,7 +149,7 @@ describe("ChallengeDetail", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Failed to submit evaluation.",
+      "LLM provider unavailable",
     );
   });
 });
