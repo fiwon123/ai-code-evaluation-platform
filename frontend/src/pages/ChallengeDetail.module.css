@@ -176,22 +176,7 @@
 }
 
 .deleteButton {
-  background: none;
-  border: none;
-  color: var(--color-danger);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  padding: 0;
-  text-align: left;
-}
-
-.deleteButton:hover {
-  text-decoration: underline;
-}
-
-.deleteButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  width: 100%;
 }
 
 @media (max-width: 900px) {

@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +16,7 @@ router = APIRouter()
 @router.get("/health")
 async def health(
     db: AsyncSession = Depends(get_session),
-    redis=Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> dict[str, str]:
     """Return service status including database and Redis connectivity."""
     status: dict[str, str] = {"status": "ok"}

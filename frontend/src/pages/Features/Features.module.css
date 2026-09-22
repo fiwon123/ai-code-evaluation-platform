@@ -63,7 +63,7 @@
     var(--color-primary),
     var(--color-primary-hover)
   );
-  color: #fff;
+  color: var(--color-on-accent);
   font-weight: 700;
   font-size: 0.85rem;
 }
@@ -375,7 +375,7 @@
     var(--color-primary),
     var(--color-primary-hover)
   );
-  color: #fff;
+  color: var(--color-on-accent);
   font-weight: 700;
   text-decoration: none;
   transition: transform 0.2s ease, filter 0.2s ease;

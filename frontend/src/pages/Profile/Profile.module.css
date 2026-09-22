@@ -24,7 +24,7 @@
   height: 64px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: var(--font-size-2xl);
   font-weight: 700;
   display: flex;

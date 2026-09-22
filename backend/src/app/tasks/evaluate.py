@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.core.celery_app import celery_app
 from app.core.database import sync_session
 from app.core.events import publish_submission_event
@@ -20,7 +21,7 @@ from app.services.llm import get_llm_provider
 logger = logging.getLogger(__name__)
 
 
-def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict:
+def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict[str, object]:
     """Orchestrate generation + test execution for a submission (sync)."""
     submission = session.get(Submission, submission_id)
     if submission is None:
@@ -38,7 +39,7 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict:
     publish_submission_event(submission.id, "processing")
 
     provider_name = submission.provider or "demo"
-    workdir = Path("/tmp/evaluations") / str(submission.id)
+    workdir = Path(settings.evaluation_dir) / str(submission.id)
 
     try:
         provider = get_llm_provider(provider_name)

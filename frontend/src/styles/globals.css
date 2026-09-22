@@ -11,8 +11,10 @@
   --color-success: #16a34a;
   --color-success-light: #dcfce7;
   --color-warning: #f59e0b;
+  --color-warning-strong: #b45309;
   --color-warning-light: #fef3c7;
   --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
   --color-danger-light: #fee2e2;
 
   /* Neutrals */
@@ -29,6 +31,15 @@
   --color-text-muted: #94a3b8;
   --color-header: rgba(255, 255, 255, 0.8);
 
+  /* Text on colored (accent) surfaces */
+  --color-on-accent: #ffffff;
+
+  /* Code surfaces (stay dark in both themes for readability) */
+  --color-code-bg: #0f172a;
+  --color-code-header: #1e293b;
+  --color-code-border: #334155;
+  --color-code-text: #e2e8f0;
+
   color-scheme: light;
 }
 
@@ -41,8 +52,10 @@
   --color-success: #22c55e;
   --color-success-light: #14532d;
   --color-warning: #f59e0b;
+  --color-warning-strong: #fbbf24;
   --color-warning-light: #78350f;
   --color-danger: #f87171;
+  --color-danger-hover: #fca5a5;
   --color-danger-light: #7f1d1d;
 
   /* Neutrals */
@@ -58,6 +71,15 @@
   --color-text-secondary: #94a3b8;
   --color-text-muted: #64748b;
   --color-header: rgba(11, 18, 32, 0.85);
+
+  /* Text on colored (accent) surfaces */
+  --color-on-accent: #ffffff;
+
+  /* Code surfaces (stay dark in both themes for readability) */
+  --color-code-bg: #0b1220;
+  --color-code-header: #111c34;
+  --color-code-border: #24324a;
+  --color-code-text: #e2e8f0;
 
   color-scheme: dark;
 }

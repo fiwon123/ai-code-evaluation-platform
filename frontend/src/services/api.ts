@@ -54,7 +54,7 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function fetchJson(path: string, options?: RequestInit): Promise<Response> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -87,11 +87,23 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new ApiError(response.status, detail);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  return response;
+}
 
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetchJson(path, options);
   return (await response.json()) as T;
+}
+
+async function requestNoContent(
+  path: string,
+  options?: RequestInit,
+): Promise<void> {
+  const response = await fetchJson(path, options);
+  if (response.status !== 204) {
+    // Drain any non-empty body (some implementations return 200 on DELETE).
+    await response.json();
+  }
 }
 
 export const api = {
@@ -100,7 +112,7 @@ export const api = {
     request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
-  del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  del: (path: string) => requestNoContent(path, { method: "DELETE" }),
 };
 
 export const authApi = {
@@ -121,7 +133,7 @@ export const challengesApi = {
   get: (id: string) => api.get<Challenge>(`/api/challenges/${id}`),
   update: (id: string, payload: ChallengeUpdatePayload) =>
     api.patch<Challenge>(`/api/challenges/${id}`, payload),
-  remove: (id: string) => api.del<void>(`/api/challenges/${id}`),
+  remove: (id: string) => api.del(`/api/challenges/${id}`),
 };
 
 export const submissionsApi = {

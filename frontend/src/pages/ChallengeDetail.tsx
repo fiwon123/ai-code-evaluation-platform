@@ -243,14 +243,15 @@ function ChallengeDetail() {
                     Edit challenge
                   </Button>
                 </Link>
-                <button
+                <Button
                   type="button"
+                  variant="danger"
                   className={styles.deleteButton}
                   onClick={() => void handleDelete()}
                   disabled={deleting}
                 >
                   {deleting ? "Deleting…" : "Delete challenge"}
-                </button>
+                </Button>
               </div>
             )}
           </Card>

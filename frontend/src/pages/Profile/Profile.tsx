@@ -5,40 +5,11 @@ import Card from "../../components/Card/Card.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
-import type { Challenge, Submission, SubmissionStatus } from "../../types.ts";
+import type { Challenge, Submission } from "../../types.ts";
+import { formatRelativeTime, statusVariant } from "../../utils/formatting.ts";
 import styles from "./Profile.module.css";
 
 const PAGE_SIZE = 10;
-
-function statusVariant(
-  status: SubmissionStatus,
-): "primary" | "success" | "warning" | "danger" | "neutral" {
-  switch (status) {
-    case "completed":
-      return "success";
-    case "failed":
-      return "danger";
-    case "processing":
-      return "warning";
-    case "pending":
-      return "primary";
-    default:
-      return "neutral";
-  }
-}
-
-function formatRelative(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMins = Math.floor((now.getTime() - date.getTime()) / 60000);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
 
 function Profile() {
   const { user } = useAuth();
@@ -55,6 +26,8 @@ function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch challenges and submissions independently so paginating one list
+  // never re-fetches (or resets) the other.
   useEffect(() => {
     if (!user) {
       return;
@@ -63,21 +36,44 @@ function Profile() {
     let cancelled = false;
     async function load() {
       try {
-        const [challengeResp, submissionResp] = await Promise.all([
-          challengesApi.list({
-            owner_id: userId,
-            page: challengePage,
-            page_size: PAGE_SIZE,
-          }),
-          submissionsApi.list({
-            page: submissionPage,
-            page_size: PAGE_SIZE,
-          }),
-        ]);
+        const challengeResp = await challengesApi.list({
+          owner_id: userId,
+          page: challengePage,
+          page_size: PAGE_SIZE,
+        });
         if (!cancelled) {
           setChallenges(challengeResp.items);
           setChallengesPages(challengeResp.pages);
           setChallengesTotal(challengeResp.total);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Failed to load your dashboard.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, challengePage]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      try {
+        const submissionResp = await submissionsApi.list({
+          page: submissionPage,
+          page_size: PAGE_SIZE,
+        });
+        if (!cancelled) {
           setSubmissions(submissionResp.items);
           setSubmissionsPages(submissionResp.pages);
           setSubmissionsTotal(submissionResp.total);
@@ -96,12 +92,7 @@ function Profile() {
     return () => {
       cancelled = true;
     };
-  }, [user, challengePage, submissionPage]);
-
-  const myChallenges = useMemo(
-    () => challenges.filter((c) => c.owner_id === user?.id),
-    [challenges, user],
-  );
+  }, [user, submissionPage]);
 
   const stats = useMemo(() => {
     const completed = submissions.filter((s) => s.status === "completed");
@@ -184,7 +175,7 @@ function Profile() {
               New
             </Link>
           </div>
-          {myChallenges.length === 0 ? (
+          {challenges.length === 0 ? (
             <Card className={styles.emptyCard}>
               <p className={styles.emptyText}>You haven't created any challenges yet.</p>
               <Link to="/challenges/new">Create your first challenge</Link>
@@ -192,7 +183,7 @@ function Profile() {
           ) : (
             <>
               <div className={styles.challengeList}>
-                {myChallenges.map((challenge) => (
+                {challenges.map((challenge) => (
                   <Card key={challenge.id} padding="compact" className={styles.challengeItem}>
                     <Link to={`/challenges/${challenge.id}`} className={styles.challengeTitle}>
                       {challenge.title}
@@ -200,7 +191,7 @@ function Profile() {
                     <div className={styles.challengeMeta}>
                       <Badge variant="neutral">{challenge.language}</Badge>
                       <span className={styles.metaDate}>
-                        {formatRelative(challenge.created_at)}
+                        {formatRelativeTime(challenge.created_at)}
                       </span>
                     </div>
                   </Card>
@@ -242,7 +233,7 @@ function Profile() {
                           {submission.status}
                         </Badge>
                         <span className={styles.metaDate}>
-                          {formatRelative(submission.created_at)}
+                          {formatRelativeTime(submission.created_at)}
                         </span>
                       </span>
                       <span className={styles.submissionScore}>

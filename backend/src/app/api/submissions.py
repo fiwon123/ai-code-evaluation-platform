@@ -1,12 +1,12 @@
 from logging import getLogger
-from math import ceil
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.pagination import paginate
 from app.core.database import get_session
 from app.core.events import apublish_submission_event
 from app.core.security import get_current_user
@@ -33,9 +33,7 @@ def dispatch_evaluation(submission_id: UUID) -> None:
 
         evaluate_submission.delay(str(submission_id))
     except Exception:
-        logger.exception(
-            "Failed to dispatch evaluation for submission %s", submission_id
-        )
+        logger.exception("Failed to dispatch evaluation for submission %s", submission_id)
 
 
 async def _get_own_submission(
@@ -96,12 +94,8 @@ async def list_submissions(
         max_length=20,
         description="Filter by submission status",
     ),
-    challenge_id: UUID | None = Query(
-        default=None, description="Filter by challenge"
-    ),
-    provider: str | None = Query(
-        default=None, max_length=50, description="Filter by LLM provider"
-    ),
+    challenge_id: UUID | None = Query(default=None, description="Filter by challenge"),
+    provider: str | None = Query(default=None, max_length=50, description="Filter by LLM provider"),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> PaginatedResponse[SubmissionRead]:
@@ -118,17 +112,10 @@ async def list_submissions(
         select(Submission)
         .options(selectinload(Submission.evaluation_result))
         .where(*filters)
+        .order_by(Submission.created_at.desc())
     )
 
-    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
-    total = count_result.scalar_one()
-
-    items_result = await db.execute(
-        base.order_by(Submission.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    orm_items = list(items_result.scalars().all())
+    orm_items, total, pages = await paginate(db, base, page=page, page_size=page_size)
     items = [SubmissionRead.model_validate(item) for item in orm_items]
 
     return PaginatedResponse[SubmissionRead](
@@ -136,7 +123,7 @@ async def list_submissions(
         total=total,
         page=page,
         page_size=page_size,
-        pages=ceil(total / page_size) if total else 0,
+        pages=pages,
     )
 
 

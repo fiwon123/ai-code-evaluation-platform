@@ -27,7 +27,7 @@
 /* Primary */
 .primary {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .primary:hover:not(:disabled) {
@@ -60,11 +60,11 @@
 /* Danger */
 .danger {
   background: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .danger:hover:not(:disabled) {
-  background: #b91c1c;
+  background: var(--color-danger-hover);
 }
 
 /* Sizes */

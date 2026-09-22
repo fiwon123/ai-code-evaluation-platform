@@ -54,6 +54,15 @@ class TestStripCodeFences:
         text = "Here you go:\n```python\ndef f():\n    return 1\n```\nDone."
         assert strip_code_fences(text) == "def f():\n    return 1"
 
+    def test_mid_string_fence_without_language_tag(self):
+        text = "Sure, one moment.\n```\ndef f():\n    return 1\n```"
+        assert strip_code_fences(text) == "def f():\n    return 1"
+
+    def test_single_fence_does_not_split(self):
+        # An odd/unbalanced fence leaves the text mostly untouched.
+        text = "Here is ```python\ncode\n"
+        assert "code" in strip_code_fences(text)
+
 
 # OpenAI/Anthropic helpers
 def _openai_handler(request: httpx.Request) -> httpx.Response:
@@ -117,6 +126,54 @@ class TestAnthropicProvider:
         )
         with pytest.raises(ValueError, match="not supported"):
             provider.generate_code("anything", language="go")
+        provider.close()
+
+
+class TestProviderErrorPaths:
+    """HTTP failures (rate limits, server errors) must surface as errors."""
+
+    def test_openai_429_rate_limit_raises(self):
+        provider = OpenAIProvider(
+            api_key="test-key",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(429, json={"error": {"message": "rate limited"}})
+            ),
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.generate_code("two sum")
+        provider.close()
+
+    def test_openai_500_server_error_raises(self):
+        provider = OpenAIProvider(
+            api_key="test-key",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(500, json={"error": "boom"})
+            ),
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.generate_code("two sum")
+        provider.close()
+
+    def test_anthropic_429_rate_limit_raises(self):
+        provider = AnthropicProvider(
+            api_key="test-key",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(429, json={"error": "rate limited"})
+            ),
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.generate_code("fibonacci")
+        provider.close()
+
+    def test_anthropic_500_server_error_raises(self):
+        provider = AnthropicProvider(
+            api_key="test-key",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(500, json={"error": "boom"})
+            ),
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.generate_code("fibonacci")
         provider.close()
 
 
