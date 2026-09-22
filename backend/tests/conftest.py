@@ -70,11 +70,8 @@ async def client(
 
 
 @pytest_asyncio.fixture
-async def db_client() -> AsyncGenerator[AsyncClient]:
-    """Async test client against an in-memory SQLite database (fresh per test)."""
-    from app.core.database import get_session
-    from app.core.redis import get_redis
-    from app.main import create_app
+async def db_sessionmaker():
+    """In-memory SQLite sessionmaker shared by the db_client fixture."""
 
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
@@ -83,12 +80,22 @@ async def db_client() -> AsyncGenerator[AsyncClient]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    test_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    sm = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    yield sm
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def db_client(db_sessionmaker) -> AsyncGenerator[AsyncClient]:
+    """Async test client against an in-memory SQLite database (fresh per test)."""
+    from app.core.database import get_session
+    from app.core.redis import get_redis
+    from app.main import create_app
 
     app = create_app()
 
     async def override_get_session() -> AsyncGenerator[AsyncSession]:
-        async with test_session() as session:
+        async with db_sessionmaker() as session:
             yield session
 
     async def override_get_redis() -> AsyncMock:
@@ -104,5 +111,3 @@ async def db_client() -> AsyncGenerator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    await engine.dispose()
