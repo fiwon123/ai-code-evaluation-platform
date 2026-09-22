@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
+import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import { Field, TextInput, useFieldId } from "../../components/Input/Input.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
+import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
-import { challengesApi, submissionsApi } from "../../services/api.ts";
-import { extractError } from "../../utils/errors.ts";
+import { authApi, challengesApi, submissionsApi } from "../../services/api.ts";
+import { extractError, extractFieldErrors } from "../../utils/errors.ts";
 import type { Challenge, Submission } from "../../types.ts";
 import { formatRelativeTime, statusVariant } from "../../utils/formatting.ts";
 import styles from "./Profile.module.css";
@@ -27,6 +30,48 @@ function Profile() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Password change form
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordFieldErrors, setPasswordFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [changingPassword, setChangingPassword] = useState(false);
+  const { showToast } = useToast();
+  const currentPasswordId = useFieldId("current-password");
+  const newPasswordId = useFieldId("new-password");
+  const confirmPasswordId = useFieldId("confirm-password");
+
+  async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordFieldErrors({});
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await authApi.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      showToast("Password updated successfully.", "success");
+    } catch (err) {
+      setPasswordError(extractError(err));
+      setPasswordFieldErrors(extractFieldErrors(err));
+    } finally {
+      setChangingPassword(false);
+    }
+  }
 
   // Fetch challenges and submissions independently so paginating one list
   // never re-fetches (or resets) the other.
@@ -151,6 +196,76 @@ function Profile() {
         <div className={styles.profileActions}>
           <Link to="/challenges/new">+ New challenge</Link>
         </div>
+      </Card>
+
+      <Card className={styles.passwordCard}>
+        <div className={styles.passwordHeader}>
+          <h2 className={styles.passwordTitle}>Change password</h2>
+          <p className={styles.passwordSubtitle}>
+            Use at least 8 characters. Your other sessions stay signed in.
+          </p>
+        </div>
+        <form onSubmit={(e) => void handlePasswordChange(e)} className={styles.passwordForm}>
+          <Field
+            label="Current password"
+            id={currentPasswordId}
+            error={passwordFieldErrors.current_password}
+          >
+            <TextInput
+              id={currentPasswordId}
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              invalid={Boolean(passwordFieldErrors.current_password)}
+            />
+          </Field>
+          <Field
+            label="New password"
+            id={newPasswordId}
+            error={passwordFieldErrors.new_password}
+          >
+            <TextInput
+              id={newPasswordId}
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={8}
+              maxLength={72}
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+              invalid={Boolean(passwordFieldErrors.new_password)}
+            />
+          </Field>
+          <Field label="Confirm new password" id={confirmPasswordId}>
+            <TextInput
+              id={confirmPasswordId}
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={8}
+              maxLength={72}
+              autoComplete="new-password"
+            />
+          </Field>
+          {passwordError && (
+            <p role="alert" className={styles.passwordError}>
+              {passwordError}
+            </p>
+          )}
+          <div className={styles.passwordActions}>
+            <Button
+              type="submit"
+              loading={changingPassword}
+              loadingText="Updating…"
+            >
+              Update password
+            </Button>
+          </div>
+        </form>
       </Card>
 
       <div className={styles.statsRow}>

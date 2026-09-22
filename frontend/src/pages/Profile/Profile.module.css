@@ -59,6 +59,42 @@
   font-weight: 600;
 }
 
+/* Password change */
+.passwordCard {
+  margin-bottom: var(--space-6);
+}
+
+.passwordHeader {
+  margin-bottom: var(--space-4);
+}
+
+.passwordTitle {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-1);
+}
+
+.passwordSubtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 420px;
+}
+
+.passwordError {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.passwordActions {
+  margin-top: var(--space-1);
+}
+
 /* Stats */
 .statsRow {
   display: grid;

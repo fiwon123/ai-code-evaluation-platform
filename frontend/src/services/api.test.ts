@@ -239,6 +239,26 @@ describe("authApi", () => {
       expect.objectContaining({ body: JSON.stringify({ identifier: "alice", password: "password123" }) }),
     );
   });
+
+  it("changes the password with POST /api/auth/change-password and handles 204", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await authApi.changePassword({
+      current_password: "oldpass123",
+      new_password: "newpass123456",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/change-password"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          current_password: "oldpass123",
+          new_password: "newpass123456",
+        }),
+      }),
+    );
+  });
 });
 
 describe("challengesApi", () => {

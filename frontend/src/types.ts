@@ -22,6 +22,11 @@ export interface RegisterPayload {
   password: string;
 }
 
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
 export interface Challenge {
   id: string;
   title: string;
