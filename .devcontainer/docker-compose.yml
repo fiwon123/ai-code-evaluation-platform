@@ -35,6 +35,39 @@ services:
           cpus: "2.0"
           memory: 2G
 
+  # Celery worker — consumes evaluation tasks from Redis and runs LLM code
+  # generation + sandboxed test execution. A managed Compose service (not a
+  # background process) so it restarts automatically if it crashes.
+  celery:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      # Mount the host Docker socket so the Celery worker can create
+      # isolated eval-sandbox containers for code evaluation.
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: bash -c 'until /workspace/.devcontainer/start-celery.sh; do sleep 5; done; exec tail -f /dev/null'
+    environment:
+      - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - DOCKER_ENABLED=true
+      - DOCKER_IMAGE=eval-sandbox:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sandbox:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
   # Builds the eval-sandbox image (pytest pre-installed) used to isolate
   # untrusted code execution. One-shot: builds the image, then exits.
   sandbox:
