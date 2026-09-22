@@ -46,18 +46,20 @@ if command -v gh >/dev/null 2>&1; then
         if [[ -n "${GITHUB_TOKEN:-}" ]]; then
             echo "Authenticating gh CLI with GITHUB_TOKEN..."
             echo "$GITHUB_TOKEN" | gh auth login --with-token
-            gh auth setup-git
         elif [[ -n "${GH_TOKEN:-}" ]]; then
             echo "Authenticating gh CLI with GH_TOKEN..."
             echo "$GH_TOKEN" | gh auth login --with-token
-            gh auth setup-git
         else
             echo "WARNING: gh CLI is not authenticated"
             echo "To authenticate, run: gh auth login"
             echo "Or set GITHUB_TOKEN/GH_TOKEN environment variable"
         fi
     fi
-    
+
+    # Re-run setup-git so HTTPS git operations keep working even when the
+    # persisted token (gh_config volume) lets gh skip re-authentication.
+    gh auth setup-git 2>/dev/null || true
+
     # Verify authentication
     if gh auth status >/dev/null 2>&1; then
         echo "gh CLI authentication verified"

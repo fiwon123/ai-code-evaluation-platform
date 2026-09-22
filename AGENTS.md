@@ -123,7 +123,8 @@ The devcontainer is configured with:
 
 ### Authentication
 
-- **gh CLI**: Requires `GITHUB_TOKEN` (or `GH_TOKEN`) to be set on the host machine. The devcontainer forwards it via `remoteEnv` (`${localEnv:GITHUB_TOKEN}`) and `setup.sh` re-authenticates gh on every container start. Auth config is persisted in the `gh_config` Docker volume across rebuilds.
+- **gh CLI**: Requires `GITHUB_TOKEN` (or `GH_TOKEN`) to be set on the host machine. The devcontainer forwards it via `remoteEnv` (`${localEnv:GITHUB_TOKEN}` / `${localEnv:GH_TOKEN}`) and `setup.sh` re-authenticates gh on every container start. Auth config is persisted in the `gh_config` Docker volume across rebuilds.
+- **Security note**: The forwarded token is visible to every process inside the devcontainer and a copy is stored in plaintext in `hosts.yml` within the `gh_config` volume. Use a fine-grained, least-privilege PAT — ideally an expiring one — rather than a broad long-lived token.
 - **opencode**: Uses API keys configured in `opencode.json` or environment variables
 
 ## Environment Variables
