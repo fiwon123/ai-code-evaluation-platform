@@ -249,6 +249,47 @@ async def test_update_challenge_owner(db_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_challenge_rejects_unsupported_language(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+
+    response = await db_client.post(
+        CHALLENGES_URL,
+        json={
+            "title": "Ruby task",
+            "description": "Unsupported runtime",
+            "prompt": "Write ruby code",
+            "test_code": "",
+            "language": "ruby",
+        },
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "Unsupported language 'ruby'" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_challenge_accepts_all_supported_languages(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+    for language in ("python", "javascript", "typescript", "java", "go"):
+        challenge = await create_challenge(db_client, token, language=language)
+        assert challenge["language"] == language
+
+
+@pytest.mark.asyncio
+async def test_update_challenge_rejects_unsupported_language(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+    created = await create_challenge(db_client, token)
+
+    response = await db_client.patch(
+        f"{CHALLENGES_URL}/{created['id']}",
+        json={"language": "cobol"},
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "Unsupported language 'cobol'" in response.text
+
+
+@pytest.mark.asyncio
 async def test_update_challenge_forbidden_for_non_owner(db_client: AsyncClient) -> None:
     owner_token, _ = await register_user(db_client)
     created = await create_challenge(db_client, owner_token)
