@@ -26,6 +26,25 @@ Build a platform where users can submit coding prompts, generate code using mult
 - Authentication: JWT tokens (OAuth2 planned for future)
 - AI: Multiple LLM providers (OpenAI, Anthropic, local models)
 - Development: Docker and Dev Containers
+- Kubernetes (optional): Kind + Kustomize (default) + Helm (expansion) + DevSpace (dev loop)
+
+### Supported Languages (Multi-Language Evaluation)
+
+The sandbox image (`backend/Dockerfile.sandbox`) ships five runtimes; generated
+code and its test harness run in an air-gapped, resource-limited container:
+
+| Language   | Test runner                    | Entry file       |
+|------------|--------------------------------|------------------|
+| Python     | pytest                         | solution.py      |
+| JavaScript | node --test                    | solution.js      |
+| TypeScript | tsx --test                     | solution.ts      |
+| Java       | javac + JUnit Platform console | Solution.java    |
+| Go         | go test -v                     | solution.go     |
+
+- The container gets no network access at runtime (`GOPROXY` disabled, module
+  cache redirected to tmpfs).
+- Docker sandbox is safely bypassed with a subprocess fallback when Docker is
+  unavailable (see backend `services/docker_sandbox.py`).
 
 ### Core Architecture
 
@@ -57,6 +76,9 @@ Evaluation Result (score, logs, metrics)
 backend/       # FastAPI app, Celery workers, evaluation logic
 frontend/      # React 19, Vite 8, TypeScript
 .devcontainer/ # Docker Compose dev environment
+k8s/           # Kind config + Kustomize base/overlays + Helm chart (optional)
+scripts/       # k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh
+devspace.yaml  # Kubernetes inner dev loop (optional)
 ```
 
 ## Development Commands
@@ -88,6 +110,22 @@ docker compose down          # Stop all services
 docker compose logs -f       # View logs
 ```
 
+### Kubernetes (optional — requires Docker on the host)
+
+```bash
+make k8s-setup               # Kind cluster + build/load images
+make k8s-deploy OVERLAY=dev  # kustomize build | kubectl apply (dev/staging/production)
+make k8s-dev                 # DevSpace inner dev loop (sync + ports + terminals)
+make k8s-status              # Nodes + pods
+make k8s-teardown            # Delete the Kind cluster
+```
+
+- Kustomize is the DEFAULT manifest strategy (`k8s/base` + `k8s/overlays`);
+  Helm (`k8s/helm/ai-eval-platform/`) is the expansion path.
+- The Kubernetes toolchain (kind, kubectl, kustomize, helm, devspace) is
+  installed best-effort by `.devcontainer/setup.sh` on rebuild.
+- Docker Compose remains the primary local path; K8s is optional.
+
 ## Runtime Environment
 
 The AI agent (opencode) runs **inside a Dev Container**, not on a bare machine.
@@ -100,6 +138,7 @@ The devcontainer is configured with:
 - **Node.js 22**: Installed via devcontainer feature
 - **Python 3.14**: Installed via Dockerfile
 - **uv**: Installed via Dockerfile
+- **K8s tooling (best-effort)**: kind, kubectl, kustomize, helm, devspace installed by `.devcontainer/setup.sh` into `$HOME/.local/share/k8s-tools/bin`
 
 ### What the agent CAN do
 
@@ -113,6 +152,7 @@ The devcontainer is configured with:
 - Run `docker` or `docker compose` commands (not available inside the container)
 - Access the Docker socket
 - Modify the host filesystem (only the workspace is writable)
+- Run K8s workflows (`make k8s-*`) end-to-end — kind/kubectl require Docker on the host; K8s manifests can be authored and validated (kustomize/helm/kubeconform) but not applied here
 
 ### Service ports (forwarded from host)
 
@@ -146,6 +186,18 @@ Backend reads from `.env` (gitignored):
 - Database: UUID primary keys for all tables
 - Migrations: Alembic
 - Background jobs: Celery with Redis broker
+
+### Admin Role
+
+- `User.is_admin` (bool) gates admin-only API routes and the `/admin` frontend.
+- Backend: `require_admin` dependency on `app.api.admin` router — routes under `/api/admin/*` (users, challenges, submissions, stats).
+- Frontend: `AdminRoute` wrapper + admin nav in `Layout`; `adminApi` in `src/services/api.ts`.
+
+### Error Handling (frontend)
+
+- API errors are normalized with `extractError` / `extractFieldErrors` helpers in `src/utils/errors.ts` (returns a human-readable message from `ApiError.detail` (Pydantic `{ detail }`) or falls back to the HTTP status; keeps the app resilient when the backend shape varies).
+- `ApiError` (in `src/services/api.ts`) carries `status`, `detail`, and field-level `validationErrors` parsed from Pydantic 422 responses.
+- Flash toasts use the shared notification pattern; 401s from non-credential endpoints trigger a session redirect via `handleUnauthorized` (login/register surface inline errors).
 
 ## Environment and Secret-File Rules
 

@@ -31,6 +31,22 @@ Build a platform where users can:
 - **Auth**: JWT tokens (OAuth2 planned for future)
 - **AI/LLM**: Multiple providers (OpenAI, Anthropic, local models)
 - **Dev environment**: Docker and Dev Containers
+- **Kubernetes (optional)**: Kind + Kustomize (default) + Helm (expansion) + DevSpace (dev loop)
+
+## Supported Languages (Multi-Language Evaluation)
+
+| Language   | Test runner                    | Entry file       |
+|------------|--------------------------------|------------------|
+| Python     | pytest                         | solution.py      |
+| JavaScript | node --test                    | solution.js      |
+| TypeScript | tsx --test                     | solution.ts      |
+| Java       | javac + JUnit Platform console | Solution.java    |
+| Go         | go test -v                     | solution.go     |
+
+## Admin
+
+- `User.is_admin` gates `/api/admin/*` routes (backend `require_admin` on `app.api.admin`) and the `/admin` frontend pages (`AdminRoute` + `adminApi`).
+- Admin surface: users, challenges, submissions, platform stats.
 
 ## Architecture
 
@@ -62,7 +78,16 @@ Evaluation Result (score, logs, metrics)
 backend/       # FastAPI app, Celery workers, evaluation logic
 frontend/      # React 19, Vite 8, TypeScript
 .devcontainer/ # Docker Compose dev environment
+k8s/           # Kind config + Kustomize base/overlays + Helm chart
+scripts/       # k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh
+devspace.yaml  # Kubernetes inner dev loop
 ```
+
+## Error Handling (frontend)
+
+- API errors normalized via `extractError` in `src/utils/errors.ts` (human-readable message from `{ detail }` or HTTP status).
+- `ApiError` (in `src/services/api.ts`) carries `status`, `detail`, and field-level `validationErrors` from Pydantic 422 responses.
+- 401 redirects apply only to non-credential endpoints; login/register surface inline messages (via `handleUnauthorized` in `src/services/api.ts`).
 
 ## Key Commands
 
@@ -77,6 +102,7 @@ frontend/      # React 19, Vite 8, TypeScript
 - **Migrations**: `cd backend && uv run alembic upgrade head`
 - **Format**: `cd backend && uv run ruff format src/`
 - **All checks**: `make check`
+- **K8s (optional)**: `make k8s-setup [OVERLAY=dev]` / `make k8s-deploy OVERLAY=dev` / `make k8s-dev` / `make k8s-status` / `make k8s-teardown`
 
 ## Notes
 
