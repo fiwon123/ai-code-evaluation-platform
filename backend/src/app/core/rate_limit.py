@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
+from ipaddress import ip_address, ip_network
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -44,13 +45,47 @@ class RateLimiter:
             return True
 
 
+def _is_trusted_proxy(peer: str | None) -> bool:
+    """Whether the direct peer is a configured trusted proxy.
+
+    Without a ``trusted_proxies`` setting (development) nothing is trusted and
+    ``X-Forwarded-For`` is ignored — the socket peer is the real client.
+    """
+    if not settings.trusted_proxies or peer is None:
+        return False
+    try:
+        addr = ip_address(peer)
+    except ValueError:
+        return False
+    for entry in settings.trusted_proxies.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            if "/" in entry:
+                if addr in ip_network(entry, strict=False):
+                    return True
+            elif addr == ip_address(entry):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client is not None:
-        return request.client.host
-    return "unknown"
+    """Best-effort client IP.
+
+    Direct connections (development): the socket peer. Behind a trusted proxy
+    (production): the first ``X-Forwarded-For`` hop, which the proxy sets.
+    Only trust the header when the direct peer is in ``trusted_proxies`` —
+    otherwise a client could spoof it to rotate around per-IP limits.
+    """
+    peer = request.client.host if request.client is not None else None
+    if _is_trusted_proxy(peer):
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return peer or "unknown"
 
 
 def _extract_user_id(request: Request) -> str | None:

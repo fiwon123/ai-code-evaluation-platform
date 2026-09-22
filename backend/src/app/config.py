@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     rate_limit_anonymous_limit: int = 60  # requests per window for anonymous clients
     rate_limit_authenticated_limit: int = 120  # requests per window for logged-in users
     rate_limit_window_seconds: int = 60
+    # Comma-separated IPs/CIDRs of proxies in front of the API (nginx, ALB,
+    # Cloudflare). When set, the rate limiter trusts X-Forwarded-For from these
+    # and picks the first non-proxy IP. Empty in development, where direct
+    # connections mean request.client.host is the real client.
+    trusted_proxies: str = ""
 
     @field_validator("database_url")
     @classmethod
