@@ -99,6 +99,52 @@ async def test_create_submission_with_provider(db_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_submission_inherits_challenge_language(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token, language="go")
+
+    submission = await create_submission(db_client, token, challenge["id"])
+
+    assert submission["language"] == "go"
+
+
+@pytest.mark.asyncio
+async def test_create_submission_defaults_language_to_none(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token, language="python")
+
+    submission = await create_submission(db_client, token, challenge["id"])
+
+    assert submission["language"] == "python"
+
+
+@pytest.mark.asyncio
+async def test_create_submission_dispatch_failure_returns_503(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api import submissions as submissions_module
+
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    # Simulate a dead Celery broker: dispatcher reports failure.
+    monkeypatch.setattr(submissions_module, "dispatch_evaluation", lambda submission_id: False)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={"challenge_id": challenge["id"]},
+        headers=auth(token),
+    )
+    assert response.status_code == 503
+    assert "unavailable" in response.json()["detail"]
+
+    # The submission is recorded so the user can see what happened.
+    listing = (await db_client.get(SUBMISSIONS_URL, headers=auth(token))).json()
+    assert listing["total"] == 1
+    assert listing["items"][0]["status"] == "failed"
+
+
+@pytest.mark.asyncio
 async def test_list_submissions_requires_auth(db_client: AsyncClient) -> None:
     response = await db_client.get(SUBMISSIONS_URL)
     assert response.status_code == 401
@@ -138,15 +184,21 @@ async def test_list_submissions_pagination(db_client: AsyncClient) -> None:
     for _ in range(5):
         await create_submission(db_client, token, challenge["id"])
 
-    page1 = (await db_client.get(
-        SUBMISSIONS_URL, params={"page": 1, "page_size": 2}, headers=auth(token)
-    )).json()
-    page2 = (await db_client.get(
-        SUBMISSIONS_URL, params={"page": 2, "page_size": 2}, headers=auth(token)
-    )).json()
-    page3 = (await db_client.get(
-        SUBMISSIONS_URL, params={"page": 3, "page_size": 2}, headers=auth(token)
-    )).json()
+    page1 = (
+        await db_client.get(
+            SUBMISSIONS_URL, params={"page": 1, "page_size": 2}, headers=auth(token)
+        )
+    ).json()
+    page2 = (
+        await db_client.get(
+            SUBMISSIONS_URL, params={"page": 2, "page_size": 2}, headers=auth(token)
+        )
+    ).json()
+    page3 = (
+        await db_client.get(
+            SUBMISSIONS_URL, params={"page": 3, "page_size": 2}, headers=auth(token)
+        )
+    ).json()
 
     for page in (page1, page2, page3):
         assert page["page_size"] == 2
@@ -210,9 +262,7 @@ async def test_get_submission_owner(db_client: AsyncClient) -> None:
     challenge = await create_challenge(db_client, token)
     submission = await create_submission(db_client, token, challenge["id"])
 
-    response = await db_client.get(
-        f"{SUBMISSIONS_URL}/{submission['id']}", headers=auth(token)
-    )
+    response = await db_client.get(f"{SUBMISSIONS_URL}/{submission['id']}", headers=auth(token))
     assert response.status_code == 200
     body = response.json()
     assert body["id"] == submission["id"]
@@ -235,9 +285,7 @@ async def test_get_submission_forbidden_for_other_user(db_client: AsyncClient) -
 @pytest.mark.asyncio
 async def test_get_submission_not_found(db_client: AsyncClient) -> None:
     token, _ = await register_user(db_client)
-    response = await db_client.get(
-        f"{SUBMISSIONS_URL}/{uuid.uuid4()}", headers=auth(token)
-    )
+    response = await db_client.get(f"{SUBMISSIONS_URL}/{uuid.uuid4()}", headers=auth(token))
     assert response.status_code == 404
 
 
