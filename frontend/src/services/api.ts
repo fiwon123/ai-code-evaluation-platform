@@ -4,6 +4,7 @@ import type {
   ChallengeCreatePayload,
   ChallengeListParams,
   ChallengeUpdatePayload,
+  ChangePasswordPayload,
   LoginPayload,
   PaginatedResponse,
   RegisterPayload,
@@ -183,6 +184,12 @@ export const api = {
   get: <T>(path: string, options?: RequestInit) => request<T>(path, options),
   post: <T>(path: string, body?: unknown, options?: RequestInit) =>
     request<T>(path, { ...options, method: "POST", body: JSON.stringify(body ?? {}) }),
+  postNoContent: (path: string, body?: unknown, options?: RequestInit) =>
+    requestNoContent(path, {
+      ...options,
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
   patch: <T>(path: string, body: unknown, options?: RequestInit) =>
     request<T>(path, { ...options, method: "PATCH", body: JSON.stringify(body) }),
   del: (path: string, options?: RequestInit) =>
@@ -195,6 +202,8 @@ export const authApi = {
   login: (payload: LoginPayload) =>
     api.post<AuthResponse>("/api/auth/login", payload),
   me: () => api.get<User>("/api/auth/me"),
+  changePassword: (payload: ChangePasswordPayload) =>
+    api.postNoContent("/api/auth/change-password", payload),
 };
 
 export const challengesApi = {
