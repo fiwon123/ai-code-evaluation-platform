@@ -6,6 +6,7 @@ import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
+import { extractError } from "../../utils/errors.ts";
 import type { Challenge, Submission } from "../../types.ts";
 import { formatRelativeTime, statusVariant } from "../../utils/formatting.ts";
 import styles from "./Profile.module.css";
@@ -34,65 +35,63 @@ function Profile() {
       return;
     }
     const userId = user.id;
-    let cancelled = false;
+    const controller = new AbortController();
     async function load() {
       try {
-        const challengeResp = await challengesApi.list({
-          owner_id: userId,
-          page: challengePage,
-          page_size: PAGE_SIZE,
-        });
-        if (!cancelled) {
-          setChallenges(challengeResp.items);
-          setChallengesPages(challengeResp.pages);
-          setChallengesTotal(challengeResp.total);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Failed to load your dashboard.");
+        const challengeResp = await challengesApi.list(
+          {
+            owner_id: userId,
+            page: challengePage,
+            page_size: PAGE_SIZE,
+          },
+          { signal: controller.signal },
+        );
+        setChallenges(challengeResp.items);
+        setChallengesPages(challengeResp.pages);
+        setChallengesTotal(challengeResp.total);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(extractError(err));
         }
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
     }
     void load();
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [user, challengePage]);
 
   useEffect(() => {
     if (!user) {
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
     async function load() {
       try {
-        const submissionResp = await submissionsApi.list({
-          page: submissionPage,
-          page_size: PAGE_SIZE,
-        });
-        if (!cancelled) {
-          setSubmissions(submissionResp.items);
-          setSubmissionsPages(submissionResp.pages);
-          setSubmissionsTotal(submissionResp.total);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Failed to load your dashboard.");
+        const submissionResp = await submissionsApi.list(
+          {
+            page: submissionPage,
+            page_size: PAGE_SIZE,
+          },
+          { signal: controller.signal },
+        );
+        setSubmissions(submissionResp.items);
+        setSubmissionsPages(submissionResp.pages);
+        setSubmissionsTotal(submissionResp.total);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(extractError(err));
         }
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
     }
     void load();
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [user, submissionPage]);
 
   const stats = useMemo(() => {

@@ -8,6 +8,7 @@ import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi } from "../services/api.ts";
+import { extractError } from "../utils/errors.ts";
 import type { Challenge } from "../types.ts";
 import { formatRelativeTime } from "../utils/formatting.ts";
 import styles from "./Challenges.module.css";
@@ -40,34 +41,33 @@ function Challenges() {
   }, [debouncedSearch, language]);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     async function load() {
       try {
-        const data = await challengesApi.list({
-          page,
-          page_size: PAGE_SIZE,
-          search: debouncedSearch || undefined,
-          language: language === "all" ? undefined : language,
-        });
-        if (!cancelled) {
-          setChallenges(data.items);
-          setPages(data.pages);
-          setTotal(data.total);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Failed to load challenges.");
+        const data = await challengesApi.list(
+          {
+            page,
+            page_size: PAGE_SIZE,
+            search: debouncedSearch || undefined,
+            language: language === "all" ? undefined : language,
+          },
+          { signal: controller.signal },
+        );
+        setChallenges(data.items);
+        setPages(data.pages);
+        setTotal(data.total);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(extractError(err));
         }
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
     }
     void load();
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [page, debouncedSearch, language]);
 
   const languages = useMemo(() => {
