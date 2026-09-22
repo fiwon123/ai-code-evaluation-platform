@@ -267,3 +267,14 @@ class TestRunPerLanguage:
         sandbox = DockerSandbox(client=FakeClient())
         with pytest.raises(ValueError, match="not supported"):
             sandbox.run("x", "", language="ruby")
+
+    def test_uses_runtime_timeout_when_not_specified(self):
+        # Go compilation headroom must apply even when the caller omits
+        # an explicit timeout (30s global default would be too tight).
+        container = FakeContainer(logs="--- PASS: TestTwoSum\nok")
+        sandbox = DockerSandbox(
+            client=FakeClient(containers=FakeContainers(container=container)),
+            timeout=30,
+        )
+        sandbox.run("package main", "", language="go")
+        assert container.wait_timeout > 30

@@ -14,6 +14,8 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from app.config import settings
+
 Parser = Callable[[str], tuple[int, int]]
 
 # --- output parsers ---------------------------------------------------------
@@ -99,6 +101,9 @@ class LanguageRunner:
     #: argv executed with cwd = workdir (host) or /code (Docker sandbox).
     command: list[str]
     parse: Parser = parse_pytest
+    #: Timeout in seconds; compilation-heavy runtimes get a longer budget so
+    #: slow javac/go build steps do not trip the default 30s limit.
+    timeout: int = settings.evaluation_timeout
     #: Extra files written next to the solution/tests (e.g. go.mod).
     extra_files: dict[str, str] = field(default_factory=dict)
     #: Extra environment variables for the subprocess/container.
@@ -143,6 +148,8 @@ JAVA_RUNNER = LanguageRunner(
     test_filename="SolutionTest.java",
     command=["sh", "-c", _JAVA_COMPILE_AND_RUN],
     parse=parse_junit,
+    # javac + JUnit startup add seconds; give compilation headroom.
+    timeout=settings.evaluation_timeout + 30,
 )
 
 GO_RUNNER = LanguageRunner(
@@ -153,6 +160,8 @@ GO_RUNNER = LanguageRunner(
     command=["go", "test", "-v", "."],
     parse=parse_go,
     extra_files={"go.mod": GO_MOD},
+    # First-run compilation of the stdlib into the tmpfs cache is slow.
+    timeout=settings.evaluation_timeout + 60,
     # Air-gapped runtimes: no module downloads, caches moved to tmpfs (/tmp).
     env={
         "GOCACHE": "/tmp/go-build",
