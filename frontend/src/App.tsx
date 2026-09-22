@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary.tsx";
 import Layout from "./components/Layout.tsx";
 import ProtectedRoute from "./components/ProtectedRoute.tsx";
 import { ToastProvider } from "./components/Toast/ToastContext.tsx";
@@ -23,27 +24,35 @@ function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/features" element={<Features />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="/demo" element={<Demo />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/challenges" element={<Challenges />} />
-          <Route path="/challenges/:id" element={<ChallengeDetail />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/challenges/new" element={<CreateChallenge />} />
-            <Route path="/challenges/:id/edit" element={<EditChallenge />} />
-            <Route path="/submissions/:id" element={<SubmissionDetail />} />
-            <Route path="/profile" element={<Profile />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Route>
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Home />} />
+              <Route path="/features" element={<Features />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/demo" element={<Demo />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/challenges" element={<Challenges />} />
+              <Route path="/challenges/:id" element={<ChallengeDetail />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/challenges/new" element={<CreateChallenge />} />
+                <Route
+                  path="/challenges/:id/edit"
+                  element={<EditChallenge />}
+                />
+                <Route
+                  path="/submissions/:id"
+                  element={<SubmissionDetail />}
+                />
+                <Route path="/profile" element={<Profile />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </ErrorBoundary>
       </ToastProvider>
     </AuthProvider>
   );

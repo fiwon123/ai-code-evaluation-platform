@@ -1,0 +1,27 @@
+.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 50vh;
+  padding: var(--space-8);
+  gap: var(--space-3);
+}
+
+.title {
+  font-size: var(--font-size-2xl);
+  color: var(--color-text);
+}
+
+.message {
+  color: var(--color-text-secondary);
+  max-width: 32rem;
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
