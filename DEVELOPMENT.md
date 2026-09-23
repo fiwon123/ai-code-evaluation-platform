@@ -46,7 +46,7 @@ docker compose down -v    # ONLY to wipe the database + Redis too
 
 ```bash
 scripts/open-in-sandbox.sh        # shell inside the dev container (zsh default)
-cd /workspace && opencode         # the AI coding agent, isolated in the sandbox
+cd /sandbox/ai-code-evaluation-platform && opencode     # the AI coding agent, isolated in the sandbox
 ```
 
 Inside the sandbox the agent has node 22, uv (+ baked `/opt/backend-venv`), gh

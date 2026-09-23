@@ -42,7 +42,7 @@ if [[ $# -gt 0 ]]; then
 fi
 
 echo "[sandbox] Dev sandbox shell — run the AI coding agent with:"
-echo "          cd /workspace && opencode"
+echo "          cd /sandbox/ai-code-evaluation-platform && opencode"
 if [[ -t 0 ]]; then
     exec docker compose exec -it dev zsh
 else
