@@ -4,9 +4,9 @@ set -euo pipefail
 # k8s-setup.sh — create the local Kind cluster, build images, load them.
 #
 # Part of the v0.6.0 Kubernetes workflow. Requires:
-#   - Docker (available on the host; NOT available inside the devcontainer)
-#   - kind, kubectl, kustomize on PATH (installed by .devcontainer/setup.sh
-#     on the host, or via your distro package manager)
+#   - Docker (available on the host)
+#   - kind, kubectl, kustomize on PATH (installed by scripts/setup-host-tools.sh
+#     via mise, or via your distro package manager)
 #
 # Usage:
 #   scripts/k8s-setup.sh                # default images (eval-backend/eval-frontend:dev)
@@ -26,7 +26,7 @@ FRONTEND_IMAGE="eval-frontend:$IMAGE_TAG"
 for tool in docker kind kubectl; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "ERROR: '$tool' is required but not on PATH." >&2
-        echo "  Install via .devcontainer/setup.sh or the official docs, then re-run." >&2
+        echo "  Install via scripts/setup-host-tools.sh (mise) or the official docs, then re-run." >&2
         exit 1
     fi
 done

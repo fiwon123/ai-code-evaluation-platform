@@ -30,7 +30,7 @@ Build a platform where users can:
 - **Background jobs**: Celery (with Redis broker)
 - **Auth**: JWT tokens (OAuth2 planned for future)
 - **AI/LLM**: Multiple providers (OpenAI, Anthropic, local models)
-- **Dev environment**: Docker and Dev Containers
+- **Dev environment**: Docker Compose dev sandbox + host-native loop (mise toolchain)
 - **Kubernetes (optional)**: Kind + Kustomize (default) + Helm (expansion) + DevSpace (dev loop)
 
 ## Supported Languages (Multi-Language Evaluation)
@@ -75,12 +75,15 @@ Evaluation Result (score, logs, metrics)
 ## Directory Layout
 
 ```text
-backend/       # FastAPI app, Celery workers, evaluation logic
-frontend/      # React 19, Vite 8, TypeScript
-.devcontainer/ # Docker Compose dev environment
-k8s/           # Kind config + Kustomize base/overlays + Helm chart
-scripts/       # k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh
-devspace.yaml  # Kubernetes inner dev loop
+backend/          # FastAPI app, Celery workers, evaluation logic
+frontend/         # React 19, Vite 8, TypeScript
+docker-compose.yml # Dev sandbox stack (dev, celery, postgres, redis, sandbox)
+Dockerfile        # Dev-sandbox image (deps baked: /opt/backend-venv)
+dev-entrypoint.sh # Foreground uvicorn + vite entrypoint for the dev service
+mise.toml         # Host toolchain single source of truth (node, uv, gh, k8s)
+k8s/              # Kind config + Kustomize base/overlays + Helm chart
+scripts/          # setup-host-tools.sh / k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh
+devspace.yaml     # Kubernetes inner dev loop
 ```
 
 ## Error Handling (frontend)
@@ -102,11 +105,14 @@ devspace.yaml  # Kubernetes inner dev loop
 - **Migrations**: `cd backend && uv run alembic upgrade head`
 - **Format**: `cd backend && uv run ruff format src/`
 - **All checks**: `make check`
-- **K8s (optional)**: `make k8s-setup [OVERLAY=dev]` / `make k8s-deploy OVERLAY=dev` / `make k8s-dev` / `make k8s-status` / `make k8s-teardown`
+- **Dev sandbox**: `make dev-up` (isolated stack: uvicorn + vite + celery + postgres + redis + sandbox) / `make dev-down` / `make dev-log`
+- **Host infra only**: `make infra-up` / `make infra-down` (for the host-native loop)
+- **Host toolchain**: `scripts/setup-host-tools.sh` (gh auth + `mise install` from mise.toml)
+- **K8s (optional)**: `make tools-k8s` / `make k8s-setup [OVERLAY=dev]` / `make k8s-deploy OVERLAY=dev` / `make k8s-dev` / `make k8s-status` / `make k8s-teardown`
 
 ## Notes
 
-- This project runs inside a Dev Container — the agent cannot run Docker commands directly
+- Development runs either in the Docker Compose dev sandbox (`make dev-up`) or host-native (`make dev-*`, `make check`); the agent runs on the host with Docker access (no Dev Containers)
 - Code execution happens in isolated Docker containers (Docker socket mounting for sandbox)
 - Uses UUID primary keys for all tables
 - Database migrations use Alembic

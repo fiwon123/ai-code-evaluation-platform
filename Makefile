@@ -1,4 +1,4 @@
-.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
+.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install dev-up dev-down dev-log infra-up infra-down tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
 
 # Install all dependencies
 install:
@@ -63,6 +63,41 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	cd frontend && npm run clean 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Dev sandbox (Docker Compose) — recommended daily loop.
+#
+# `make dev-up` starts the isolated dev container (uvicorn + vite, hot reload)
+# plus celery, postgres, redis and builds the eval-sandbox image. The host-
+# native targets above (dev-backend / dev-frontend / check) remain available
+# as the dependency-free fast path.
+# ---------------------------------------------------------------------------
+
+# Build the dev image and start the full stack (dev, celery, postgres, redis, sandbox)
+dev-up:
+	docker compose up --build dev
+
+# Stop the whole compose stack (keeps data volumes, incl. postgres_data)
+dev-down:
+	docker compose down
+
+# Tail the dev sandbox + celery worker logs
+dev-log:
+	docker compose logs -f dev celery
+
+# Infra only (postgres + redis + sandbox image) — for the host-native loop
+infra-up:
+	docker compose up --build -d postgres redis sandbox
+
+# Stop infra (also stops dev/celery if running)
+infra-down:
+	docker compose down
+
+# Host toolchain from mise.toml (node, uv, gh + kind/kubectl/kustomize/helm/devspace)
+tools-k8s:
+	@command -v mise >/dev/null 2>&1 || scripts/setup-host-tools.sh --no-gh
+	mise install
+	@echo "Toolchain installed (see mise.toml — k8s: kind, kubectl, kustomize, helm, devspace)."
 
 # ---------------------------------------------------------------------------
 # Kubernetes (optional — requires Docker + the K8s toolchain on PATH)

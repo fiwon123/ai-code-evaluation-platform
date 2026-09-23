@@ -13,7 +13,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if ! command -v devspace >/dev/null 2>&1; then
     echo "ERROR: 'devspace' is required but not on PATH." >&2
-    echo "  Install via .devcontainer/setup.sh, then re-run." >&2
+    echo "  Install via scripts/setup-host-tools.sh (mise), then re-run." >&2
     exit 1
 fi
 
