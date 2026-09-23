@@ -63,6 +63,17 @@ in the first, or standalone (it starts the stack if needed):
 ```bash
 make opencode      # → opencode TUI running INSIDE the dev container
 make sandbox       # → plain interactive shell in the container
+make help          # → list every target with its one-line description
+make dev-build     # → rebuild the dev image after Dockerfile/pyproject/uv.lock changes
+```
+
+`make opencode` defaults to auto-approving permission prompts (`OPENCODE_ARGS=--auto`,
+the trusted-agent model). Override per invocation, e.g.:
+
+```bash
+make opencode OPENCODE_ARGS=""                      # bare TUI (permission prompts)
+make opencode OPENCODE_ARGS="--auto -m provider/model"
+make opencode OPENCODE_ARGS="run 'task' --auto"     # one-shot non-interactive
 ```
 
 > Trusted-agent model: the dev container shares the workspace bind-mount and

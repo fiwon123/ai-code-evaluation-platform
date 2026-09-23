@@ -1,150 +1,173 @@
-.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install dev-up dev-down dev-log dev-restart sandbox opencode infra-up infra-down tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
+.PHONY: help setup host-tools infra-up infra-down preflight dev-up dev-build dev-down dev-restart \
+        dev-log dev-exec dev-agent opencode sandbox reset \
+        test test-backend test-frontend lint lint-fix format typecheck build check \
+        install run dev-backend dev-frontend dev-celery dev-all clean \
+        tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
 
-# Install all dependencies
-install:
-	cd backend && uv sync
-	cd frontend && npm install
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-# Run the application
-run:
-	cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Compose command (override-friendly; e.g. COMPOSE="docker-compose")
+COMPOSE ?= docker compose
+BACKEND_DIR := backend
+FRONTEND_DIR := frontend
 
-# Development servers
-dev-backend:
-	cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# --- Host-native path (fastest, no containers) -------------------------------
+install: setup ## Alias for setup (kept for backwards compatibility)
+setup: ## Install host-native deps (uv sync + npm install)
+	cd $(BACKEND_DIR) && uv sync
+	cd $(FRONTEND_DIR) && npm install
 
-dev-frontend:
-	cd frontend && npm run dev -- --host 0.0.0.0
+host-tools: ## Install dev tools on the host via mise (kind/kubectl/kustomize/helm/devspace)
+	@command -v mise >/dev/null 2>&1 || scripts/setup-host-tools.sh --no-gh
+	mise install
+	@echo "Toolchain installed (see mise.toml — k8s: kind, kubectl, kustomize, helm, devspace)."
 
-dev-celery:
-	cd backend && uv run celery -A app.core.celery_app:celery_app worker --loglevel=info
+run: ## Run the backend dev server on the host
+	cd $(BACKEND_DIR) && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Start all development services in the background
-dev-all:
+dev-backend: ## Start backend dev server on the host
+	cd $(BACKEND_DIR) && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+dev-frontend: ## Start frontend dev server on the host
+	cd $(FRONTEND_DIR) && npm run dev -- --host 0.0.0.0
+
+dev-celery: ## Start celery worker on the host
+	cd $(BACKEND_DIR) && uv run celery -A app.core.celery_app:celery_app worker --loglevel=info
+
+dev-all: ## Start backend + celery + frontend on the host (background, /tmp/*.log)
 	@echo "Starting development services..."
-	@cd backend && nohup uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
-	@cd backend && nohup uv run celery -A app.core.celery_app:celery_app worker --loglevel=info > /tmp/celery.log 2>&1 &
-	@cd frontend && nohup npm run dev -- --host 0.0.0.0 > /tmp/frontend.log 2>&1 &
+	@cd $(BACKEND_DIR) && nohup uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+	@cd $(BACKEND_DIR) && nohup uv run celery -A app.core.celery_app:celery_app worker --loglevel=info > /tmp/celery.log 2>&1 &
+	@cd $(FRONTEND_DIR) && nohup npm run dev -- --host 0.0.0.0 > /tmp/frontend.log 2>&1 &
 	@sleep 2
 	@echo "  Backend:  http://localhost:8000  (logs: /tmp/backend.log)"
 	@echo "  Frontend: http://localhost:5173  (logs: /tmp/frontend.log)"
 	@echo "  Celery:   running                (logs: /tmp/celery.log)"
 
-# Testing
-test: test-backend test-frontend
+# --- Infrastructure only (postgres/redis/eval-sandbox image) -----------------
+infra-up: ## Start postgres + redis + build the eval-sandbox image (host-native path)
+	$(COMPOSE) up -d --build postgres redis sandbox
 
-test-backend:
-	cd backend && uv run pytest
+infra-down: ## Stop infra only (also stops dev/celery if running)
+	$(COMPOSE) down postgres redis sandbox
 
-test-frontend:
-	cd frontend && npm test
-
-# Linting
-lint:
-	cd backend && uv run ruff check src/ tests/
-	cd frontend && npm run lint
-
-lint-fix:
-	cd backend && uv run ruff check --fix src/ tests/
-
-# Formatting
-format:
-	cd backend && uv run ruff format src/ tests/
-
-# Type checking
-typecheck:
-	cd frontend && npm run build
-
-# All checks
-check: lint typecheck test
-
-# Clean
-clean:
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
-	cd frontend && npm run clean 2>/dev/null || true
-
-# ---------------------------------------------------------------------------
-# Dev sandbox (Docker Compose) — recommended daily loop.
+# --- Isolated dev sandbox (dev + worker + infra) -----------------------------
 #
-# `make dev-up` starts the isolated dev container (uvicorn + vite, hot reload)
-# plus celery, postgres, redis and builds the eval-sandbox image. The host-
-# native targets above (dev-backend / dev-frontend / check) remain available
-# as the dependency-free fast path.
-# ---------------------------------------------------------------------------
+# `make dev-up` starts the dev container (uvicorn + vite, hot reload) plus
+# celery, postgres, redis and builds the eval-sandbox image. Rebuilds after
+# Dockerfile/pyproject/uv.lock changes go through `make dev-build` (plain
+# `dev-up` reuses an existing image — compose auto-builds only when missing).
+#
+# Sandboxed AI coding agent (trusted-agent model): the dev container mounts
+# the host opencode binary + config, git identity, and gh auth read-only,
+# plus the host Docker socket (RW by design — see DEVELOPMENT.md). Only the
+# sandbox-starting targets below require the host opencode binary; the
+# host-native loop (infra-up / make check) never does.
+# NOTE: not named OPENCODE — the opencode agent runtime exports an OPENCODE
+# env var (=1) which would override a ?= default via make's env import.
+OPENCODE_BIN ?= $(HOME)/.opencode/bin/opencode
 
-# Build the dev image and start the full stack (dev, celery, postgres, redis, sandbox)
-# opencode is required because the dev image mounts the host binary read-only
-# (sandboxed AI coding agent); infra/host-native loops do not need it.
-dev-up:
-	@test -x "$$HOME/.opencode/bin/opencode" || { echo "ERROR: opencode not found at $$HOME/.opencode/bin/opencode" >&2; echo "  Install: curl -fsSL https://opencode.ai/install | bash   (or scripts/setup-host-tools.sh)" >&2; exit 1; }
-	@mkdir -p "$$HOME/.config/opencode" && touch "$$HOME/.gitconfig"
-	docker compose up --build dev
+# Default for the sandbox: auto-approve permission prompts (trusted-agent
+# model — the dev container already has the workspace + docker socket).
+# Override per-invocation, e.g.:
+#   make opencode OPENCODE_ARGS=""                      # bare TUI (prompts back)
+#   make opencode OPENCODE_ARGS="--auto -m provider/model"
+#   make opencode OPENCODE_ARGS="run 'task' --auto"     # one-shot non-interactive
+OPENCODE_ARGS ?= --auto
 
-# Stop the whole compose stack (keeps data volumes, incl. postgres_data)
-dev-down:
-	docker compose down
+preflight: ## (internal) Require host opencode + pre-create mounted config paths
+	@test -x "$(OPENCODE_BIN)" || { echo "ERROR: opencode not found at $(OPENCODE_BIN)" >&2; \
+	  echo "  Install: curl -fsSL https://opencode.ai/install | bash   (or scripts/setup-host-tools.sh)" >&2; exit 1; }
+	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
 
-# Stop + start in one step (data kept; ends in the foreground with live logs)
-dev-restart:
-	$(MAKE) dev-down
-	$(MAKE) dev-up
+dev-up: preflight ## Start the isolated dev sandbox (uvicorn + vite + worker + infra)
+	$(COMPOSE) up dev
 
-# Interactive shell inside the dev sandbox, opencode available
-sandbox:
+dev-build: ## Rebuild the dev image after Dockerfile/pyproject/uv.lock changes
+	$(COMPOSE) build dev
+
+dev-down: ## Stop the dev sandbox (keeps data volumes)
+	$(COMPOSE) down
+
+dev-restart: preflight ## Stop and restart the dev sandbox in one step (data kept, foreground logs)
+	$(COMPOSE) down
+	$(COMPOSE) up dev
+
+dev-log: ## Tail dev sandbox + celery worker logs
+	$(COMPOSE) logs -f dev celery
+
+dev-exec: ## Open a shell inside the dev sandbox
+	$(COMPOSE) exec dev bash
+
+opencode: preflight ## Run the AI coding agent (opencode) inside the dev sandbox
+	@if [ -z "$$($(COMPOSE) ps -q dev)" ]; then echo "[opencode] starting dev stack..."; $(COMPOSE) up -d dev; fi
+	@if [ -t 0 ]; then $(COMPOSE) exec -it dev bash -lc "cd /workspace && opencode $(OPENCODE_ARGS)"; else $(COMPOSE) exec -T dev bash -lc "cd /workspace && opencode $(OPENCODE_ARGS)"; fi
+
+# Alias kept for compatibility with earlier dev-sandbox docs.
+dev-agent: opencode
+
+sandbox: preflight ## Open an interactive shell in the dev sandbox (opencode ready)
 	scripts/open-in-sandbox.sh
 
-# Launch the AI coding agent INSIDE the dev sandbox (no manual compose exec).
-# Ensures the stack is running (idempotent), then execs opencode in the
-# container. TTY-aware: -it on an interactive terminal, -T otherwise.
-opencode:
-	@test -x "$$HOME/.opencode/bin/opencode" || { echo "ERROR: opencode not found at $$HOME/.opencode/bin/opencode" >&2; echo "  Install: curl -fsSL https://opencode.ai/install | bash   (or scripts/setup-host-tools.sh)" >&2; exit 1; }
-	@docker compose up -d dev >/dev/null
-	if [ -t 0 ]; then docker compose exec -it dev opencode; else docker compose exec -T dev opencode; fi
+reset: ## Stop everything and wipe volumes (clean slate — destructive!)
+	$(COMPOSE) down -v
 
-# Tail the dev sandbox + celery worker logs
-dev-log:
-	docker compose logs -f dev celery
-
-# Infra only (postgres + redis + sandbox image) — for the host-native loop
-infra-up:
-	docker compose up --build -d postgres redis sandbox
-
-# Stop infra (also stops dev/celery if running)
-infra-down:
-	docker compose down
-
-# Host toolchain from mise.toml (node, uv, gh + kind/kubectl/kustomize/helm/devspace)
-tools-k8s:
+# --- Kubernetes (optional — requires Docker + the K8s toolchain on PATH) -----
+# Docker Compose remains the primary local path. These targets wrap the
+# scripts under scripts/ (the source of truth); see k8s/ for manifests.
+tools-k8s: ## Host k8s toolchain from mise.toml (kind/kubectl/kustomize/helm/devspace)
 	@command -v mise >/dev/null 2>&1 || scripts/setup-host-tools.sh --no-gh
 	mise install
 	@echo "Toolchain installed (see mise.toml — k8s: kind, kubectl, kustomize, helm, devspace)."
 
-# ---------------------------------------------------------------------------
-# Kubernetes (optional — requires Docker + the K8s toolchain on PATH)
-#
-# Docker Compose remains the primary local path. These targets are the
-# convenience wrappers; the scripts under scripts/ are the source of truth.
-# See k8s/ for manifests and k8s/helm/ for the Helm chart.
-# ---------------------------------------------------------------------------
-
-# Tool check and cluster setup: `make k8s-setup`
-k8s-setup:
+k8s-setup: ## Create the Kind cluster + build/load images
 	scripts/k8s-setup.sh
 
-# Deploy all manifests to the Kind cluster: `make k8s-deploy [OVERLAY=dev]`
-k8s-deploy:
+k8s-deploy: ## Deploy manifests: make k8s-deploy [OVERLAY=dev|staging|production]
 	scripts/k8s-deploy.sh $(OVERLAY)
 
-# Inner dev loop with DevSpace in the Kind cluster: `make k8s-dev`
-k8s-dev:
+k8s-dev: ## DevSpace inner dev loop (sync + ports + terminals)
 	scripts/k8s-dev.sh
 
-# Tear down the Kind cluster: `make k8s-teardown`
-k8s-teardown:
+k8s-teardown: ## Delete the Kind cluster
 	scripts/k8s-teardown.sh
 
-# Show cluster + workload status: `make k8s-status`
-k8s-status:
+k8s-status: ## Show nodes + pods
 	@kubectl get nodes -o wide
 	@kubectl get pods -A
+
+# --- Testing -----------------------------------------------------------------
+test: test-backend test-frontend ## Run all tests
+
+test-backend: ## Run backend tests (pytest)
+	cd $(BACKEND_DIR) && uv run pytest
+
+test-frontend: ## Run frontend tests (vitest)
+	cd $(FRONTEND_DIR) && npm test
+
+# --- Lint / format ------------------------------------------------------------
+lint: ## Lint backend (ruff) + frontend (oxlint)
+	cd $(BACKEND_DIR) && uv run ruff check src/ tests/
+	cd $(FRONTEND_DIR) && npm run lint
+
+lint-fix: ## Auto-fix lint issues (ruff --fix + oxlint --fix)
+	cd $(BACKEND_DIR) && uv run ruff check --fix src/ tests/
+	cd $(FRONTEND_DIR) && npm run lint:fix
+
+format: ## Format backend code (ruff format)
+	cd $(BACKEND_DIR) && uv run ruff format src/ tests/
+
+# --- Build / typecheck ---------------------------------------------------------
+typecheck: ## Frontend typecheck + build (tsc -b && vite build)
+	cd $(FRONTEND_DIR) && npm run build
+
+build: typecheck ## Build the frontend (same as make typecheck)
+
+check: lint test build ## Full local gate: lint + tests + build
+
+# --- Cleanup -------------------------------------------------------------------
+clean: ## Remove build caches
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	cd $(FRONTEND_DIR) && npm run clean 2>/dev/null || true
