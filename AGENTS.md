@@ -134,7 +134,7 @@ The AI agent (opencode) runs **inside a Dev Container**, not on a bare machine.
 
 The devcontainer is configured with:
 - **opencode**: Installed automatically via `.devcontainer/setup.sh` on container creation
-- **gh CLI**: Installed via devcontainer feature, auto-authenticated from the host's `GITHUB_TOKEN` (forwarded via `remoteEnv`, re-run by `setup.sh` on every container start; auth config persisted in the `gh_config` Docker volume)
+- **gh CLI**: Installed in the devcontainer image (root `Dockerfile`, pinned GitHub release), auto-authenticated from the host's `GITHUB_TOKEN` (forwarded via `remoteEnv`, re-run by `setup.sh` on every container start; auth config persisted in the `gh_config` Docker volume)
 - **Node.js 22**: Installed via devcontainer feature
 - **Python 3.14**: Installed via Dockerfile
 - **uv**: Installed via Dockerfile

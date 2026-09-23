@@ -13,7 +13,7 @@
 FROM ghcr.io/astral-sh/uv:latest AS builder
 
 # NOTE: uv:latest is intentional — it tracks the uv release channel and is the
-# same reference the devcontainer uses (.devcontainer/Dockerfile) for a matching
+# same reference the dev-container image (root Dockerfile) uses for a matching
 # lockfile (uv.lock v1). Pin to a hash in CI for maximum reproducibility.
 
 WORKDIR /app

@@ -1,3 +1,11 @@
+# Dev-container Compose file (repo root) — used by VS Code Dev Containers
+# (.devcontainer/devcontainer.json) and directly via `docker compose up -d`.
+#
+# name is pinned so project volumes/networks keep the devcontainer_* prefix
+# (e.g. the persisted gh_config auth volume) regardless of the repo directory
+# name or where the compose file lives.
+name: devcontainer
+
 # Resource limits on every service prevent runaway processes from exhausting
 # the host machine (e.g., heavy evaluations, build spikes). Ceilings are
 # intentionally generous so normal dev workflows (uv sync, npm install,
@@ -6,10 +14,10 @@
 services:
   backend:
     build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     volumes:
-      - ..:/workspace:cached
+      - .:/workspace:cached
       # Mount the host Docker socket so the Celery worker can create
       # isolated eval-sandbox containers for code evaluation.
       - /var/run/docker.sock:/var/run/docker.sock
@@ -42,10 +50,10 @@ services:
   # background process) so it restarts automatically if it crashes.
   celery:
     build:
-      context: ..
-      dockerfile: .devcontainer/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     volumes:
-      - ..:/workspace:cached
+      - .:/workspace:cached
       # Mount the host Docker socket so the Celery worker can create
       # isolated eval-sandbox containers for code evaluation.
       - /var/run/docker.sock:/var/run/docker.sock
@@ -74,7 +82,7 @@ services:
   # untrusted code execution. One-shot: builds the image, then exits.
   sandbox:
     build:
-      context: ..
+      context: .
       dockerfile: backend/Dockerfile.sandbox
     image: eval-sandbox:latest
     command: ["true"]
@@ -87,7 +95,7 @@ services:
   frontend:
     image: mcr.microsoft.com/devcontainers/javascript-node:22
     volumes:
-      - ..:/workspace:cached
+      - .:/workspace:cached
     command: bash -c "/workspace/.devcontainer/start-frontend.sh; exec tail -f /dev/null"
     ports:
       - "5173:5173"
