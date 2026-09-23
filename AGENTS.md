@@ -110,7 +110,8 @@ The primary dev path is a lightweight Docker "dev sandbox" (no VS Code Dev
 Containers): `docker compose up dev` runs uvicorn + vite in a prebuilt
 container with the source bind-mounted; `celery` runs the evaluation worker;
 `postgres`/`redis`/`sandbox` provide infra. Dependency-free host-native
-targets (`make dev-*`) remain the fastest alternative.
+targets (`make dev-*`) remain the fastest alternative. See `DEVELOPMENT.md`
+for the daily-loop cheatsheet (up/down, AI-in-sandbox, manual coding).
 
 ```bash
 make infra-up               # postgres + redis + sandbox image (compose, detached)
