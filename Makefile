@@ -1,4 +1,4 @@
-.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install dev-up dev-down dev-log infra-up infra-down tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
+.PHONY: run test test-backend test-frontend lint format typecheck check clean dev-backend dev-frontend dev-celery dev-all install dev-up dev-down dev-log dev-restart sandbox opencode infra-up infra-down tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
 
 # Install all dependencies
 install:
@@ -84,6 +84,23 @@ dev-up:
 # Stop the whole compose stack (keeps data volumes, incl. postgres_data)
 dev-down:
 	docker compose down
+
+# Stop + start in one step (data kept; ends in the foreground with live logs)
+dev-restart:
+	$(MAKE) dev-down
+	$(MAKE) dev-up
+
+# Interactive shell inside the dev sandbox, opencode available
+sandbox:
+	scripts/open-in-sandbox.sh
+
+# Launch the AI coding agent INSIDE the dev sandbox (no manual compose exec).
+# Ensures the stack is running (idempotent), then execs opencode in the
+# container. TTY-aware: -it on an interactive terminal, -T otherwise.
+opencode:
+	@test -x "$$HOME/.opencode/bin/opencode" || { echo "ERROR: opencode not found at $$HOME/.opencode/bin/opencode" >&2; echo "  Install: curl -fsSL https://opencode.ai/install | bash   (or scripts/setup-host-tools.sh)" >&2; exit 1; }
+	@docker compose up -d dev >/dev/null
+	if [ -t 0 ]; then docker compose exec -it dev opencode; else docker compose exec -T dev opencode; fi
 
 # Tail the dev sandbox + celery worker logs
 dev-log:

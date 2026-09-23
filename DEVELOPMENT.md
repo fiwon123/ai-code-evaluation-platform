@@ -27,6 +27,7 @@ container** (`scripts/open-in-sandbox.sh`). Both see the same files.
 make dev-up        # START: build (once) + dev + celery + postgres + redis + sandbox
                    # foreground with combined logs — Ctrl+C stops it
 make dev-log       # tail dev + celery logs without stopping
+make dev-restart   # stop + start in one step (data kept, ends in foreground logs)
 make dev-down      # STOP: tear down the stack (postgres data volume kept)
 make dev-up        # RESTART: fast, no rebuild, data still there
 make infra-up      # infra only (postgres/redis/eval-sandbox image) for host-native loop
@@ -54,6 +55,14 @@ the running stack at `:8000` / `:5173`. One-shot mode without a shell:
 
 ```bash
 scripts/open-in-sandbox.sh 'uv run pytest'
+```
+
+**One-word shortcut** — from a second terminal while `make dev-up` streams logs
+in the first, or standalone (it starts the stack if needed):
+
+```bash
+make opencode      # → opencode TUI running INSIDE the dev container
+make sandbox       # → plain interactive shell in the container
 ```
 
 > Trusted-agent model: the dev container shares the workspace bind-mount and

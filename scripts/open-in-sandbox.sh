@@ -30,9 +30,14 @@ else
     echo "[sandbox] Dev stack already running."
 fi
 
-# One-shot command mode (no TTY).
+# One-shot command mode — preserve a TTY when stdin is interactive so
+# interactive tools (opencode, vim, ...) work; -T only for non-TTY callers.
 if [[ $# -gt 0 ]]; then
-    exec docker compose exec -T dev bash -lc "$*"
+    if [[ -t 0 ]]; then
+        exec docker compose exec -it dev bash -lc "$*"
+    else
+        exec docker compose exec -T dev bash -lc "$*"
+    fi
 fi
 
 echo "[sandbox] Dev sandbox shell — run the AI coding agent with:"
