@@ -4,11 +4,6 @@
   "service": "backend",
   "runServices": ["backend", "frontend", "celery", "postgres", "redis"],
   "workspaceFolder": "/workspace",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
-    }
-  },
   "forwardPorts": [8000, 5173, 5432, 6379],
   "remoteEnv": {
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
