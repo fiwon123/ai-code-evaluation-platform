@@ -1,5 +1,5 @@
 .PHONY: help setup host-tools infra-up infra-down preflight dev-up dev-build dev-down dev-restart \
-        dev-log dev-exec dev-agent opencode sandbox reset \
+        dev-log dev-exec dev-agent opencode shell sandbox reset \
         test test-backend test-frontend lint lint-fix format typecheck build check \
         install run dev-backend dev-frontend dev-celery dev-all clean \
         tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
@@ -98,17 +98,21 @@ dev-log: ## Tail dev sandbox + celery worker logs
 	$(COMPOSE) logs -f dev celery
 
 dev-exec: ## Open a shell inside the dev sandbox
-	$(COMPOSE) exec dev bash
+	$(COMPOSE) exec dev zsh
 
 opencode: preflight ## Run the AI coding agent (opencode) inside the dev sandbox
 	@if [ -z "$$($(COMPOSE) ps -q dev)" ]; then echo "[opencode] starting dev stack..."; $(COMPOSE) up -d dev; fi
-	@if [ -t 0 ]; then $(COMPOSE) exec -it dev bash -lc "cd /workspace && opencode $(OPENCODE_ARGS)"; else $(COMPOSE) exec -T dev bash -lc "cd /workspace && opencode $(OPENCODE_ARGS)"; fi
+	@echo "[sandbox] opencode is running INSIDE the dev container (terminal title: [SANDBOX] ...)"
+	@if [ -t 0 ]; then $(COMPOSE) exec -it dev zsh -lc "cd /workspace && env OPENCODE_DISABLE_TERMINAL_TITLE=true opencode $(OPENCODE_ARGS)"; else $(COMPOSE) exec -T dev zsh -lc "cd /workspace && env OPENCODE_DISABLE_TERMINAL_TITLE=true opencode $(OPENCODE_ARGS)"; fi
 
 # Alias kept for compatibility with earlier dev-sandbox docs.
 dev-agent: opencode
 
-sandbox: preflight ## Open an interactive shell in the dev sandbox (opencode ready)
+shell: preflight ## Open an interactive zsh shell in the dev sandbox (opencode ready)
 	scripts/open-in-sandbox.sh
+
+# Alias kept for compatibility with earlier dev-sandbox docs.
+sandbox: shell
 
 reset: ## Stop everything and wipe volumes (clean slate — destructive!)
 	$(COMPOSE) down -v

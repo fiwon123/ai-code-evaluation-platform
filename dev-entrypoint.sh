@@ -6,7 +6,7 @@ set -euo pipefail
 # `docker stop`/Ctrl-C shuts both down cleanly.
 #
 # Interactive shell inside the sandbox:
-#   docker compose run --rm --entrypoint bash dev
+#   docker compose run --rm --entrypoint zsh dev
 #   scripts/open-in-sandbox.sh   (opens a shell with opencode available)
 #   docker compose exec dev opencode   (sandboxed AI coding agent)
 #

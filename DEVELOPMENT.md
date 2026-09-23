@@ -45,7 +45,7 @@ docker compose down -v    # ONLY to wipe the database + Redis too
 ## Code with AI — sandboxed
 
 ```bash
-scripts/open-in-sandbox.sh        # shell inside the dev container
+scripts/open-in-sandbox.sh        # shell inside the dev container (zsh default)
 cd /workspace && opencode         # the AI coding agent, isolated in the sandbox
 ```
 
@@ -62,7 +62,7 @@ in the first, or standalone (it starts the stack if needed):
 
 ```bash
 make opencode      # → opencode TUI running INSIDE the dev container
-make sandbox       # → plain interactive shell in the container
+make shell         # → interactive zsh in the container (shows [SANDBOX] badge)
 make help          # → list every target with its one-line description
 make dev-build     # → rebuild the dev image after Dockerfile/pyproject/uv.lock changes
 ```
@@ -77,8 +77,13 @@ make opencode OPENCODE_ARGS="run 'task' --auto"     # one-shot non-interactive
 ```
 
 > Trusted-agent model: the dev container shares the workspace bind-mount and
-> the Docker socket with the host by design. Isolation covers the agent's
-> runtime (filesystem, toolchain, CPU/mem caps), not repo/Docker access.
+> the Docker socket with the host by design. Interactive shells inside the container show a `[SANDBOX]`
+> prompt badge (zsh is the default shell) and the terminal title starts with
+> `[SANDBOX] ai-code-evaluation-platform`, so it's clearly distinguishable from
+> your host terminal — including while the opencode TUI is running (the title is
+> set before launch and `OPENCODE_DISABLE_TERMINAL_TITLE=true` keeps it).
+> Isolation covers the agent's runtime (filesystem, toolchain, CPU/mem caps),
+> not repo/Docker access.
 
 ## Code with AI — on the host
 

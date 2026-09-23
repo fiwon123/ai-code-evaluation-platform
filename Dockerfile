@@ -14,11 +14,13 @@
 
 FROM python:3.14-slim
 
-# Install system dependencies
+# Install system dependencies (zsh = default interactive shell in the sandbox;
+# bash remains available for scripts/entrypoints with their own shebangs).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
+    zsh \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI (pinned release tarball — no ghcr.io devcontainer features).
@@ -79,6 +81,23 @@ WORKDIR /workspace
 ENV UV_PROJECT_ENVIRONMENT=/opt/backend-venv
 COPY backend/ /workspace/backend/
 RUN cd /workspace/backend && uv sync
+
+# Install dev sandbox shell config (prompt + terminal title indicators). The
+# script is shell-aware (bash + zsh) and sourced from the rc files below.
+COPY scripts/dev-sandbox-rc.sh /etc/profile.d/00-dev-sandbox.sh
+
+# Make zsh the default interactive shell for the sandbox (bash stays installed
+# for scripts/entrypoints, which carry their own shebangs).
+RUN chsh -s /usr/bin/zsh root
+
+# Ensure interactive non-login shells (docker compose exec -it dev bash) also pick up config
+RUN printf '\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' >> /root/.bashrc
+
+# zsh startup files:
+#   ~/.zshrc    — interactive shells (make shell / dev-exec / docker exec -it)
+#   ~/.zprofile — login shells (zsh -lc from `make opencode` sets the title)
+RUN printf '\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' >> /root/.zshrc \
+    && printf '\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' >> /root/.zprofile
 
 # Keep the container alive when started without an explicit command; the dev
 # and celery compose services override this with their real entrypoints.
