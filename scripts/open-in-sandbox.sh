@@ -4,8 +4,9 @@ set -euo pipefail
 # open-in-sandbox.sh — interactive shell inside the dev sandbox with the
 # sandboxed AI coding agent (opencode) available.
 #
-# Ensures the stack is running, then opens bash in the `dev` container.
-# opencode is injected via read-only compose mounts (see docker-compose.yml):
+# Ensures the stack is running, then opens zsh (the default sandbox shell) in
+# the `dev` container. opencode is injected via read-only compose mounts (see
+# docker-compose.yml):
 #   - binary: ${HOME}/.opencode/bin/opencode          → /usr/local/bin/opencode
 #   - config: ${HOME}/.config/opencode                → /root/.config/opencode
 #   - git identity: ${HOME}/.gitconfig                 → /root/.gitconfig
@@ -15,7 +16,7 @@ set -euo pipefail
 # runtime, not Docker/workspace access. `make dev-up` pre-creates config paths.
 #
 # Usage:
-#   scripts/open-in-sandbox.sh                  # interactive bash (opencode ready)
+#   scripts/open-in-sandbox.sh                  # interactive zsh (opencode ready)
 #   scripts/open-in-sandbox.sh 'uv run pytest'  # run one command in the sandbox
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,16 +35,16 @@ fi
 # interactive tools (opencode, vim, ...) work; -T only for non-TTY callers.
 if [[ $# -gt 0 ]]; then
     if [[ -t 0 ]]; then
-        exec docker compose exec -it dev bash -lc "$*"
+        exec docker compose exec -it dev zsh -lc "$*"
     else
-        exec docker compose exec -T dev bash -lc "$*"
+        exec docker compose exec -T dev zsh -lc "$*"
     fi
 fi
 
 echo "[sandbox] Dev sandbox shell — run the AI coding agent with:"
 echo "          cd /workspace && opencode"
 if [[ -t 0 ]]; then
-    exec docker compose exec -it dev bash
+    exec docker compose exec -it dev zsh
 else
-    exec docker compose exec -T dev bash
+    exec docker compose exec -T dev zsh
 fi

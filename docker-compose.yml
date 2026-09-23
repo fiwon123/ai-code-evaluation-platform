@@ -25,6 +25,9 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["/workspace/dev-entrypoint.sh"]
+    # Friendly hostname so prompts (`%n@%m`) and `hostname` clearly show you're
+    # inside the sandbox (containers otherwise get a random hex ID).
+    hostname: ai-eval-sandbox
     volumes:
       - .:/workspace:cached
       # Mount the host Docker socket so evaluations can spawn isolated

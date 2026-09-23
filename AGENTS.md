@@ -118,7 +118,7 @@ make infra-up               # postgres + redis + sandbox image (compose, detache
 make dev-up                 # build image + run dev sandbox + celery in the foreground (logs)
 make dev-down               # stop dev container + celery
 make dev-log                # tail dev + celery logs
-docker compose run --rm --entrypoint bash dev   # interactive shell inside the sandbox
+docker compose run --rm --entrypoint zsh dev   # interactive shell inside the sandbox (zsh default)
 scripts/open-in-sandbox.sh  # shell in the sandbox with opencode (sandboxed agent)
 make check                  # full local gate (host toolchain)
 ```
@@ -132,7 +132,7 @@ resource caps) while sharing the workspace bind mount.
 
 ```bash
 make dev-up                         # dev image mounts the host opencode binary
-scripts/open-in-sandbox.sh          # → interactive bash in the dev container
+scripts/open-in-sandbox.sh          # → interactive zsh in the dev container ([SANDBOX] badge)
 cd /workspace && opencode           # the AI coding agent, sandboxed
 ```
 
