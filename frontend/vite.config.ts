@@ -16,6 +16,18 @@ export default defineConfig(({ mode }) => ({
         },
       }
     : {}),
+  // Defense-in-depth for the non-bundled client path (upstream vite bug, see
+  // vitejs/vite#22419): if the dev server ever runs without bundledDev, the
+  // raw client.mjs hits `__SERVER_FORWARD_CONSOLE__` unreplaced and throws.
+  // The `define` mechanism reliably replaces the token via __DEFINES__ and is
+  // inert in bundled mode (clientInjectionsPlugin is excluded there, see
+  // vitejs/vite#22012) and in build/test (these tokens never appear in app
+  // source). `false` short-circuits setupForwardConsoleHandler, preserving the
+  // default disabled forwardConsole behavior.
+  define: {
+    __BUNDLED_DEV__: "false",
+    __SERVER_FORWARD_CONSOLE__: "false",
+  },
   server: {
     port: 5173,
     host: "0.0.0.0",
