@@ -32,6 +32,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Share the host gh CLI auth with the dev sandbox.
       - ${HOME}/.config/gh:/root/.config/gh:ro
+      # Sandboxed AI coding agent: mount the host opencode binary + config and
+      # git identity read-only so `opencode` can run INSIDE the dev container
+      # (same trusted-agent model as gh: workspace bind mount + docker socket
+      # are shared by design). `make dev-up` pre-creates ${HOME}/.config/opencode
+      # and ${HOME}/.gitconfig so these mounts never fail on a fresh machine.
+      - ${HOME}/.opencode/bin/opencode:/usr/local/bin/opencode:ro
+      - ${HOME}/.config/opencode:/root/.config/opencode:ro
+      - ${HOME}/.gitconfig:/root/.gitconfig:ro
     ports:
       - "8000:8000"
       - "5173:5173"

@@ -82,7 +82,7 @@ Dockerfile        # Dev-sandbox image (deps baked: /opt/backend-venv)
 dev-entrypoint.sh # Foreground uvicorn + vite entrypoint for the dev service
 mise.toml         # Host toolchain single source of truth (node, uv, gh, k8s)
 k8s/              # Kind config + Kustomize base/overlays + Helm chart
-scripts/          # setup-host-tools.sh / k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh
+scripts/          # setup-host-tools.sh / open-in-sandbox.sh / k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh
 devspace.yaml     # Kubernetes inner dev loop
 ```
 
@@ -105,7 +105,7 @@ devspace.yaml     # Kubernetes inner dev loop
 - **Migrations**: `cd backend && uv run alembic upgrade head`
 - **Format**: `cd backend && uv run ruff format src/`
 - **All checks**: `make check`
-- **Dev sandbox**: `make dev-up` (isolated stack: uvicorn + vite + celery + postgres + redis + sandbox) / `make dev-down` / `make dev-log`
+- **Dev sandbox**: `make dev-up` (isolated stack: uvicorn + vite + celery + postgres + redis + sandbox) / `make dev-down` / `make dev-log` / `scripts/open-in-sandbox.sh` (shell with the sandboxed opencode agent)
 - **Host infra only**: `make infra-up` / `make infra-down` (for the host-native loop)
 - **Host toolchain**: `scripts/setup-host-tools.sh` (gh auth + `mise install` from mise.toml)
 - **K8s (optional)**: `make tools-k8s` / `make k8s-setup [OVERLAY=dev]` / `make k8s-deploy OVERLAY=dev` / `make k8s-dev` / `make k8s-status` / `make k8s-teardown`

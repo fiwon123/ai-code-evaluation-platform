@@ -74,7 +74,11 @@ clean:
 # ---------------------------------------------------------------------------
 
 # Build the dev image and start the full stack (dev, celery, postgres, redis, sandbox)
+# opencode is required because the dev image mounts the host binary read-only
+# (sandboxed AI coding agent); infra/host-native loops do not need it.
 dev-up:
+	@test -x "$$HOME/.opencode/bin/opencode" || { echo "ERROR: opencode not found at $$HOME/.opencode/bin/opencode" >&2; echo "  Install: curl -fsSL https://opencode.ai/install | bash   (or scripts/setup-host-tools.sh)" >&2; exit 1; }
+	@mkdir -p "$$HOME/.config/opencode" && touch "$$HOME/.gitconfig"
 	docker compose up --build dev
 
 # Stop the whole compose stack (keeps data volumes, incl. postgres_data)

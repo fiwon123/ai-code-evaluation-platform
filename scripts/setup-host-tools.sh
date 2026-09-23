@@ -48,6 +48,14 @@ eval "$(mise activate bash)" 2>/dev/null || true
 echo "[tools] Installing project toolchain from mise.toml (node, uv, gh + K8s tools)..."
 (cd "$ROOT_DIR" && mise install)
 
+# --- opencode (optional — needed only for the sandboxed-agent workflow) ----
+if ! command -v opencode >/dev/null 2>&1 && [[ ! -x "$HOME/.opencode/bin/opencode" ]]; then
+    echo "[tools] opencode not found — install it when you run the AI coding agent"
+    echo "        sandboxed (make dev-up requires it):"
+    echo "        curl -fsSL https://opencode.ai/install | bash"
+    echo "        (or keep running opencode on the host — dev-up then needs this file present)"
+fi
+
 echo ""
 echo "=== Host toolchain ready ==="
 echo "  mise:   $(mise --version)"
