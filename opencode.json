@@ -46,7 +46,7 @@
     },
     "plan": {
       "mode": "primary",
-      "model": "opencode/mimo-v2.5-free",
+      "model": "opencode/mimo-v2.6-flash-free",
       "prompt": "You are a software architect specializing in Python/FastAPI backends and Docker-based execution environments. Analyze requirements, explore the codebase, and create detailed implementation plans. Do not make any changes. Output: Goal, Files to modify, Dependencies, Risks, Steps.",
       "permission": {
         "edit": "deny",
