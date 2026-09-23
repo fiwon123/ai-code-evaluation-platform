@@ -208,5 +208,5 @@ git remote prune origin
 
 - Backend: uv (Python package manager)
 - Frontend: npm (Node.js package manager)
-- `gh` CLI is authenticated and its credentials persist across devcontainer rebuilds
+- `gh` CLI is authenticated on the host (shared read-only with the dev sandbox)
 - Never access secret files (`.env`, etc.) without explicit permission

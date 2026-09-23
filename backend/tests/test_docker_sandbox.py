@@ -143,6 +143,15 @@ class TestRun:
         assert kwargs["nano_cpus"] == int(0.5 * 1_000_000_000)
         assert kwargs["read_only"] is True
         assert kwargs["tmpfs"] == {"/tmp": "size=64m"}
+        mounts = kwargs["mounts"]
+        assert len(mounts) == 1
+        # docker SDK Mount is a dict-like type; normalize for the assertion.
+        assert dict(mounts[0]) == {
+            "Target": "/code",
+            "Source": "",
+            "Type": "volume",
+            "ReadOnly": False,
+        }
         assert kwargs["pids_limit"] == 64
         assert kwargs["cap_drop"] == ["ALL"]
         assert kwargs["security_opt"] == ["no-new-privileges"]

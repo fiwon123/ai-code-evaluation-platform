@@ -126,6 +126,8 @@ class DockerSandbox:
             raise DockerSandboxError("Docker daemon is not reachable")
 
         client = self._get_client()
+        from docker.types import Mount  # noqa: PLC0415 - docker is an optional dep
+
         container = None
         try:
             container = client.containers.create(
@@ -137,7 +139,16 @@ class DockerSandbox:
                 mem_limit=self.memory_limit,
                 nano_cpus=int(self.cpu_limit * 1_000_000_000),
                 read_only=self.readonly_rootfs,
+                # /tmp is tmpfs scratch for runtime artifacts; /code (the
+                # injected solution+test files) is an anonymous *volume*
+                # (Mount type=volume, no source). Docker refuses put_archive
+                # into any path of a read-only rootfs — including tmpfs
+                # mounts ("container rootfs is marked read-only") — but
+                # volumes are writable even with a read-only rootfs. The
+                # rootfs stays read-only; the volume is discarded with the
+                # one-shot container.
                 tmpfs={"/tmp": "size=64m"},
+                mounts=[Mount(source="", target="/code", type="volume")],
                 pids_limit=64,
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges"],

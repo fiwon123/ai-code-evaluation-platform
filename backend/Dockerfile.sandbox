@@ -15,18 +15,50 @@
 # never attempts to download dependencies.
 FROM python:3.14-slim
 
-# Node.js (for JavaScript + TypeScript via tsx), OpenJDK 17 (Java), Go 1.21+.
-# Uncomment the toolchain you need for a smaller image, but the default image
-# ships all five supported languages.
+# Go + OpenJDK 21 (Java) via apt (Debian 13 repos). Java 21 is the LTS on
+# trixie — openjdk-17 was removed from the Debian 13 repos. Node.js is NOT
+# installed from apt: Debian 13 ships node 20/npm 9, whose HTTPS breaks
+# against the system OpenSSL 3.5 (TLS to registry.npmjs.org fails with
+# ETIMEDOUT — python/curl work fine). The official Node tarball below
+# bundles its own OpenSSL, matching the dev image (Node 22.23.2).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nodejs \
-        npm \
-        openjdk-17-jdk-headless \
+        curl \
+        openjdk-21-jdk-headless \
         golang-go \
     && rm -rf /var/lib/apt/lists/*
 
+# Node.js 22 (official tarball — bundled OpenSSL, TLS works). Same pinned
+# version + arch normalization as the root Dockerfile. Bump deliberately.
+ARG NODE_VERSION=v22.23.2
+ARG TARGETARCH
+RUN if [ -z "$TARGETARCH" ]; then \
+      case "$(uname -m)" in \
+        x86_64|amd64) TARGETARCH=amd64 ;; \
+        aarch64|arm64) TARGETARCH=arm64 ;; \
+        *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+      esac; \
+    fi \
+    && case "$TARGETARCH" in \
+         x86_64|amd64) NODE_TARGETARCH=x64 ;; \
+         aarch64|arm64) NODE_TARGETARCH=arm64 ;; \
+         *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-${NODE_TARGETARCH}.tar.gz" -o /tmp/node.tar.gz \
+    && mkdir -p /usr/local/lib/nodejs \
+    && tar -xzf /tmp/node.tar.gz -C /usr/local/lib/nodejs \
+    && ln -sf "/usr/local/lib/nodejs/node-${NODE_VERSION}-linux-${NODE_TARGETARCH}/bin"/* /usr/local/bin/ \
+    && node --version && npm --version \
+    && rm -rf /tmp/node.tar.gz
+
+# Test runners: pytest (python), tsx (typescript via node --test). tsx is
+# pinned for reproducible image builds. npm's global prefix on official Node
+# builds is the tarball dir, so after installing tsx we re-link that bin dir
+# into /usr/local/bin (resolved via readlink, since /usr/local/bin/node is a
+# symlink — call it after npm install so tsx is included).
 RUN pip install --no-cache-dir pytest \
-    && npm install --global tsx
+    && npm install --global tsx@4.23.15 \
+    && ln -sf "$(dirname "$(readlink -f "$(command -v node)")")"/* /usr/local/bin/ \
+    && tsx --version
 
 # JUnit Platform console launcher (Java test runner) — version-tracked so the
 # image build is reproducible.

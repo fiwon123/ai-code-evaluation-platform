@@ -1,10 +1,15 @@
-# Dev-container Compose file (repo root) — used by VS Code Dev Containers
-# (.devcontainer/devcontainer.json) and directly via `docker compose up -d`.
+# Dev-sandbox Compose file (repo root) — lightweight Docker-based development.
 #
-# name is pinned so project volumes/networks keep the devcontainer_* prefix
-# (e.g. the persisted gh_config auth volume) regardless of the repo directory
-# name or where the compose file lives.
-name: devcontainer
+# Replaces the old VS Code Dev Containers setup (`.devcontainer/`): a single
+# prebuilt `dev` container (bind-mounted source, deps baked at image build)
+# runs uvicorn + vite in the foreground, a `celery` service runs the
+# evaluation worker, and `postgres` / `redis` provide infra. The `sandbox`
+# service builds the air-gapped eval-sandbox image used to isolate untrusted
+# code evaluation. Use `docker compose up dev` (or push `infra-up`).
+#
+# name is pinned so project volumes/networks keep the ai-eval_* prefix
+# regardless of the repo directory name or where the compose file lives.
+name: ai-eval
 
 # Resource limits on every service prevent runaway processes from exhausting
 # the host machine (e.g., heavy evaluations, build spikes). Ceilings are
@@ -12,20 +17,24 @@ name: devcontainer
 # uvicorn, Vite) run comfortably while still bounding resource use.
 # Note: limits apply to running containers with `docker compose up` (Compose v2).
 services:
-  backend:
+  # Dev sandbox — the coding/runtime environment. Source is bind-mounted for
+  # hot reload; backend deps are baked into /opt/backend-venv; node_modules is
+  # shared with the host and bootstrapped via npm ci when missing.
+  dev:
     build:
       context: .
       dockerfile: Dockerfile
+    command: ["/workspace/dev-entrypoint.sh"]
     volumes:
       - .:/workspace:cached
-      # Mount the host Docker socket so the Celery worker can create
-      # isolated eval-sandbox containers for code evaluation.
+      # Mount the host Docker socket so evaluations can spawn isolated
+      # eval-sandbox containers (docker_sandbox uses the Python SDK).
       - /var/run/docker.sock:/var/run/docker.sock
-      # Persist gh CLI auth config (~/.config/gh) across container rebuilds.
-      - gh_config:/root/.config/gh
-    command: tail -f /dev/null
+      # Share the host gh CLI auth with the dev sandbox.
+      - ${HOME}/.config/gh:/root/.config/gh:ro
     ports:
       - "8000:8000"
+      - "5173:5173"
     environment:
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
@@ -33,6 +42,10 @@ services:
       - DOCKER_ENABLED=true
       - DOCKER_IMAGE=eval-sandbox:latest
     depends_on:
+      # Celery runs with the dev sandbox by default (`docker compose up dev`)
+      # so evaluations work out of the box.
+      celery:
+        condition: service_started
       postgres:
         condition: service_healthy
       redis:
@@ -52,12 +65,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: bash -c 'cd /workspace/backend && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app worker --loglevel=info'
     volumes:
       - .:/workspace:cached
       # Mount the host Docker socket so the Celery worker can create
       # isolated eval-sandbox containers for code evaluation.
       - /var/run/docker.sock:/var/run/docker.sock
-    command: bash -c 'until /workspace/.devcontainer/start-celery.sh; do sleep 5; done; exec tail -f /dev/null'
     environment:
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
@@ -78,7 +91,7 @@ services:
           cpus: "1.0"
           memory: 1G
 
-  # Builds the eval-sandbox image (pytest pre-installed) used to isolate
+  # Builds the eval-sandbox image (multi-language runtimes) used to isolate
   # untrusted code execution. One-shot: builds the image, then exits.
   sandbox:
     build:
@@ -91,21 +104,6 @@ services:
         limits:
           cpus: "1.0"
           memory: 512M
-
-  frontend:
-    image: mcr.microsoft.com/devcontainers/javascript-node:22
-    volumes:
-      - .:/workspace:cached
-    command: bash -c "/workspace/.devcontainer/start-frontend.sh; exec tail -f /dev/null"
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1G
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -145,5 +143,3 @@ services:
 
 volumes:
   postgres_data:
-  # Persists gh CLI authentication across devcontainer rebuilds.
-  gh_config:

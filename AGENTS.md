@@ -25,7 +25,7 @@ Build a platform where users can submit coding prompts, generate code using mult
 - Background jobs: Celery (with Redis broker)
 - Authentication: JWT tokens (OAuth2 planned for future)
 - AI: Multiple LLM providers (OpenAI, Anthropic, local models)
-- Development: Docker and Dev Containers
+- Development: Docker + Compose (dev sandbox) with host-native Makefile loop
 - Kubernetes (optional): Kind + Kustomize (default) + Helm (expansion) + DevSpace (dev loop)
 
 ### Supported Languages (Multi-Language Evaluation)
@@ -75,9 +75,11 @@ Evaluation Result (score, logs, metrics)
 ```
 backend/       # FastAPI app, Celery workers, evaluation logic
 frontend/      # React 19, Vite 8, TypeScript
-.devcontainer/ # Docker Compose dev environment
+docker-compose.yml  # Dev sandbox + infra (dev, celery, postgres, redis, sandbox)
+Dockerfile     # Dev image (python:3.14-slim + gh + uv + Node 22)
+dev-entrypoint.sh  # Starts uvicorn + vite in the dev sandbox
 k8s/           # Kind config + Kustomize base/overlays + Helm chart (optional)
-scripts/       # k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh
+scripts/       # k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh / setup-host-tools.sh
 devspace.yaml  # Kubernetes inner dev loop (optional)
 ```
 
@@ -102,12 +104,21 @@ npm run build        # Build for production
 npm run lint         # Lint code
 ```
 
-### Docker Compose (Full Stack)
+### Dev Sandbox (Docker Compose)
+
+The primary dev path is a lightweight Docker "dev sandbox" (no VS Code Dev
+Containers): `docker compose up dev` runs uvicorn + vite in a prebuilt
+container with the source bind-mounted; `celery` runs the evaluation worker;
+`postgres`/`redis`/`sandbox` provide infra. Dependency-free host-native
+targets (`make dev-*`) remain the fastest alternative.
 
 ```bash
-docker compose up -d         # Start all services
-docker compose down          # Stop all services
-docker compose logs -f       # View logs
+make infra-up               # postgres + redis + sandbox image (compose, detached)
+make dev-up                 # build image + run dev sandbox + celery in the foreground (logs)
+make dev-down               # stop dev container + celery
+make dev-log                # tail dev + celery logs
+docker compose run --rm --entrypoint bash dev   # interactive shell inside the sandbox
+make check                  # full local gate (host toolchain)
 ```
 
 ### Kubernetes (optional — requires Docker on the host)
@@ -123,38 +134,41 @@ make k8s-teardown            # Delete the Kind cluster
 - Kustomize is the DEFAULT manifest strategy (`k8s/base` + `k8s/overlays`);
   Helm (`k8s/helm/ai-eval-platform/`) is the expansion path.
 - The Kubernetes toolchain (kind, kubectl, kustomize, helm, devspace) is
-  installed best-effort by `.devcontainer/setup.sh` on rebuild.
+  installed best-effort on the host by `scripts/setup-host-tools.sh`
+  (`make tools-k8s`).
 - Docker Compose remains the primary local path; K8s is optional.
 
 ## Runtime Environment
 
-The AI agent (opencode) runs **inside a Dev Container**, not on a bare machine.
+The AI agent (opencode) runs **on the host**, not inside a container. The
+VSCode/opencode CLI connects to the host workspace directly.
 
-### Dev Container Setup
+### Host prerequisites
 
-The devcontainer is configured with:
-- **opencode**: Installed automatically via `.devcontainer/setup.sh` on container creation
-- **gh CLI**: Installed in the devcontainer image (root `Dockerfile`, pinned GitHub release), auto-authenticated from the host's `GITHUB_TOKEN` (forwarded via `remoteEnv`, re-run by `setup.sh` on every container start; auth config persisted in the `gh_config` Docker volume)
-- **Node.js 22**: Installed via devcontainer feature
-- **Python 3.14**: Installed via Dockerfile
-- **uv**: Installed via Dockerfile
-- **K8s tooling (best-effort)**: kind, kubectl, kustomize, helm, devspace installed by `.devcontainer/setup.sh` into `$HOME/.local/share/k8s-tools/bin`
+- **Python 3.14** + **uv** (backend) — `backend/.venv`; `make check`
+- **Node.js 22** + **npm** (frontend) — `frontend/node_modules`
+- **Docker + Compose** for infra and the dev sandbox; the host user must be
+  in the `docker` group so evaluations can spawn sandbox containers via the
+  mounted Docker socket
+- **gh CLI** authenticated on the host (`~/.config/gh`, shared read-only
+  with the dev sandbox)
 
 ### What the agent CAN do
 
 - Run backend commands (uv, python, pytest, ruff)
 - Run frontend commands (npm, npx, node)
 - Run git and GitHub CLI commands
-- Access services at forwarded ports
+- Run Docker/Compose commands for infra and the dev sandbox (host socket)
 
 ### What the agent CANNOT do
 
-- Run `docker` or `docker compose` commands (not available inside the container)
-- Access the Docker socket
-- Modify the host filesystem (only the workspace is writable)
-- Run K8s workflows (`make k8s-*`) end-to-end — kind/kubectl require Docker on the host; K8s manifests can be authored and validated (kustomize/helm/kubeconform) but not applied here
+- Create containers for *evaluations* directly here only if the sandbox is
+  not reachable — evaluations are spawned by the Celery worker via the host
+  Docker socket (subprocess fallback exists when Docker is disabled)
+- Run K8s workflows (`make k8s-*`) end-to-end unless the K8s toolchain is
+  on PATH (see `scripts/setup-host-tools.sh`)
 
-### Service ports (forwarded from host)
+### Service ports
 
 - Backend API: `localhost:8000`
 - Frontend Dev: `localhost:5173`
@@ -163,8 +177,8 @@ The devcontainer is configured with:
 
 ### Authentication
 
-- **gh CLI**: Requires `GITHUB_TOKEN` (or `GH_TOKEN`) to be set on the host machine. The devcontainer forwards it via `remoteEnv` (`${localEnv:GITHUB_TOKEN}` / `${localEnv:GH_TOKEN}`) and `setup.sh` re-authenticates gh on every container start. Auth config is persisted in the `gh_config` Docker volume across rebuilds.
-- **Security note**: The forwarded token is visible to every process inside the devcontainer and a copy is stored in plaintext in `hosts.yml` within the `gh_config` volume. Use a fine-grained, least-privilege PAT — ideally an expiring one — rather than a broad long-lived token.
+- **gh CLI**: Authenticated on the host via `scripts/setup-host-tools.sh`
+  (or `gh auth login`). The dev sandbox mounts `~/.config/gh` read-only.
 - **opencode**: Uses API keys configured in `opencode.json` or environment variables
 
 ## Environment Variables
