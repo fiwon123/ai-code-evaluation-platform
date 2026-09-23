@@ -15,8 +15,8 @@ set -euo pipefail
 # a workspace where the image predates a pyproject change). Frontend deps are
 # shared with the host in the workspace; npm ci runs only when missing.
 
-BACKEND_DIR=/workspace/backend
-FRONTEND_DIR=/workspace/frontend
+BACKEND_DIR=/sandbox/ai-code-evaluation-platform/backend
+FRONTEND_DIR=/sandbox/ai-code-evaluation-platform/frontend
 BACKEND_VENV="${UV_PROJECT_ENVIRONMENT:-/opt/backend-venv}"
 
 # --- Bootstrap dependencies if missing (first run on a fresh workspace) ---

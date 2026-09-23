@@ -2,9 +2,10 @@
 # Built by docker-compose.yml (`context: .`, `dockerfile: Dockerfile`).
 #
 # This is the "dev sandbox": a slim, isolated runtime for the application.
-# Source code is bind-mounted into /workspace at runtime (hot reload); Python
-# dependencies are baked into /opt/backend-venv at build time so the bind
-# mount (which shadows /workspace) cannot hide them. Frontend dependencies
+# Source code is bind-mounted into /sandbox/ai-code-evaluation-platform at
+# runtime (hot reload); Python dependencies are baked into /opt/backend-venv at
+# build time so the bind mount (which shadows
+# /sandbox/ai-code-evaluation-platform) cannot hide them. Frontend dependencies
 # (node_modules) are relocatable and live in the workspace, shared with the
 # host-native loop.
 #
@@ -71,16 +72,18 @@ RUN if [ -z "$TARGETARCH" ]; then \
     && rm -rf /tmp/node.tar.gz
 
 # Set working directory
-WORKDIR /workspace
+WORKDIR /sandbox/ai-code-evaluation-platform
 
-# Bake backend dependencies into /opt/backend-venv (NOT /workspace/backend/.venv:
-# the workspace bind mount shadows /workspace at runtime, and venv interpreter
-# symlinks are path-specific, so the baked venv must live outside /workspace).
-# The bind-mounted source at runtime stays in sync with this lockfile via
-# `uv sync` whenever pyproject.toml/uv.lock change.
+# Bake backend dependencies into /opt/backend-venv (NOT
+# /sandbox/ai-code-evaluation-platform/backend/.venv: the workspace bind mount
+# shadows /sandbox/ai-code-evaluation-platform at runtime, and venv interpreter
+# symlinks are path-specific, so the baked venv must live outside
+# /sandbox/ai-code-evaluation-platform). The bind-mounted source at runtime
+# stays in sync with this lockfile via `uv sync` whenever
+# pyproject.toml/uv.lock change.
 ENV UV_PROJECT_ENVIRONMENT=/opt/backend-venv
-COPY backend/ /workspace/backend/
-RUN cd /workspace/backend && uv sync
+COPY backend/ /sandbox/ai-code-evaluation-platform/backend/
+RUN cd /sandbox/ai-code-evaluation-platform/backend && uv sync
 
 # Install dev sandbox shell config (prompt + terminal title indicators). The
 # script is shell-aware (bash + zsh) and sourced from the rc files below.

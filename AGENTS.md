@@ -133,7 +133,7 @@ resource caps) while sharing the workspace bind mount.
 ```bash
 make dev-up                         # dev image mounts the host opencode binary
 scripts/open-in-sandbox.sh          # → interactive zsh in the dev container ([SANDBOX] badge)
-cd /workspace && opencode           # the AI coding agent, sandboxed
+cd /sandbox/ai-code-evaluation-platform && opencode     # the AI coding agent, sandboxed
 ```
 
 The dev image mounts (all read-only): the host opencode binary
