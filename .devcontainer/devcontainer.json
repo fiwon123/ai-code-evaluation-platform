@@ -1,14 +1,13 @@
 {
   "name": "AI Code Evaluation Platform",
-  "dockerComposeFile": ["docker-compose.yml"],
+  "dockerComposeFile": ["../docker-compose.yml"],
   "service": "backend",
   "runServices": ["backend", "frontend", "celery", "postgres", "redis"],
   "workspaceFolder": "/workspace",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "22"
-    },
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    }
   },
   "forwardPorts": [8000, 5173, 5432, 6379],
   "remoteEnv": {
