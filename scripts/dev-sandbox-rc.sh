@@ -21,7 +21,7 @@ if [ -n "$ZSH_VERSION" ]; then
   if [[ $- == *i* ]]; then
     # Interactive: colored prompt with [SANDBOX] badge + title on each prompt
     autoload -U colors && colors
-    PROMPT='%F{red}[SANDBOX]%f %F{green}%n@%m%f %F{blue}%~%f $ '
+    PROMPT='%F{red}[SANDBOX]%f %F{blue}%~%f $ '
     # Idempotent registration (rc is sourced from both ~/.zprofile and ~/.zshrc
     # for login+interactive shells).
     (( ${precmd_functions[(Ie)__sandbox_set_title]} )) || precmd_functions+=(__sandbox_set_title)
@@ -40,7 +40,7 @@ __sandbox_set_title() {
 
 if [[ $- == *i* ]]; then
   # Interactive: colored prompt with [SANDBOX] badge + title on each prompt
-  export PS1='\[\e[1;31m\][SANDBOX]\[\e[0m\] \[\e[32m\]\u@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ '
+  export PS1='\[\e[1;31m\][SANDBOX]\[\e[0m\] \[\e[34m\]\w\[\e[0m\] \$ '
   PROMPT_COMMAND="__sandbox_set_title${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 else
   # Login non-interactive (bash -lc, e.g. make opencode): set the title once
