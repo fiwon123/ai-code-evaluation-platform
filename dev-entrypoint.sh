@@ -7,6 +7,8 @@ set -euo pipefail
 #
 # Interactive shell inside the sandbox:
 #   docker compose run --rm --entrypoint bash dev
+#   scripts/open-in-sandbox.sh   (opens a shell with opencode available)
+#   docker compose exec dev opencode   (sandboxed AI coding agent)
 #
 # Backend deps are baked at image build into /opt/backend-venv (outside the
 # bind mount); the script re-syncs only when the baked venv is missing (e.g.

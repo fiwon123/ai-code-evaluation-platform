@@ -118,8 +118,34 @@ make dev-up                 # build image + run dev sandbox + celery in the fore
 make dev-down               # stop dev container + celery
 make dev-log                # tail dev + celery logs
 docker compose run --rm --entrypoint bash dev   # interactive shell inside the sandbox
+scripts/open-in-sandbox.sh  # shell in the sandbox with opencode (sandboxed agent)
 make check                  # full local gate (host toolchain)
 ```
+
+### Sandboxed AI agent (opencode inside the dev sandbox)
+
+By default opencode runs on the **host** (this agent). For an isolated coding
+environment — without Dev Containers — run opencode **inside** the `dev`
+container: it inherits the container runtime (filesystem, baked toolchain,
+resource caps) while sharing the workspace bind mount.
+
+```bash
+make dev-up                         # dev image mounts the host opencode binary
+scripts/open-in-sandbox.sh          # → interactive bash in the dev container
+cd /workspace && opencode           # the AI coding agent, sandboxed
+```
+
+The dev image mounts (all read-only): the host opencode binary
+(`${HOME}/.opencode/bin/opencode` → `/usr/local/bin/opencode`), opencode
+config (`${HOME}/.config/opencode`) and git identity (`${HOME}/.gitconfig`);
+`make dev-up` pre-creates the config paths and errors if opencode is missing.
+
+**Trusted-agent model by design**: the dev container also mounts the workspace
+and the Docker socket, so an agent running inside it can write the repo and
+spawn eval-sandbox containers. That is the same trust granted to opencode on
+the host. For stricter confinement (agent without Docker control) use a
+dedicated service; for kernel-level isolation (microVM, e.g. E2B/sbx) treat it
+as a separate future experiment.
 
 ### Kubernetes (optional — requires Docker on the host)
 
