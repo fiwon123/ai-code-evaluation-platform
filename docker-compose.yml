@@ -49,6 +49,18 @@ services:
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
       - DOCKER_ENABLED=true
       - DOCKER_IMAGE=eval-sandbox:latest
+      # Forward the host GITHUB_TOKEN into the dev sandbox so `gh` (which the
+      # agent uses for issues/PRs) actually works INSIDE the container: the
+      # read-only ~/.config/gh mount only carries an invalid/stale stored token,
+      # and gh prefers GH_TOKEN over that stored credential store. The token is
+      # exported under both names — GH_TOKEN (what gh checks first) and
+      # GITHUB_TOKEN (the GitHub Actions convention other tooling reads) — so
+      # scripts inside the sandbox work regardless of which name they check.
+      # The value is read from the host shell at compose-up time (interpolation
+      # only — never written to the file), matching the existing trusted-agent
+      # model (same trust as the ro gh config mount + bind-mounted workspace).
+      - GH_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     depends_on:
       # Celery runs with the dev sandbox by default (`docker compose up dev`)
       # so evaluations work out of the box.
