@@ -235,6 +235,17 @@
   padding: 0 var(--space-1);
 }
 
+/* Severe tier: a *pending* submission past the 10-minute mark mirrors the
+   backend's "waiting over 10 minutes … will be marked as failed automatically"
+   escalation on the detail page — distinct from the mild "delayed" tag. */
+.stuckTag {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  background: var(--color-danger-light);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
 .emptyCard {
   display: flex;
   flex-direction: column;

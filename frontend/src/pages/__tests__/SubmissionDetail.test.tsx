@@ -152,6 +152,57 @@ describe("SubmissionDetail", () => {
     expect(screen.queryByText(/worker/i)).not.toBeInTheDocument();
   });
 
+  it("escalates the warning for a pending submission stuck over 10 minutes", async () => {
+    const severelyStuck = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: new Date(Date.now() - 11 * 60_000).toISOString(),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(severelyStuck), { status: 200 }),
+    );
+
+    renderPage(60_000);
+
+    expect(
+      await screen.findByText(/waiting over 10 minutes/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/worker is likely offline/i)).toBeInTheDocument();
+    expect(screen.getByText(/marked as failed automatically/i)).toBeInTheDocument();
+    // The escalated message replaces the milder "taking longer than usual" one.
+    expect(screen.queryByText(/taking longer than usual/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the milder warning for a pending submission under the severe threshold", async () => {
+    const mildlyStuck = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(mildlyStuck), { status: 200 }),
+    );
+
+    renderPage(60_000);
+
+    expect(
+      await screen.findByText(/taking longer than usual/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/worker is likely offline/i)).not.toBeInTheDocument();
+  });
+
   it("does not poll again once complete", async () => {
     const completed = {
       id: "s1",

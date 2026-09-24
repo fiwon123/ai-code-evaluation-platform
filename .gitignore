@@ -212,6 +212,8 @@ docker-compose.override.yml
 
 # OpenCode
 .opencode/node_modules/
+# OpenCode session memory — agent-local progress file, never committed.
+.opencode/progress.md
 
 # Evaluation platform specific
 /tmp/evaluations/

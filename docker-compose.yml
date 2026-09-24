@@ -53,6 +53,13 @@ services:
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
       - DOCKER_ENABLED=true
       - DOCKER_IMAGE=eval-sandbox:latest
+      # Import the app package from the live bind-mounted source, never from a
+      # baked editable install: `uv sync` at image build pins the editable
+      # path at build time (previously /workspace/backend/src before the #129
+      # workspace rename), so a stale image silently runs pre-merge code
+      # (e.g. the worker discarding the recovery sweep as "unregistered").
+      # PYTHONPATH precedes site-packages in sys.path and shadows that .pth.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
       # Forward the host GITHUB_TOKEN into the dev sandbox so `gh` (which the
       # agent uses for issues/PRs) actually works INSIDE the container: the
       # read-only ~/.config/gh mount only carries an invalid/stale stored token,
@@ -63,7 +70,7 @@ services:
       # The value is read from the host shell at compose-up time (interpolation
       # only — never written to the file), matching the existing trusted-agent
       # model (same trust as the ro gh config mount + bind-mounted workspace).
-      - GH_TOKEN=${GITHUB_TOKEN:-}
+      - GH_TOKEN=${GH_TOKEN:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     depends_on:
       # Celery runs with the dev sandbox by default (`docker compose up dev`)
@@ -75,7 +82,7 @@ services:
       celery:
         condition: service_healthy
       beat:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -112,6 +119,8 @@ services:
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
       - DOCKER_ENABLED=true
       - DOCKER_IMAGE=eval-sandbox:latest
+      # Live source (see dev service): stale images must not run baked code.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,9 +161,23 @@ services:
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      # Live source (see dev service): stale images must not run baked code.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      # Beat persists its schedule to /tmp/celerybeat-schedule* (shelve db):
+      # written at startup and every 3 min while ticking (Celery sync_every),
+      # so a deadlocked or wedged beat stops refreshing the file. Failing the
+      # check when the newest schedule file is older than 5 min catches a
+      # process that is alive but no longer ticking — which otherwise silently
+      # stops the stale-submission recovery sweep.
+      test: ["CMD-SHELL", "test -n \"$(find /tmp -maxdepth 1 -name 'celerybeat-schedule*' -mmin -5 2>/dev/null)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:

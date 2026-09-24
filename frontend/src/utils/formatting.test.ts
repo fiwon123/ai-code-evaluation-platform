@@ -5,8 +5,10 @@ import {
   formatElapsedMs,
   formatRelativeTime,
   isDelayed,
+  isSeverelyDelayed,
   statusVariant,
   STALE_AFTER_MS,
+  SEVERE_DELAY_AFTER_MS,
 } from "./formatting.ts";
 
 const T0 = Date.parse("2026-01-01T00:00:00Z");
@@ -84,6 +86,24 @@ describe("isDelayed / STALE_AFTER_MS", () => {
     expect(isDelayed("2026-01-01T00:00:00Z", T0 + STALE_AFTER_MS + 1_000)).toBe(
       true,
     );
+  });
+});
+
+describe("isSeverelyDelayed / SEVERE_DELAY_AFTER_MS", () => {
+  it("is not severely delayed before the threshold", () => {
+    expect(
+      isSeverelyDelayed("2026-01-01T00:00:00Z", T0 + SEVERE_DELAY_AFTER_MS - 1_000),
+    ).toBe(false);
+  });
+
+  it("is severely delayed after the threshold", () => {
+    expect(
+      isSeverelyDelayed("2026-01-01T00:00:00Z", T0 + SEVERE_DELAY_AFTER_MS + 1_000),
+    ).toBe(true);
+  });
+
+  it("is independent of the milder STALE_AFTER_MS threshold", () => {
+    expect(SEVERE_DELAY_AFTER_MS).toBeGreaterThan(STALE_AFTER_MS);
   });
 });
 

@@ -316,6 +316,18 @@ Agent definitions live in `opencode.json` and `.opencode/agents/`:
 
 - Load relevant skills when working on specific domains (e.g., Docker, Celery, LLM integration)
 
+### Session Memory (progress file)
+
+- At the START of every new chat: read `.opencode/progress.md` (if it exists) and
+  resume from its "Next action" — this is how long-running work survives between
+  sessions. If the file references an issue/branch/PR, continue that work unless
+  the user says otherwise.
+- During work: update the file after each milestone (issue created, branch
+  renamed, code done, tests run, PR opened, merged).
+- Keep it small: prune completed detail to one line; cap at ~80–100 lines;
+  never store secrets/tokens/credentials; it is gitignored and must never be
+  committed.
+
 ### Rules for Agents
 
 All workflow rules that agents must follow are documented in this file. When configuring a project, ensure AGENTS.md contains:

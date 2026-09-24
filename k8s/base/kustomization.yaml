@@ -13,6 +13,7 @@ resources:
   - backend.yaml
   - frontend.yaml
   - worker.yaml
+  - beat.yaml
   - postgres.yaml
   - redis.yaml
   - ingress.yaml

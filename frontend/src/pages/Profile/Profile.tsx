@@ -17,11 +17,16 @@ import {
   formatElapsed,
   formatRelativeTime,
   isDelayed,
+  isSeverelyDelayed,
   statusVariant,
 } from "../../utils/formatting.ts";
 import styles from "./Profile.module.css";
 
 const PAGE_SIZE = 10;
+// While any submission is still pending/processing, re-fetch the list on this
+// interval so rows flip to their terminal state (e.g. the recovery sweep fails
+// an abandoned pending row) without a manual page reload.
+const SUBMISSIONS_POLL_INTERVAL_MS = 5_000;
 
 function Profile() {
   const { user } = useAuth();
@@ -151,6 +156,45 @@ function Profile() {
     void load();
     return () => controller.abort();
   }, [user, submissionPage]);
+
+  // Light polling while any submission is still in progress: the recovery
+  // sweep (Celery beat) fails abandoned pending rows in the background, but
+  // the list is otherwise a one-shot fetch — without this, rows would keep
+  // showing "pending … delayed" until a manual reload or page change.
+  useEffect(() => {
+    if (!user || !hasInProgress) {
+      return;
+    }
+    let cancelled = false;
+    let pollTimer: number | undefined;
+    async function poll() {
+      try {
+        const submissionResp = await submissionsApi.list({
+          page: submissionPage,
+          page_size: PAGE_SIZE,
+        });
+        if (!cancelled) {
+          setSubmissions(submissionResp.items);
+        }
+      } catch {
+        // Transient poll errors keep the last known data; the next tick retries.
+      } finally {
+        if (!cancelled) {
+          pollTimer = window.setTimeout(() => {
+            pollTimer = undefined;
+            void poll();
+          }, SUBMISSIONS_POLL_INTERVAL_MS);
+        }
+      }
+    }
+    void poll();
+    return () => {
+      cancelled = true;
+      if (pollTimer !== undefined) {
+        window.clearTimeout(pollTimer);
+      }
+    };
+  }, [user, submissionPage, hasInProgress]);
 
   const stats = useMemo(() => {
     const completed = submissions.filter((s) => s.status === "completed");
@@ -385,7 +429,19 @@ function Profile() {
                             </span>
                           )}
                           {inProgress && isDelayed(submission.created_at, now) && (
-                            <span className={styles.delayedTag}>delayed</span>
+                            <span
+                              className={
+                                submission.status === "pending" &&
+                                isSeverelyDelayed(submission.created_at, now)
+                                  ? styles.stuckTag
+                                  : styles.delayedTag
+                              }
+                            >
+                              {submission.status === "pending" &&
+                              isSeverelyDelayed(submission.created_at, now)
+                                ? "stuck"
+                                : "delayed"}
+                            </span>
                           )}
                         </span>
                         <span className={styles.submissionScore}>
