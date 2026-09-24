@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 from pathlib import Path
 from uuid import UUID
 
@@ -21,7 +22,18 @@ from app.services.llm import get_llm_provider
 logger = logging.getLogger(__name__)
 
 
-def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict[str, object]:
+def _redact(message: str, api_key: str | None) -> str:
+    """Strip a per-run API key out of an error message before it is logged."""
+    if api_key:
+        return message.replace(api_key, "***")
+    return message
+
+
+def _run_submission_evaluation(
+    session: Session,
+    submission_id: UUID,
+    api_key: str | None = None,
+) -> dict[str, object]:
     """Orchestrate generation + test execution for a submission (sync)."""
     submission = session.get(Submission, submission_id)
     if submission is None:
@@ -42,7 +54,7 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict[st
     workdir = Path(settings.evaluation_dir) / str(submission.id)
 
     try:
-        provider = get_llm_provider(provider_name)
+        provider = get_llm_provider(provider_name, api_key=api_key)
         code = provider.generate_code(challenge.prompt, challenge.language)
         submission.code = code
         session.commit()
@@ -57,21 +69,28 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict[st
             # budget (java/go get extra headroom for compilation).
         )
     except Exception as exc:  # noqa: BLE001 - worker must never crash silently
-        logger.exception("Evaluation failed for submission %s", submission.id)
+        message = _redact(str(exc), api_key)
+        # Log the full traceback with any per-run API key scrubbed out — the
+        # raw exception could embed the key and must never reach the logs.
+        logger.error(
+            "Evaluation failed for submission %s:\n%s",
+            submission.id,
+            _redact(traceback.format_exc(), api_key),
+        )
         result = EvaluationResult(
             submission_id=submission.id,
             passed_tests=0,
             total_tests=0,
             score=0.0,
-            logs=f"Evaluation error: {exc}",
-            metrics={"error": str(exc)},
+            logs=f"Evaluation error: {message}",
+            metrics={"error": message},
         )
         session.add(result)
         submission.status = "failed"
         submission.score = 0.0
         session.commit()
-        publish_submission_event(submission.id, "failed", error=str(exc))
-        return {"status": "failed", "error": str(exc)}
+        publish_submission_event(submission.id, "failed", error=message)
+        return {"status": "failed", "error": message}
 
     result = EvaluationResult(
         submission_id=submission.id,
@@ -96,7 +115,7 @@ def _run_submission_evaluation(session: Session, submission_id: UUID) -> dict[st
 
 
 @celery_app.task(name="app.tasks.evaluate.evaluate_submission")
-def evaluate_submission(submission_id: str) -> dict:
+def evaluate_submission(submission_id: str, api_key: str | None = None) -> dict:
     """Celery entry point — dispatch a submission for evaluation."""
     with sync_session() as session:
-        return _run_submission_evaluation(session, UUID(submission_id))
+        return _run_submission_evaluation(session, UUID(submission_id), api_key=api_key)

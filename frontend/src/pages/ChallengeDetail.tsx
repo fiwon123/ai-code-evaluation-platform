@@ -14,21 +14,26 @@ import { extensionForLanguage } from "../utils/language.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import styles from "./ChallengeDetail.module.css";
 
+// Provider list mirrors KEY_REQUIRED_PROVIDERS in
+// backend/src/app/schemas/submission.py — keep in sync.
 const PROVIDERS = [
   {
     value: "demo",
     name: "Demo",
     description: "Free · no API key",
+    requiresKey: false,
   },
   {
     value: "openai",
     name: "OpenAI",
     description: "gpt-4o-mini",
+    requiresKey: true,
   },
   {
     value: "anthropic",
     name: "Anthropic",
     description: "claude-3-5-haiku",
+    requiresKey: true,
   },
 ];
 
@@ -44,7 +49,11 @@ function ChallengeDetail() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [provider, setProvider] = useState("demo");
+  const [apiKey, setApiKey] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const selectedProvider = PROVIDERS.find((p) => p.value === provider);
+  const requiresKey = selectedProvider?.requiresKey ?? false;
 
   useEffect(() => {
     if (!id) {
@@ -96,12 +105,21 @@ function ChallengeDetail() {
     if (!challenge) {
       return;
     }
+    // Client-side gate for key-required providers; the API enforces the same
+    // rule server-side (422), so this is just for a snappy inline message.
+    if (requiresKey && !apiKey.trim()) {
+      setSubmitError(
+        `Enter your ${selectedProvider?.name ?? "provider"} API key to run this evaluation.`,
+      );
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
       const submission = await submissionsApi.create({
         challenge_id: challenge.id,
         provider,
+        ...(requiresKey ? { api_key: apiKey.trim() } : {}),
       });
       navigate(`/submissions/${submission.id}`);
     } catch (err) {
@@ -198,7 +216,12 @@ function ChallengeDetail() {
                         name="provider"
                         value={p.value}
                         checked={provider === p.value}
-                        onChange={() => setProvider(p.value)}
+                        onChange={() => {
+                          setProvider(p.value);
+                          if (!p.requiresKey) {
+                            setApiKey("");
+                          }
+                        }}
                         className={styles.providerRadio}
                       />
                       <span className={styles.providerInfo}>
@@ -211,6 +234,28 @@ function ChallengeDetail() {
                     </label>
                   ))}
                 </fieldset>
+
+                {requiresKey && (
+                  <div className={styles.apiKeyGroup}>
+                    <label htmlFor="api-key" className={styles.apiKeyLabel}>
+                      API key
+                    </label>
+                    <input
+                      id="api-key"
+                      type="password"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                      placeholder={`Your ${selectedProvider?.name ?? "provider"} API key`}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className={styles.apiKeyInput}
+                    />
+                    <p className={styles.apiKeyHint}>
+                      Used only for this single evaluation — never stored or
+                      logged.
+                    </p>
+                  </div>
+                )}
 
                 {submitError && (
                   <p role="alert" className={styles.errorText}>
@@ -227,7 +272,8 @@ function ChallengeDetail() {
                 </Button>
                 <p className={styles.hint}>
                   Tip: the demo provider works instantly with prompts containing
-                  keywords like "two sum" or "fizzbuzz".
+                  keywords like "two sum", "valid parentheses" or "longest
+                  common prefix".
                 </p>
               </form>
             ) : (

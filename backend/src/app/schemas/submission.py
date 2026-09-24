@@ -2,7 +2,11 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Providers that require an API key to generate code. Mirrors the UI provider
+# list in frontend/src/pages/ChallengeDetail.tsx (requiresKey) — keep in sync.
+KEY_REQUIRED_PROVIDERS = frozenset({"openai", "anthropic"})
 
 
 class SubmissionCreate(BaseModel):
@@ -10,6 +14,22 @@ class SubmissionCreate(BaseModel):
 
     challenge_id: UUID
     provider: str | None = Field(default=None, max_length=50)
+    api_key: str | None = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "Per-run LLM API key. Used only for this submission's code "
+            "generation and never stored, returned, or logged."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_api_key_for_keyed_providers(self):
+        if self.provider in KEY_REQUIRED_PROVIDERS and not self.api_key:
+            raise ValueError(
+                f"An API key is required for provider '{self.provider}'"
+            )
+        return self
 
 
 class SubmissionUpdate(BaseModel):

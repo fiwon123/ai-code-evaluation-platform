@@ -139,6 +139,45 @@
   width: 100%;
 }
 
+/* Per-run API key */
+.apiKeyGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+}
+
+.apiKeyLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.apiKeyInput {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  transition: border-color var(--transition-fast);
+}
+
+.apiKeyInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.apiKeyInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.apiKeyHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
 .errorText {
   color: var(--color-danger);
   font-size: var(--font-size-sm);

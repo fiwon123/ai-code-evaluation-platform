@@ -92,7 +92,7 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name: type("P", (), {"generate_code": boom})(),
+            lambda name, api_key=None: type("P", (), {"generate_code": boom})(),
         )
         result = _run_submission_evaluation(session, submission_id)
 
@@ -104,6 +104,59 @@ class TestSubmissionEvaluation:
         assert "LLM down" in result["error"]
         evaluation = session.get(EvaluationResult, submission.evaluation_result.id)
         assert "LLM down" in evaluation.logs
+
+    def test_api_key_forwarded_to_provider(self, monkeypatch):
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        captured: dict[str, str] = {}
+
+        correct_code = (
+            "def two_sum(nums, target):\n"
+            "    seen = {}\n"
+            "    for i, n in enumerate(nums):\n"
+            "        if target - n in seen:\n"
+            "            return [seen[target - n], i]\n"
+            "        seen[n] = i\n"
+            "    return []\n"
+        )
+
+        def fake_get(name, api_key=None):
+            captured["api_key"] = api_key
+            return type(
+                "P",
+                (),
+                {"generate_code": lambda self, prompt, language="python": correct_code},
+            )()
+
+        monkeypatch.setattr("app.tasks.evaluate.get_llm_provider", fake_get)
+        result = _run_submission_evaluation(session, submission_id, api_key="sk-task")
+
+        assert captured["api_key"] == "sk-task"
+        assert result["status"] == "completed"
+
+    def test_api_key_redacted_from_failure_logs(self, monkeypatch):
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        def boom(self, prompt, language="python"):
+            raise RuntimeError("upstream rejected sk-secret-key")
+
+        monkeypatch.setattr(
+            "app.tasks.evaluate.get_llm_provider",
+            lambda name, api_key=None: type("P", (), {"generate_code": boom})(),
+        )
+        result = _run_submission_evaluation(
+            session, submission_id, api_key="sk-secret-key"
+        )
+
+        session.expire_all()
+        submission = session.get(Submission, submission_id)
+        evaluation = session.get(EvaluationResult, submission.evaluation_result.id)
+        assert "sk-secret-key" not in result["error"]
+        assert "***" in result["error"]
+        assert "sk-secret-key" not in evaluation.logs
+        assert "***" in evaluation.logs
+        assert "sk-secret-key" not in evaluation.metrics["error"]
 
     def test_missing_challenge_marks_failed(self):
         session = _make_sync_session()

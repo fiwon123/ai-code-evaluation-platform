@@ -22,6 +22,78 @@ class TestMockProvider:
     def test_generates_fizzbuzz(self):
         code = MockProvider().generate_code("Implement fizzbuzz for a number n")
         assert "def fizzbuzz(n)" in code
+        # The good fizzbuzz example handles the empty/negative edge cases.
+        assert "if n <= 0" in code
+
+    def test_generates_fizzbuzz_empty_edges_every_language(self):
+        # Every language's fizzbuzz solution guards n <= 0.
+        edge_guards = {
+            "python": "if n <= 0",
+            "javascript": "if (n <= 0) return []",
+            "typescript": "if (n <= 0) return []",
+            "java": "if (n <= 0) return result",
+            "go": "if n <= 0",
+        }
+        for language, guard in edge_guards.items():
+            code = MockProvider().generate_code("fizzbuzz", language=language)
+            assert guard in code, f"missing n<=0 guard for {language}"
+
+    def test_generates_valid_parentheses(self):
+        code = MockProvider().generate_code(
+            "Write a function valid_parentheses that checks balanced brackets"
+        )
+        assert "def valid_parentheses(s)" in code
+
+    def test_generates_valid_parentheses_every_language(self):
+        signatures = {
+            "python": "def valid_parentheses(s)",
+            "javascript": "function validParentheses(s)",
+            "typescript": "export function validParentheses(s: string): boolean",
+            "java": "public static boolean validParentheses(String s)",
+            "go": "func ValidParentheses(s string) bool",
+        }
+        for language, signature in signatures.items():
+            code = MockProvider().generate_code(
+                "valid parentheses", language=language
+            )
+            assert signature in code, f"missing valid_parentheses for {language}"
+
+    def test_generates_longest_common_prefix(self):
+        code = MockProvider().generate_code(
+            "Find the longest common prefix among a list of strings"
+        )
+        assert "def longest_common_prefix(strs)" in code
+
+    def test_generates_longest_common_prefix_every_language(self):
+        signatures = {
+            "python": "def longest_common_prefix(strs)",
+            "javascript": "function longestCommonPrefix(strs)",
+            "typescript": "export function longestCommonPrefix(strs: string[]): string",
+            "java": "public static String longestCommonPrefix(String[] strs)",
+            "go": "func LongestCommonPrefix(strs []string) string",
+        }
+        for language, signature in signatures.items():
+            code = MockProvider().generate_code(
+                "longest common prefix", language=language
+            )
+            assert signature in code, f"missing longest_common_prefix for {language}"
+
+    def test_camelcase_alias_for_new_keywords(self):
+        # Frontend prompts may use camelCase forms ("validParentheses").
+        code = MockProvider().generate_code(
+            "Write validParentheses", language="javascript"
+        )
+        assert "function validParentheses" in code
+
+    def test_all_languages_share_the_same_keyword_set(self):
+        # The example corpus is mirrored across every supported language, so a
+        # prompt that resolves in Python behaves identically in JS/TS/Java/Go.
+        from app.services.llm_providers.mock_provider import SOLUTIONS_BY_LANGUAGE
+
+        key_sets = {frozenset(solutions) for solutions in SOLUTIONS_BY_LANGUAGE.values()}
+        assert len(key_sets) == 1
+        assert "valid_parentheses" in next(iter(key_sets))
+        assert "longest_common_prefix" in next(iter(key_sets))
 
     def test_generates_fibonacci(self):
         code = MockProvider().generate_code("Return fibonacci sequence of length n")
@@ -222,6 +294,21 @@ class TestGetLLMProvider:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with pytest.raises(ValueError, match="OPENAI_API_KEY"):
             get_llm_provider("openai")
+
+    def test_openai_explicit_key_without_env(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        provider = get_llm_provider("openai", api_key="sk-call")
+        assert isinstance(provider, OpenAIProvider)
+
+    def test_openai_explicit_key_preferred_over_env(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        provider = get_llm_provider("openai", api_key="sk-call")
+        assert isinstance(provider, OpenAIProvider)
+
+    def test_anthropic_explicit_key_without_env(self, monkeypatch):
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        provider = get_llm_provider("anthropic", api_key="sk-ant-call")
+        assert isinstance(provider, AnthropicProvider)
 
     def test_anthropic_requires_key(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

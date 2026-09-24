@@ -8,13 +8,14 @@ from app.services.llm_providers.openai_provider import OpenAIProvider
 _PROVIDERS = {"demo": MockProvider, "openai": OpenAIProvider, "anthropic": AnthropicProvider}
 
 
-def get_llm_provider(name: str | None = None) -> LLMProvider:
+def get_llm_provider(name: str | None = None, api_key: str | None = None) -> LLMProvider:
     """Return an LLM provider by name (falling back to configured default).
 
     ``demo`` is the free, network-independent provider. ``openai`` and
-    ``anthropic`` require their respective API keys via environment
-    variables and raise ``ValueError`` when the key is missing so callers
-    can surface a clear failure.
+    ``anthropic`` require an API key — provided per-call via ``api_key`` or
+    via the OPENAI_API_KEY / ANTHROPIC_API_KEY environment variables — and
+    raise ``ValueError`` when the key is missing so callers can surface a
+    clear failure.
     """
     provider_name = (name or settings.llm_provider or "demo").lower()
     if provider_name not in _PROVIDERS:
@@ -24,15 +25,19 @@ def get_llm_provider(name: str | None = None) -> LLMProvider:
         )
 
     if provider_name == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY is not set")
-        return OpenAIProvider(api_key=api_key)
+        key = api_key or os.getenv("OPENAI_API_KEY")
+        if not key:
+            raise ValueError(
+                "OpenAI API key missing — provide an api_key or set OPENAI_API_KEY"
+            )
+        return OpenAIProvider(api_key=key)
 
     if provider_name == "anthropic":
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY is not set")
-        return AnthropicProvider(api_key=api_key)
+        key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not key:
+            raise ValueError(
+                "Anthropic API key missing — provide an api_key or set ANTHROPIC_API_KEY"
+            )
+        return AnthropicProvider(api_key=key)
 
     return MockProvider()
