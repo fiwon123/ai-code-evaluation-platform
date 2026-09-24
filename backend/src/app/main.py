@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,10 +10,29 @@ from app.api.websocket import router as websocket_router
 from app.config import settings
 from app.core.security_headers import SecurityHeadersMiddleware
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan — yields then cleans up connections on shutdown."""
+    """Application lifespan — seeds example challenges on startup, yields, then
+    cleans up connections on shutdown."""
+    if settings.seed_examples:
+        from app.core.database import async_session
+        from app.services.example_challenges import seed_example_challenges
+
+        try:
+            async with async_session() as session:
+                result = await seed_example_challenges(session)
+            logger.info(
+                "Seeded example challenges: %d created, %d updated",
+                result.created,
+                result.updated,
+            )
+        except Exception:
+            # Never block boot: the DB may be unreachable or not yet migrated.
+            # `make seed-examples` re-runs the seeder manually.
+            logger.exception("Failed to seed example challenges (non-fatal)")
     yield
     from app.core.database import engine
     from app.core.redis import redis_client

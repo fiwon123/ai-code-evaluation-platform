@@ -1,7 +1,7 @@
 .PHONY: help setup host-tools infra-up infra-down preflight dev-up dev-build dev-down dev-restart \
         dev-log dev-exec dev-agent opencode shell sandbox reset \
         test test-backend test-frontend lint lint-fix format typecheck build check \
-        install run dev-backend dev-frontend dev-celery dev-all clean \
+        install run dev-backend dev-frontend dev-celery dev-all seed-examples clean \
         tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
 
 help: ## Show this help
@@ -44,6 +44,9 @@ dev-all: ## Start backend + celery + frontend on the host (background, /tmp/*.lo
 	@echo "  Backend:  http://localhost:8000  (logs: /tmp/backend.log)"
 	@echo "  Frontend: http://localhost:5173  (logs: /tmp/frontend.log)"
 	@echo "  Celery:   running                (logs: /tmp/celery.log)"
+
+seed-examples: ## Seed the curated example challenges into the DB (idempotent)
+	cd $(BACKEND_DIR) && uv run python -m app.seed_examples
 
 # --- Infrastructure only (postgres/redis/eval-sandbox image) -----------------
 infra-up: ## Start postgres + redis + build the eval-sandbox image (host-native path)

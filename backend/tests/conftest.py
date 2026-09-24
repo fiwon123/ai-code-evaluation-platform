@@ -28,6 +28,20 @@ def _disable_docker_sandbox(monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _disable_example_seeding(monkeypatch):
+    """Keep the in-memory test DBs free of seeded example challenges.
+
+    Many API tests assert exact row totals (e.g. challenges list ``total ==
+    0``), so startup auto-seeding must never run during tests. Tests that
+    exercise the seeder override this with explicit ``monkeypatch``.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "seed_examples", False)
+    yield
+
+
 @pytest.fixture
 def mock_db_session() -> AsyncMock:
     """Mock database session for tests that don't need a real DB."""
