@@ -49,6 +49,9 @@ class EvaluationResultRead(BaseModel):
     metrics: dict[str, Any]
     #: Per-test-case breakdown returned when the runner produced one.
     test_results: list[dict[str, Any]] | None = None
+    #: Public share token — visible only to the owner (submission reads are
+    #: owner-scoped) so the dashboard can show shared state.
+    share_token: str | None = None
     created_at: datetime
 
 
@@ -99,6 +102,26 @@ class SharedResultRead(BaseModel):
     logs: str
     metrics: dict[str, Any]
     test_results: list[dict[str, Any]] | None = None
+
+
+class ChallengeStatsItem(BaseModel):
+    """Per-challenge evaluation stats for the current user."""
+
+    challenge_id: UUID
+    challenge_title: str
+    language: str
+    total_runs: int
+    completed_runs: int
+    failed_runs: int
+    avg_score: float | None
+    best_score: float | None
+    last_run_at: datetime
+
+
+class SubmissionStatsRead(BaseModel):
+    """The user's evaluation history grouped by challenge."""
+
+    items: list[ChallengeStatsItem]
 
 
 class SubmissionRead(BaseModel):

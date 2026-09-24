@@ -3,7 +3,7 @@ from secrets import token_urlsafe
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import case, func, null, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,11 +17,13 @@ from app.models.submission import Submission
 from app.models.user import User
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.submission import (
+    ChallengeStatsItem,
     ProviderComparisonEntry,
     ProviderComparisonRead,
     ShareResultRead,
     SubmissionCreate,
     SubmissionRead,
+    SubmissionStatsRead,
     SubmissionUpdate,
 )
 
@@ -208,6 +210,74 @@ async def get_provider_comparison(
     # Best average score first, then most runs — deterministic for the UI.
     entries.sort(key=lambda e: (-e.score, -e.runs, e.provider))
     return ProviderComparisonRead(challenge_id=challenge_id, entries=entries)
+
+
+@router.get("/stats", response_model=SubmissionStatsRead)
+async def get_submission_stats(
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> SubmissionStatsRead:
+    """Aggregate the current user's evaluations per challenge.
+
+    Powers the dashboard's "evaluations by challenge" view: how many runs,
+    how many completed/failed, and the average/best score per challenge —
+    across all submissions, independent of list pagination.
+    """
+    rows = (
+        await db.execute(
+            select(
+                Challenge.id,
+                Challenge.title,
+                Challenge.language,
+                func.count(Submission.id).label("total_runs"),
+                func.sum(case((Submission.status == "completed", 1), else_=0)).label(
+                    "completed_runs"
+                ),
+                func.sum(case((Submission.status == "failed", 1), else_=0)).label("failed_runs"),
+                func.avg(
+                    case(
+                        (Submission.status == "completed", EvaluationResult.score),
+                        else_=null(),
+                    )
+                ).label("avg_score"),
+                func.max(
+                    case(
+                        (Submission.status == "completed", EvaluationResult.score),
+                        else_=null(),
+                    )
+                ).label("best_score"),
+                func.max(Submission.created_at).label("last_run_at"),
+            )
+            .join(Submission, Submission.challenge_id == Challenge.id)
+            .outerjoin(
+                EvaluationResult,
+                EvaluationResult.submission_id == Submission.id,
+            )
+            .where(Submission.user_id == current_user.id)
+            .group_by(Challenge.id, Challenge.title, Challenge.language)
+        )
+    ).all()
+
+    items: list[ChallengeStatsItem] = []
+    for row in rows:
+        avg_score = round(row.avg_score, 1) if row.avg_score is not None else None
+        best_score = round(row.best_score, 1) if row.best_score is not None else None
+        items.append(
+            ChallengeStatsItem(
+                challenge_id=row.id,
+                challenge_title=row.title,
+                language=row.language,
+                total_runs=row.total_runs,
+                completed_runs=row.completed_runs or 0,
+                failed_runs=row.failed_runs or 0,
+                avg_score=avg_score,
+                best_score=best_score,
+                last_run_at=row.last_run_at,
+            )
+        )
+
+    items.sort(key=lambda item: item.last_run_at, reverse=True)
+    return SubmissionStatsRead(items=items)
 
 
 @router.get("/{submission_id}", response_model=SubmissionRead)

@@ -593,3 +593,144 @@ async def test_provider_comparison_empty_when_no_runs(
     )
     assert response.status_code == 200
     assert response.json()["entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_requires_auth(db_client: AsyncClient) -> None:
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_empty(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats", headers=auth(token))
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_aggregates_per_challenge(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    token, user = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    uid = uuid.UUID(user["id"])
+    cid = uuid.UUID(challenge["id"])
+
+    # Two completed runs (100 + 50) → avg 75, best 100.
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        cid,
+        provider="demo",
+        score=100.0,
+        passed=2,
+        total=2,
+        duration_ms=100,
+    )
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        cid,
+        provider="demo",
+        score=50.0,
+        passed=1,
+        total=2,
+        duration_ms=100,
+    )
+    # One failed run through the API.
+    submission = await create_submission(db_client, token, challenge["id"])
+    await db_client.patch(
+        f"{SUBMISSIONS_URL}/{submission['id']}",
+        json={"status": "failed"},
+        headers=auth(token),
+    )
+
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats", headers=auth(token))
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    item = items[0]
+    assert item["challenge_title"] == "Two Sum"
+    assert item["language"] == "python"
+    assert item["total_runs"] == 3
+    assert item["completed_runs"] == 2
+    assert item["failed_runs"] == 1
+    assert item["avg_score"] == 75.0
+    assert item["best_score"] == 100.0
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_excludes_other_users(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    token, user = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    uid = uuid.UUID(user["id"])
+    cid = uuid.UUID(challenge["id"])
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        cid,
+        provider="demo",
+        score=90.0,
+        passed=2,
+        total=2,
+        duration_ms=100,
+    )
+
+    other_token, other = await register_user(db_client)
+    await _insert_completed_run(
+        db_sessionmaker,
+        uuid.UUID(other["id"]),
+        cid,
+        provider="demo",
+        score=10.0,
+        passed=0,
+        total=2,
+        duration_ms=100,
+    )
+
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats", headers=auth(other_token))
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["avg_score"] == 10.0
+    assert items[0]["best_score"] == 10.0
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_groups_by_challenge(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    token, user = await register_user(db_client)
+    first = await create_challenge(db_client, token, title="First")
+    second = await create_challenge(db_client, token, title="Second")
+    uid = uuid.UUID(user["id"])
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        uuid.UUID(first["id"]),
+        provider="demo",
+        score=80.0,
+        passed=2,
+        total=2,
+        duration_ms=100,
+    )
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        uuid.UUID(second["id"]),
+        provider="demo",
+        score=40.0,
+        passed=1,
+        total=3,
+        duration_ms=100,
+    )
+
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats", headers=auth(token))
+    items = response.json()["items"]
+    assert len(items) == 2
+    titles = {item["challenge_title"]: item for item in items}
+    assert titles["First"]["avg_score"] == 80.0
+    assert titles["Second"]["best_score"] == 40.0
