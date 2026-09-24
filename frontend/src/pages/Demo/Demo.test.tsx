@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Demo from "./Demo.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
@@ -29,6 +30,23 @@ vi.mock("../../services/api.ts", () => ({
 const mockUseAuth = vi.mocked(useAuth);
 const mockList = vi.mocked(challengesApi.list);
 const mockCreate = vi.mocked(submissionsApi.create);
+const mockGet = vi.mocked(submissionsApi.get);
+
+const loggedInAuth = () => ({
+  user: {
+    id: "u1",
+    email: "alice@example.com",
+    username: "alice",
+    is_admin: false,
+    is_active: true,
+    created_at: "2026-01-01T00:00:00Z",
+  },
+  token: "t",
+  initializing: false,
+  login: vi.fn(),
+  register: vi.fn(),
+  logout: vi.fn(),
+});
 
 const pythonChallenge = {
   id: "py1",
@@ -106,9 +124,10 @@ describe("Demo page preview", () => {
     } as never);
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.useRealTimers();
+});
 
   it("shows what will run for the selected challenge without an account", async () => {
     renderPage();
@@ -186,21 +205,7 @@ describe("Demo page preview", () => {
   });
 
   it("tells a logged-in user how long the run takes while generating", async () => {
-    mockUseAuth.mockReturnValue({
-      user: {
-        id: "u1",
-        email: "alice@example.com",
-        username: "alice",
-        is_admin: false,
-        is_active: true,
-        created_at: "2026-01-01T00:00:00Z",
-      },
-      token: "t",
-      initializing: false,
-      login: vi.fn(),
-      register: vi.fn(),
-      logout: vi.fn(),
-    });
+    mockUseAuth.mockReturnValue(loggedInAuth());
     mockCreate.mockResolvedValue({
       id: "s1",
       challenge_id: "py1",
@@ -221,5 +226,83 @@ describe("Demo page preview", () => {
       await screen.findByText(/usually takes 10–30 seconds/),
     ).toBeInTheDocument();
     expect(screen.getByText(/updates automatically/)).toBeInTheDocument();
+  });
+
+  it("shows run feedback directly under the controls, above the preview", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
+    mockCreate.mockResolvedValue({
+      id: "s1",
+      challenge_id: "py1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    } as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    const pending = await screen.findByText(/usually takes 10–30 seconds/);
+    const preview = screen.getByRole("heading", { name: "What will run" });
+    // The pending message must sit ABOVE the preview panel (and therefore
+    // directly below the dropdown + Generate button row).
+    expect(
+      pending.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("shows the busy-server message after the run times out", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
+    mockCreate.mockResolvedValue({
+      id: "s1",
+      challenge_id: "py1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    } as never);
+    mockGet.mockResolvedValue({
+      id: "s1",
+      challenge_id: "py1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    } as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    // Switch to a fake clock only after the initial (microtask) load, so the
+    // 60s timeout fires on demand instead of waiting in real time.
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    // create() resolves on a microtask — flush it; no timers are involved.
+    await act(async () => {});
+    expect(screen.getByText(/usually takes 10–30 seconds/)).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(60_000));
+
+    expect(
+      screen.getByText(/didn't finish in time — the server may be busy/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Celery|worker/i, { exact: false }),
+    ).not.toBeInTheDocument();
+    // The error renders above the preview (directly under the run controls).
+    const preview = screen.getByRole("heading", { name: "What will run" });
+    const error = screen.getByRole("alert");
+    expect(
+      error.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

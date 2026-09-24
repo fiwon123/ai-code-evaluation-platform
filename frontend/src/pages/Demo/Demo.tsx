@@ -187,8 +187,8 @@ function Demo() {
     }
     const timeoutId = window.setTimeout(() => {
       setError(
-        "Evaluation timed out after about 60 seconds — the Celery worker may " +
-          "not be running. Check that the worker is up and resubmit.",
+        "The evaluation didn't finish in time — the server may be busy. " +
+          "Please try again in a minute.",
       );
       setRunning(false);
       setSubmissionId(null);
@@ -265,6 +265,79 @@ function Demo() {
                 </Button>
               </div>
 
+              {/* Feedback sits directly under the run controls, above the
+                  preview, so a run's outcome is visible without scrolling. */}
+              {error && (
+                <p role="alert" className={styles.error}>
+                  {error}
+                </p>
+              )}
+
+              {inProgress && (
+                <Card className={styles.resultCard}>
+                  <p className={styles.progressText}>
+                    ⏳ Generating code and running tests… usually takes 10–30
+                    seconds. This page updates automatically.
+                  </p>
+                </Card>
+              )}
+
+              {result &&
+                (result.status === "completed" ||
+                  result.status === "failed") && (
+                <Card className={styles.resultCard}>
+                  <div className={styles.resultHeader}>
+                    <h3 className={styles.resultTitle}>Demo result</h3>
+                    <Badge
+                      variant={
+                        result.status === "completed" ? "success" : "danger"
+                      }
+                    >
+                      {result.status}
+                    </Badge>
+                  </div>
+                  {result.evaluation_result && (
+                    <div className={styles.resultStats}>
+                      <div className={styles.resultStat}>
+                        <span className={styles.resultStatValue}>
+                          {result.evaluation_result.score}%
+                        </span>
+                        <span className={styles.resultStatLabel}>Score</span>
+                      </div>
+                      <div className={styles.resultStat}>
+                        <span className={styles.resultStatValue}>
+                          {result.evaluation_result.passed_tests}/
+                          {result.evaluation_result.total_tests}
+                        </span>
+                        <span className={styles.resultStatLabel}>
+                          Tests passed
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {result.code && (
+                    <div className={styles.resultCode}>
+                      <p className={styles.resultCodeLabel}>Generated code</p>
+                      <CodeBlock
+                        code={result.code}
+                        language={resultLanguage}
+                        filename={`solution.${extensionForLanguage(resultLanguage)}`}
+                      />
+                    </div>
+                  )}
+                  <p className={styles.resultMeta}>
+                    Submitted at{" "}
+                    {new Date(result.created_at).toLocaleString()} · provider:{" "}
+                    <code>demo</code>
+                  </p>
+                  <Link to={`/submissions/${result.id}`}>
+                    <Button variant="secondary" size="sm">
+                      View full report
+                    </Button>
+                  </Link>
+                </Card>
+              )}
+
               {selectedChallenge && (
                 <div className={styles.preview}>
                   <div className={styles.previewHeader}>
@@ -335,74 +408,6 @@ function Demo() {
               <Link to="/register">sign up</Link> or{" "}
               <Link to="/login">log in</Link> to run the demo.
             </p>
-          )}
-
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-          )}
-
-          {inProgress && (
-            <Card className={styles.resultCard}>
-              <p className={styles.progressText}>
-                ⏳ Generating code and running tests… usually takes 10–30
-                seconds. This page updates automatically.
-              </p>
-            </Card>
-          )}
-
-          {result &&
-            (result.status === "completed" || result.status === "failed") && (
-            <Card className={styles.resultCard}>
-              <div className={styles.resultHeader}>
-                <h3 className={styles.resultTitle}>Demo result</h3>
-                <Badge
-                  variant={
-                    result.status === "completed" ? "success" : "danger"
-                  }
-                >
-                  {result.status}
-                </Badge>
-              </div>
-              {result.evaluation_result && (
-                <div className={styles.resultStats}>
-                  <div className={styles.resultStat}>
-                    <span className={styles.resultStatValue}>
-                      {result.evaluation_result.score}%
-                    </span>
-                    <span className={styles.resultStatLabel}>Score</span>
-                  </div>
-                  <div className={styles.resultStat}>
-                    <span className={styles.resultStatValue}>
-                      {result.evaluation_result.passed_tests}/
-                      {result.evaluation_result.total_tests}
-                    </span>
-                    <span className={styles.resultStatLabel}>Tests passed</span>
-                  </div>
-                </div>
-              )}
-              {result.code && (
-                <div className={styles.resultCode}>
-                  <p className={styles.resultCodeLabel}>Generated code</p>
-                  <CodeBlock
-                    code={result.code}
-                    language={resultLanguage}
-                    filename={`solution.${extensionForLanguage(resultLanguage)}`}
-                  />
-                </div>
-              )}
-              <p className={styles.resultMeta}>
-                Submitted at{" "}
-                {new Date(result.created_at).toLocaleString()} · provider:{" "}
-                <code>demo</code>
-              </p>
-              <Link to={`/submissions/${result.id}`}>
-                <Button variant="secondary" size="sm">
-                  View full report
-                </Button>
-              </Link>
-            </Card>
           )}
         </div>
       </section>

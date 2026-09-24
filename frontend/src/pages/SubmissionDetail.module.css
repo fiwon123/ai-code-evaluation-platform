@@ -88,3 +88,7 @@
   color: var(--color-danger);
   margin: 0;
 }
+
+.retry {
+  margin-top: var(--space-4);
+}

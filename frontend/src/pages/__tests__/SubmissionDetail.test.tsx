@@ -73,6 +73,11 @@ describe("SubmissionDetail", () => {
     // The recorded execution duration is promoted to a first-class stat.
     expect(screen.getByText("Duration")).toBeInTheDocument();
     expect(screen.getByText("12ms")).toBeInTheDocument();
+    // Completed reports keep the secondary "Back to challenge" (no "Try again").
+    expect(
+      screen.getByRole("link", { name: "Back to challenge" }),
+    ).toHaveAttribute("href", "/challenges/c1");
+    expect(screen.queryByRole("link", { name: "Try again" })).not.toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 
@@ -143,6 +148,8 @@ describe("SubmissionDetail", () => {
 
     expect(await screen.findByText(/taking longer than usual/i)).toBeInTheDocument();
     expect(screen.getByText(/3m 0\d+s/)).toBeInTheDocument();
+    // Warnings use user-friendly wording — no ops jargon.
+    expect(screen.queryByText(/worker/i)).not.toBeInTheDocument();
   });
 
   it("does not poll again once complete", async () => {
@@ -202,6 +209,36 @@ describe("SubmissionDetail", () => {
     expect((await screen.findAllByText("failed")).length).toBeGreaterThan(0);
     expect(screen.getByText("0%")).toBeInTheDocument();
     expect((await screen.findAllByText(/LLM down/)).length).toBeGreaterThan(0);
+    // Failed reports offer a retry CTA back to the challenge.
+    expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
+      "href",
+      "/challenges/c1",
+    );
+  });
+
+  it("offers try again when a failed submission has no result", async () => {
+    const failed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "failed",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    };
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(failed), { status: 200 }));
+
+    renderPage(60_000);
+
+    expect(
+      await screen.findByText(/no result was produced/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
+      "href",
+      "/challenges/c1",
+    );
   });
 
   it("shows an error when the submission cannot be loaded", async () => {
