@@ -26,9 +26,7 @@ class SubmissionCreate(BaseModel):
     @model_validator(mode="after")
     def require_api_key_for_keyed_providers(self):
         if self.provider in KEY_REQUIRED_PROVIDERS and not self.api_key:
-            raise ValueError(
-                f"An API key is required for provider '{self.provider}'"
-            )
+            raise ValueError(f"An API key is required for provider '{self.provider}'")
         return self
 
 
@@ -49,6 +47,8 @@ class EvaluationResultRead(BaseModel):
     score: float
     logs: str
     metrics: dict[str, Any]
+    #: Per-test-case breakdown returned when the runner produced one.
+    test_results: list[dict[str, Any]] | None = None
     created_at: datetime
 
 

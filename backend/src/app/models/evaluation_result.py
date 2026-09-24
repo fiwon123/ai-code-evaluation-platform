@@ -28,5 +28,7 @@ class EvaluationResult(UUIDMixin, TimestampMixin, Base):
     score: Mapped[float] = mapped_column(default=0.0)
     logs: Mapped[str] = mapped_column(Text, default="")
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    #: Per-test-case breakdown: ``[{name, passed, message}]``.
+    test_results: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, default=list)
 
     submission: Mapped[Submission] = relationship(back_populates="evaluation_result")

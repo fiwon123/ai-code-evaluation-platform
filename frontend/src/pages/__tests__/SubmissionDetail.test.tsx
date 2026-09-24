@@ -81,6 +81,80 @@ describe("SubmissionDetail", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 
+  it("renders the per-test breakdown with pass/fail rows and messages", async () => {
+    const completed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "completed",
+      provider: "demo",
+      code: "def two_sum(nums, target):\n    return [0, 1]\n",
+      score: 50,
+      language: "python",
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 1,
+        total_tests: 2,
+        score: 50,
+        logs: "1 passed, 1 failed in 0.01s",
+        metrics: { language: "python", duration_ms: 12 },
+        test_results: [
+          { name: "test_two_sum", passed: true, message: null },
+          {
+            name: "test_edge_case",
+            passed: false,
+            message: "assert [3, 3] == [1, 2]",
+          },
+        ],
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(completed), { status: 200 }),
+    );
+
+    renderPage(60000); // no re-poll — single completed response
+
+    expect(await screen.findByText("Test results")).toBeInTheDocument();
+    expect(screen.getByText("test_two_sum")).toBeInTheDocument();
+    expect(screen.getByText("test_edge_case")).toBeInTheDocument();
+    expect(screen.getByText("assert [3, 3] == [1, 2]")).toBeInTheDocument();
+    // Score ring reflects the 50% score (danger bucket).
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Score 50 percent" })).toBeInTheDocument();
+  });
+
+  it("falls back to counts when no per-test breakdown exists", async () => {
+    const completed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "completed",
+      provider: "demo",
+      code: null,
+      score: 100,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 2,
+        total_tests: 2,
+        score: 100,
+        logs: "2 passed in 0.01s",
+        metrics: { language: "python" },
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(completed), { status: 200 }),
+    );
+
+    renderPage(60000);
+
+    expect(await screen.findByText("Test results")).toBeInTheDocument();
+    expect(
+      screen.getByText(/No per-test breakdown was recorded/),
+    ).toBeInTheDocument();
+  });
+
   it("shows a live elapsed counter and an estimate while processing", async () => {
     const processing = {
       id: "s1",
