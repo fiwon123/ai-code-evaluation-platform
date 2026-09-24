@@ -19,6 +19,13 @@ celery_app.conf.worker_prefetch_multiplier = 1  # one task per worker at a time
 celery_app.conf.broker_transport_options = {"visibility_timeout": 3600}
 celery_app.conf.result_expires = 3600  # reap task result keys after 1 hour
 
+# Hard per-task ceiling so a wedged child (hung Docker daemon, blocking Redis
+# publish, ...) can't occupy a worker slot forever; the soft limit logs a
+# warning before the hard kill. The worst healthy evaluation path is ~2.5 min
+# (60s LLM call + 90s Go compile/test), so 4/5 min leaves generous headroom.
+celery_app.conf.task_soft_time_limit = 240
+celery_app.conf.task_time_limit = 300
+
 # Periodic recovery: sweep every minute for submissions stranded in
 # pending/processing (lost broker messages, expired tasks, killed workers).
 # The schedule state file lives in /tmp so it never pollutes the repo, even

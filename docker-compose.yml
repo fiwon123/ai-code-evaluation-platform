@@ -68,9 +68,12 @@ services:
     depends_on:
       # Celery runs with the dev sandbox by default (`docker compose up dev`)
       # so evaluations work out of the box; beat runs the stale-submission
-      # recovery sweep on the same schedule.
+      # recovery sweep on the same schedule. Celery must be *healthy* (pings
+      # back on its control queue) — `service_started` alone would let the
+      # sandbox come up next to a crash-looping worker and queue submissions
+      # that nobody consumes.
       celery:
-        condition: service_started
+        condition: service_healthy
       beat:
         condition: service_started
       postgres:
@@ -87,12 +90,17 @@ services:
 
   # Celery worker — consumes evaluation tasks from Redis and runs LLM code
   # generation + sandboxed test execution. A managed Compose service (not a
-  # background process) so it restarts automatically if it crashes.
+  # background process) so it restarts automatically if it crashes. The
+  # healthcheck pings the worker's control queue so `dev` (depends_on
+  # service_healthy) never comes up against a dead/crash-looping consumer.
   celery:
     build:
       context: .
       dockerfile: Dockerfile
-    command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app worker --loglevel=info'
+    # Re-sync the baked venv only when it's missing (same guard as
+    # dev-entrypoint.sh) so an image predating a pyproject change can't
+    # crash-loop the worker at import time.
+    command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && { [[ -x /opt/backend-venv/bin/celery ]] || uv sync; } && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app worker --loglevel=info'
     volumes:
       - .:/sandbox/ai-code-evaluation-platform:cached
       # Mount the host Docker socket so the Celery worker can create
@@ -111,6 +119,14 @@ services:
         condition: service_healthy
       sandbox:
         condition: service_completed_successfully
+    healthcheck:
+      # Pings *this* worker's control queue; fails while the worker is
+      # starting (start_period) or when it's wedged/restarting.
+      test: ["CMD-SHELL", "/opt/backend-venv/bin/celery -A app.core.celery_app:celery_app inspect ping -d celery@$${HOSTNAME} --timeout 5"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
@@ -127,7 +143,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app beat --loglevel=info'
+    # Same venv guard as celery: sync only when the baked venv is missing so
+    # an image predating a pyproject change can't crash-loop beat at import.
+    command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && { [[ -x /opt/backend-venv/bin/celery ]] || uv sync; } && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app beat --loglevel=info'
     volumes:
       - .:/sandbox/ai-code-evaluation-platform:cached
     environment:
