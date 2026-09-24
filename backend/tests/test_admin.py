@@ -53,9 +53,7 @@ async def test_admin_users_requires_auth(db_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_users_as_admin(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_list_users_as_admin(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
     await register_user(db_client)
 
@@ -69,9 +67,7 @@ async def test_list_users_as_admin(
 
 
 @pytest.mark.asyncio
-async def test_patch_user_role_and_status(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_patch_user_role_and_status(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
     _, target = await register_user(db_client)
 
@@ -86,9 +82,7 @@ async def test_patch_user_role_and_status(
 
 
 @pytest.mark.asyncio
-async def test_patch_user_empty_payload_422(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_patch_user_empty_payload_422(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
     _, target = await register_user(db_client)
 
@@ -101,9 +95,7 @@ async def test_patch_user_empty_payload_422(
 
 
 @pytest.mark.asyncio
-async def test_deactivate_user(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_deactivate_user(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
     _, target = await register_user(db_client)
 
@@ -116,9 +108,7 @@ async def test_deactivate_user(
 
 
 @pytest.mark.asyncio
-async def test_deactivate_own_account_rejected(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_deactivate_own_account_rejected(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, admin = await register_admin(db_client, db_sessionmaker)
 
     response = await db_client.post(
@@ -129,9 +119,7 @@ async def test_deactivate_own_account_rejected(
 
 
 @pytest.mark.asyncio
-async def test_deactivated_user_cannot_login(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_deactivated_user_cannot_login(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
     _, target = await register_user(db_client)
 
@@ -165,9 +153,7 @@ async def test_deactivated_user_token_no_longer_authorized(
 
 
 @pytest.mark.asyncio
-async def test_admin_list_challenges(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_admin_list_challenges(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
 
     challenge_payload = {
@@ -187,9 +173,7 @@ async def test_admin_list_challenges(
 
 
 @pytest.mark.asyncio
-async def test_admin_delete_challenge(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_admin_delete_challenge(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
     other_token, _ = await register_user(db_client)
 
@@ -217,9 +201,7 @@ async def test_admin_delete_challenge(
 
 
 @pytest.mark.asyncio
-async def test_admin_delete_missing_challenge_404(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_admin_delete_missing_challenge_404(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
 
     response = await db_client.delete(
@@ -230,9 +212,7 @@ async def test_admin_delete_missing_challenge_404(
 
 
 @pytest.mark.asyncio
-async def test_admin_list_submissions(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_admin_list_submissions(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
 
     response = await db_client.get("/api/admin/submissions", headers=auth(admin_token))
@@ -241,9 +221,7 @@ async def test_admin_list_submissions(
 
 
 @pytest.mark.asyncio
-async def test_platform_stats(
-    db_client: AsyncClient, db_sessionmaker
-) -> None:
+async def test_platform_stats(db_client: AsyncClient, db_sessionmaker) -> None:
     admin_token, _ = await register_admin(db_client, db_sessionmaker)
     await register_user(db_client)
 

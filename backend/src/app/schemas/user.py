@@ -42,6 +42,37 @@ class AdminUserUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class StatusCount(BaseModel):
+    """Submission count per status."""
+
+    status: str
+    count: int
+
+
+class LanguageStat(BaseModel):
+    """Submission aggregate per challenge language."""
+
+    language: str
+    count: int
+    avg_score: float | None = None
+
+
+class TopChallengeStat(BaseModel):
+    """A challenge ranked by evaluation run count."""
+
+    challenge_id: UUID
+    title: str
+    runs: int
+    avg_score: float | None = None
+
+
+class DailySubmissionStat(BaseModel):
+    """Submission counts for a calendar day (UTC)."""
+
+    date: str
+    count: int
+
+
 class PlatformStats(BaseModel):
     """Platform-wide statistics for the admin dashboard."""
 
@@ -52,3 +83,8 @@ class PlatformStats(BaseModel):
     failed_submissions: int
     pending_submissions: int
     average_score: float | None = None
+    #: Breakdown groups consumed by the admin dashboard charts.
+    submissions_by_status: list[StatusCount] = []
+    submissions_by_language: list[LanguageStat] = []
+    top_challenges: list[TopChallengeStat] = []
+    submissions_last_14_days: list[DailySubmissionStat] = []
