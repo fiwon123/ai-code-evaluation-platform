@@ -15,9 +15,11 @@ export function statusVariant(status: SubmissionStatus): StatusVariant {
       return "success";
     case "failed":
       return "danger";
-    case "processing":
-      return "warning";
+    // pending = waiting in the queue (yellow/orange), processing = actively
+    // running (blue).
     case "pending":
+      return "warning";
+    case "processing":
       return "primary";
     default:
       return "neutral";

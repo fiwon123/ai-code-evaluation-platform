@@ -5,10 +5,26 @@ import {
   formatElapsedMs,
   formatRelativeTime,
   isDelayed,
+  statusVariant,
   STALE_AFTER_MS,
 } from "./formatting.ts";
 
 const T0 = Date.parse("2026-01-01T00:00:00Z");
+
+describe("statusVariant", () => {
+  it("maps pending to the warning variant (waiting in the queue)", () => {
+    expect(statusVariant("pending")).toBe("warning");
+  });
+
+  it("maps processing to the primary variant (actively running)", () => {
+    expect(statusVariant("processing")).toBe("primary");
+  });
+
+  it("maps completed and failed to success and danger", () => {
+    expect(statusVariant("completed")).toBe("success");
+    expect(statusVariant("failed")).toBe("danger");
+  });
+});
 
 describe("formatElapsedMs", () => {
   it("formats sub-minute elapsed times as seconds", () => {
