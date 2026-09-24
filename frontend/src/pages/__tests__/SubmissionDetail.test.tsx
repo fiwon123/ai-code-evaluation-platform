@@ -181,6 +181,56 @@ describe("SubmissionDetail", () => {
     expect(screen.queryByText(/taking longer than usual/i)).not.toBeInTheDocument();
   });
 
+  it("shows the generating phase while the LLM call is in flight", async () => {
+    const generating = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "processing",
+      phase: "generating",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: new Date(Date.now() - 60_000).toISOString(),
+      started_at: new Date(Date.now() - 30_000).toISOString(),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(generating), { status: 200 }),
+    );
+
+    renderPage(60_000);
+
+    expect(await screen.findByText(/Generating code/i)).toBeInTheDocument();
+    // The elapsed counter is measured from the run start, not the queue time.
+    expect(screen.getByText(/30s/)).toBeInTheDocument();
+    expect(screen.getByText(/started at/i)).toBeInTheDocument();
+  });
+
+  it("switches to the testing phase once code has been generated", async () => {
+    const testing = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "processing",
+      phase: "testing",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: new Date(Date.now() - 60_000).toISOString(),
+      started_at: new Date(Date.now() - 20_000).toISOString(),
+    };
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(testing), { status: 200 }));
+
+    renderPage(60_000);
+
+    expect(await screen.findByText(/Running tests/i)).toBeInTheDocument();
+    // Processing phases never render the false-failure card.
+    expect(screen.queryByText(/Evaluation failed/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
   it("mentions compilation for java evaluations", async () => {
     const processing = {
       id: "s1",

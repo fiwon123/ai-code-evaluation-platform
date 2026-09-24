@@ -69,6 +69,9 @@ export type ChallengeUpdatePayload = Partial<ChallengeCreatePayload>;
 
 export type SubmissionStatus = "pending" | "processing" | "completed" | "failed";
 
+/** Pipeline phase while a submission is processing. */
+export type SubmissionPhase = "generating" | "testing";
+
 export interface EvaluationResult {
   id: string;
   passed_tests: number;
@@ -93,6 +96,11 @@ export interface Submission {
   user_id: string;
   challenge_id: string;
   status: SubmissionStatus;
+  /** Pipeline phase while processing: "generating" | "testing"; null when
+   *  pending or terminal. Absent on older cached responses. */
+  phase?: SubmissionPhase | null;
+  /** When evaluation began (status → processing); null while queued. */
+  started_at?: string | null;
   provider: string | null;
   language: string | null;
   code: string | null;

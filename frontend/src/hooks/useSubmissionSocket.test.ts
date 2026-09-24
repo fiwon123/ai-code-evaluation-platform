@@ -110,7 +110,7 @@ describe("useSubmissionSocket", () => {
     expect(result.current.state).toBe("open");
   });
 
-  it("merges status updates into the live submission", () => {
+it("merges status updates into the live submission", () => {
     const { result } = renderHook(() => useSubmissionSocket("s1"));
 
     act(() => FakeWebSocket.latest().open());
@@ -125,6 +125,48 @@ describe("useSubmissionSocket", () => {
     expect(result.current.liveSubmission?.status).toBe("completed");
     expect(result.current.liveSubmission?.id).toBe("s1");
     expect(result.current.liveSubmission?.provider).toBe("demo");
+  });
+
+  it("merges the phase alongside a processing update", () => {
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "snapshot",
+        submission: submissionFixture({ status: "processing", phase: "generating" }),
+      }),
+    );
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "update",
+        status: "processing",
+        phase: "testing",
+      }),
+    );
+
+    expect(result.current.liveSubmission?.status).toBe("processing");
+    expect(result.current.liveSubmission?.phase).toBe("testing");
+  });
+
+  it("ignores updates whose status is not a valid SubmissionStatus", () => {
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "snapshot",
+        submission: submissionFixture({ status: "processing", phase: "generating" }),
+      }),
+    );
+    act(() =>
+      FakeWebSocket.latest().message({ type: "update", status: "code_generated" }),
+    );
+
+    // The stray event must not corrupt the client state — a "code_generated"
+    // status would previously blank the page into a false failure.
+    expect(result.current.liveSubmission?.status).toBe("processing");
+    expect(result.current.liveSubmission?.phase).toBe("generating");
   });
 
   it("reconnects with capped exponential backoff after an unexpected close", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getToken } from "../services/api.ts";
-import type { Submission, SubmissionStatus } from "../types.ts";
+import type { Submission, SubmissionPhase, SubmissionStatus } from "../types.ts";
 
 const API_BASE: string = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const WS_BASE: string =
@@ -11,10 +11,20 @@ const MAX_RECONNECT_MS = 15000;
 
 export type SocketState = "connecting" | "open" | "closed";
 
+/** Client-safe statuses that can arrive in an update (the server maps
+ *  ephemeral worker events like "code_generated" to these). */
+const VALID_STATUSES = new Set<SubmissionStatus>([
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+]);
+
 interface SocketMessage {
   type?: string;
   submission?: Submission;
   status?: SubmissionStatus;
+  phase?: SubmissionPhase | null;
 }
 
 /**
@@ -82,10 +92,26 @@ export function useSubmissionSocket(submissionId: string | undefined): {
         }
         if (message.type === "snapshot" && message.submission) {
           setLiveSubmission(message.submission);
-        } else if (message.type === "update" && message.status) {
-          setLiveSubmission((prev) =>
-            prev ? { ...prev, status: message.status as SubmissionStatus } : prev,
-          );
+        } else if (message.type === "update") {
+          // Merge a status/phase pair. Ignore anything that is not a valid
+          // SubmissionStatus so a stray event can never corrupt client state
+          // (the server now maps events, but belt-and-braces).
+          if (message.status && !VALID_STATUSES.has(message.status)) {
+            return;
+          }
+          setLiveSubmission((prev) => {
+            if (!prev) {
+              return prev;
+            }
+            const next: Submission = { ...prev };
+            if (message.status && VALID_STATUSES.has(message.status)) {
+              next.status = message.status;
+            }
+            if (typeof message.phase !== "undefined") {
+              next.phase = message.phase;
+            }
+            return next;
+          });
         }
       };
 

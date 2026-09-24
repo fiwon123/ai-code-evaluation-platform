@@ -266,6 +266,18 @@
   border-color: var(--color-primary, #2563eb);
 }
 
+.runningMeta {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.noResultText {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
 .providerCardHeader {
   display: flex;
   align-items: center;
