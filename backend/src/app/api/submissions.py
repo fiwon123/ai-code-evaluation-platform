@@ -1,4 +1,5 @@
 from logging import getLogger
+from secrets import token_urlsafe
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -18,6 +19,7 @@ from app.schemas.pagination import PaginatedResponse
 from app.schemas.submission import (
     ProviderComparisonEntry,
     ProviderComparisonRead,
+    ShareResultRead,
     SubmissionCreate,
     SubmissionRead,
     SubmissionUpdate,
@@ -216,6 +218,44 @@ async def get_submission(
 ) -> Submission:
     """Get a single submission (owner only)."""
     return await _get_own_submission(db, submission_id, current_user)
+
+
+@router.post("/{submission_id}/share", response_model=ShareResultRead)
+async def share_submission_result(
+    submission_id: UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> ShareResultRead:
+    """Publish a public share link for a completed evaluation (owner only).
+
+    Idempotent: re-sharing an already-shared report returns the same token.
+    """
+    submission = await _get_own_submission(db, submission_id, current_user)
+    result = submission.evaluation_result
+    if result is None or submission.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only completed evaluations can be shared",
+        )
+
+    if not result.share_token:
+        result.share_token = token_urlsafe(16)
+        await db.commit()
+    return ShareResultRead(share_token=result.share_token)
+
+
+@router.delete("/{submission_id}/share", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_submission_share(
+    submission_id: UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Revoke a public share link (owner only)."""
+    submission = await _get_own_submission(db, submission_id, current_user)
+    result = submission.evaluation_result
+    if result is not None and result.share_token:
+        result.share_token = None
+        await db.commit()
 
 
 @router.patch("/{submission_id}", response_model=SubmissionRead)

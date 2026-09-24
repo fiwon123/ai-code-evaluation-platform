@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import JSON, ForeignKey, Text, Uuid
+from sqlalchemy import JSON, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, TimestampMixin, UUIDMixin
@@ -30,5 +30,9 @@ class EvaluationResult(UUIDMixin, TimestampMixin, Base):
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     #: Per-test-case breakdown: ``[{name, passed, message}]``.
     test_results: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, default=list)
+    #: Unguessable public share token; ``None`` until the owner opts in.
+    share_token: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True, default=None
+    )
 
     submission: Mapped[Submission] = relationship(back_populates="evaluation_result")
