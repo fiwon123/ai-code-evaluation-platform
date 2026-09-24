@@ -153,6 +153,11 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
+    # Named volume so the Celery broker queue survives `docker compose down`
+    # (data kept across dev-restart, like postgres_data). Tasks queued but not
+    # yet acked are redelivered when the worker reconnects after a restart.
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -166,3 +171,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
