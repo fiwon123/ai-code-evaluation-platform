@@ -129,6 +129,23 @@ describe("AdminDashboard", () => {
       failed_submissions: 1,
       pending_submissions: 1,
       average_score: 100,
+      submissions_by_status: [
+        { status: "pending", count: 1 },
+        { status: "processing", count: 0 },
+        { status: "completed", count: 1 },
+        { status: "failed", count: 1 },
+      ],
+      submissions_by_language: [
+        { language: "python", count: 2, avg_score: 88 },
+        { language: "javascript", count: 1, avg_score: 90 },
+      ],
+      top_challenges: [
+        { challenge_id: "c1", title: "Two Sum", runs: 3, avg_score: 86 },
+      ],
+      submissions_last_14_days: Array.from({ length: 14 }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, "0")}`,
+        count: i + 1,
+      })),
     } as never);
   });
 

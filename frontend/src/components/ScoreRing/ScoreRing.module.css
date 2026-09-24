@@ -1,0 +1,28 @@
+.ring {
+  display: inline-block;
+}
+
+.track {
+  fill: none;
+  stroke: var(--color-track, rgba(0, 0, 0, 0.12));
+  stroke-width: 10;
+}
+
+.progress {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 10;
+  transition: stroke-dashoffset 240ms ease-in-out;
+}
+
+.danger {
+  stroke: var(--color-danger, #dc2626);
+}
+
+.warning {
+  stroke: var(--color-warning, #d97706);
+}
+
+.success {
+  stroke: var(--color-success, #16a34a);
+}

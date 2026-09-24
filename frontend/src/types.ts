@@ -205,4 +205,32 @@ export interface PlatformStats {
   failed_submissions: number;
   pending_submissions: number;
   average_score: number | null;
+  // Breakdown groups consumed by the admin dashboard charts.
+  submissions_by_status: StatusCount[];
+  submissions_by_language: LanguageStat[];
+  top_challenges: TopChallengeStat[];
+  submissions_last_14_days: DailySubmissionStat[];
+}
+
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+
+export interface LanguageStat {
+  language: string;
+  count: number;
+  avg_score: number | null;
+}
+
+export interface TopChallengeStat {
+  challenge_id: string;
+  title: string;
+  runs: number;
+  avg_score: number | null;
+}
+
+export interface DailySubmissionStat {
+  date: string;
+  count: number;
 }
