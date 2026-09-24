@@ -12,6 +12,7 @@ from app.models.evaluation_result import EvaluationResult
 from app.models.submission import Submission
 from app.models.user import User
 from app.tasks.recover import (
+    PENDING_MAX_MINUTES,
     PENDING_STALE_MINUTES,
     PROCESSING_STALE_MINUTES,
     _run_recovery,
@@ -36,7 +37,13 @@ def _make_sync_session():
     return sessionmaker(engine, expire_on_commit=False)()
 
 
-def _seed(session, status: str, updated_at: datetime | None = None, provider: str = "demo"):
+def _seed(
+    session,
+    status: str,
+    updated_at: datetime | None = None,
+    provider: str = "demo",
+    created_at: datetime | None = None,
+):
     """Seed a fresh user + challenge + submission (unique per call)."""
     user = User(
         email=f"recover-{uuid4().hex[:8]}@example.com",
@@ -63,6 +70,8 @@ def _seed(session, status: str, updated_at: datetime | None = None, provider: st
         language="python",
     )
     session.add(submission)
+    if created_at is not None:
+        submission.created_at = created_at
     if updated_at is not None:
         submission.updated_at = updated_at
     session.commit()
@@ -282,6 +291,145 @@ class TestRecoverStaleProcessing:
 
         assert summary == {"dispatched": 0, "failed": 0}
         publish.assert_not_called()
+
+
+class TestRecoverAbandonedPending:
+    """A pending row that never started within PENDING_MAX_MINUTES is failed,
+    not re-dispatched forever."""
+
+    def test_pending_past_max_age_fails_without_redispatch(self, monkeypatch):
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            created_at=T0 - timedelta(minutes=PENDING_MAX_MINUTES + 1),
+            # updated_at stays fresh — recovery keeps bumping it on re-send, so
+            # only created_at can correctly age out the row.
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+        )
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+        publish = Mock()
+        monkeypatch.setattr("app.tasks.recover.publish_submission_event", publish)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 0, "failed": 1}
+        delay.assert_not_called()
+        session.expire_all()
+        fresh = session.get(Submission, submission.id)
+        assert fresh.status == "failed"
+        assert fresh.score == 0.0
+        result = session.get(EvaluationResult, fresh.evaluation_result.id)
+        assert result.metrics["error"] == "stale_pending"
+        assert "never started" in result.logs
+        publish.assert_called_once_with(fresh.id, "failed", error=ANY)
+
+    def test_pending_past_max_age_fails_even_when_updated_at_fresh(self, monkeypatch):
+        """A working re-dispatch loop keeps updated_at fresh — the ceiling must
+        key off created_at or a stuck worker would never be detected."""
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            created_at=T0 - timedelta(minutes=PENDING_MAX_MINUTES + 5),
+            updated_at=T0 - timedelta(seconds=30),
+        )
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+        publish = Mock()
+        monkeypatch.setattr("app.tasks.recover.publish_submission_event", publish)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 0, "failed": 1}
+        delay.assert_not_called()
+        session.expire_all()
+        fresh = session.get(Submission, submission.id)
+        assert fresh.status == "failed"
+        assert fresh.evaluation_result.metrics["error"] == "stale_pending"
+        publish.assert_called_once_with(fresh.id, "failed", error=ANY)
+
+    def test_keyed_provider_no_key_fails_before_max_age_ceiling(self, monkeypatch):
+        """Precedence: a keyed provider without an env key reports the truthful
+        'missing key' error rather than the generic 'never started' one."""
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            created_at=T0 - timedelta(minutes=PENDING_MAX_MINUTES + 1),
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+            provider="openai",
+        )
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+        publish = Mock()
+        monkeypatch.setattr("app.tasks.recover.publish_submission_event", publish)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 0, "failed": 1}
+        delay.assert_not_called()
+        session.expire_all()
+        fresh = session.get(Submission, submission.id)
+        assert fresh.status == "failed"
+        assert fresh.evaluation_result.metrics["error"] == "missing_api_key"
+        publish.assert_called_once_with(fresh.id, "failed", error=ANY)
+
+    def test_pending_between_stale_and_max_still_redispatches(self, monkeypatch):
+        """Not yet at the ceiling — normal stale re-dispatch still applies."""
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            created_at=T0 - timedelta(minutes=PENDING_MAX_MINUTES - 30),
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+        )
+        delay = Mock(return_value=None)
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 1, "failed": 0}
+        delay.assert_called_once_with(str(submission.id))
+
+    def test_abandoned_pending_with_env_key_fails_not_redispatched(self, monkeypatch):
+        """A keyed provider with an env key available still gets abandoned at the
+        ceiling — a key is useless when the worker never picks the task up."""
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            created_at=T0 - timedelta(minutes=PENDING_MAX_MINUTES + 1),
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+            provider="anthropic",
+        )
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+        publish = Mock()
+        monkeypatch.setattr("app.tasks.recover.publish_submission_event", publish)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 0, "failed": 1}
+        delay.assert_not_called()
+        session.expire_all()
+        fresh = session.get(Submission, submission.id)
+        assert fresh.status == "failed"
+        assert fresh.evaluation_result.metrics["error"] == "stale_pending"
+
+
+class TestRecoverBeatSchedule:
+    def test_beat_schedule_runs_recovery_every_minute(self):
+        """The recovery sweep must stay on the beat schedule for self-healing."""
+        from app.core.celery_app import celery_app
+
+        entry = celery_app.conf.beat_schedule.get("recover-stuck-submissions")
+        assert entry is not None
+        assert entry["task"] == "app.tasks.recover.recover_stuck_submissions"
+        assert entry["schedule"] == 60.0
 
 
 class TestRecoverMixedAndEdge:
