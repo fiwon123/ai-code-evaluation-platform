@@ -9,15 +9,22 @@ import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
+import { useShareLink } from "../../hooks/useShareLink.ts";
 import { authApi, challengesApi, submissionsApi } from "../../services/api.ts";
 import { extractError, extractFieldErrors } from "../../utils/errors.ts";
-import type { Challenge, Submission } from "../../types.ts";
+import type {
+  Challenge,
+  ChallengeStatsItem,
+  Submission,
+  SubmissionStats,
+} from "../../types.ts";
 import {
   formatDurationMs,
   formatElapsed,
   formatRelativeTime,
   isDelayed,
   isSeverelyDelayed,
+  scoreVariant,
   statusVariant,
 } from "../../utils/formatting.ts";
 import styles from "./Profile.module.css";
@@ -42,6 +49,9 @@ function Profile() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Per-challenge evaluation stats (all pages, not just the visible one).
+  const [challengeStats, setChallengeStats] = useState<ChallengeStatsItem[]>([]);
 
   // Live elapsed ticks only while at least one submission is still running.
   const hasInProgress = submissions.some(
@@ -196,27 +206,63 @@ function Profile() {
     };
   }, [user, submissionPage, hasInProgress]);
 
+  // Per-challenge stats are computed server-side so the headline numbers
+  // reflect every submission, not just the visible page.
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    const controller = new AbortController();
+    submissionsApi
+      .stats()
+      .then((stats: SubmissionStats) => {
+        if (!controller.signal.aborted) {
+          setChallengeStats(stats.items);
+        }
+      })
+      .catch(() => {
+        // Non-fatal: the dashboard still works without per-challenge stats.
+      });
+    return () => controller.abort();
+  }, [user]);
+
   const stats = useMemo(() => {
     const completed = submissions.filter((s) => s.status === "completed");
     const scores = completed
       .map((s) => s.score)
       .filter((score): score is number => score !== null);
-    const avgScore =
+    const pageAvg =
       scores.length > 0
         ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) /
           10
         : 0;
-    const completionRate =
+    const pageRate =
       submissions.length > 0
         ? Math.round((completed.length / submissions.length) * 100)
         : 0;
+
+    const totalRuns = challengeStats.reduce((sum, item) => sum + item.total_runs, 0);
+    const completedRuns = challengeStats.reduce(
+      (sum, item) => sum + item.completed_runs,
+      0,
+    );
+    const weightedScores = challengeStats.reduce(
+      (sum, item) => sum + (item.avg_score ?? 0) * item.completed_runs,
+      0,
+    );
     return {
       totalChallenges: challengesTotal,
       totalSubmissions: submissionsTotal,
-      avgScore,
-      completionRate,
+      avgScore:
+        completedRuns > 0
+          ? Math.round((weightedScores / completedRuns) * 10) / 10
+          : pageAvg,
+      completionRate:
+        totalRuns > 0
+          ? Math.round((completedRuns / totalRuns) * 100)
+          : pageRate,
     };
-  }, [submissions, challengesTotal, submissionsTotal]);
+  }, [submissions, challengesTotal, submissionsTotal, challengeStats]);
 
   if (loading || !user) {
     return (
@@ -344,6 +390,64 @@ function Profile() {
         </Card>
       </div>
 
+      <section className={styles.section}>
+        <div className={styles.colHeader}>
+          <h2 className={styles.colTitle}>Evaluations by challenge</h2>
+        </div>
+        {challengeStats.length === 0 ? (
+          <Card className={styles.emptyCard}>
+            <p className={styles.emptyText}>
+              You haven't evaluated any challenges yet.
+            </p>
+            <Link to="/challenges">Browse challenges</Link>
+          </Card>
+        ) : (
+          <div className={styles.statsGrid}>
+            {challengeStats.map((item) => {
+              const variant =
+                item.avg_score !== null ? scoreVariant(item.avg_score) : null;
+              return (
+                <Card
+                  key={item.challenge_id}
+                  padding="compact"
+                  className={styles.statsItem}
+                >
+                  <Link
+                    to={`/challenges/${item.challenge_id}`}
+                    className={styles.statsTitle}
+                  >
+                    {item.challenge_title}
+                  </Link>
+                  <div className={styles.statsMeta}>
+                    <Badge variant="neutral">{item.language}</Badge>
+                    {item.avg_score !== null && (
+                      <span
+                        className={`${styles.scoreChip} ${variant ? styles[`chip${variant}`] : ""}`}
+                      >
+                        {item.avg_score}% avg
+                      </span>
+                    )}
+                  </div>
+                  <p className={styles.statsLine}>
+                    {item.best_score !== null && (
+                      <>
+                        best <strong>{item.best_score}%</strong> ·{" "}
+                      </>
+                    )}
+                    {item.total_runs} run{item.total_runs === 1 ? "" : "s"}
+                    {item.failed_runs > 0 && ` · ${item.failed_runs} failed`}
+                    {item.completed_runs === 0 && " · no completed runs"}
+                  </p>
+                  <p className={styles.metaDate}>
+                    Last run {formatRelativeTime(item.last_run_at)}
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       <div className={styles.columns}>
         <section className={styles.col}>
           <div className={styles.colHeader}>
@@ -456,6 +560,15 @@ function Profile() {
                           )}
                         </span>
                       </Link>
+                      {submission.status === "completed" &&
+                        submission.evaluation_result && (
+                          <SubmissionShareActions
+                            submissionId={submission.id}
+                            initialToken={
+                              submission.evaluation_result.share_token ?? null
+                            }
+                          />
+                        )}
                     </Card>
                   );
                 })}
@@ -471,6 +584,60 @@ function Profile() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+/** Compact share controls for one completed submission row. */
+function SubmissionShareActions({
+  submissionId,
+  initialToken,
+}: {
+  submissionId: string;
+  initialToken: string | null;
+}) {
+  const { shareToken, busy, copied, error, share, revoke, copy } = useShareLink(
+    submissionId,
+    initialToken,
+  );
+  return (
+    <div className={styles.submissionActions}>
+      {shareToken ? (
+        <>
+          <Badge variant="success">Shared</Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void copy()}
+          >
+            {copied ? "Copied" : "Copy link"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={busy}
+            loadingText="…"
+            onClick={() => void revoke()}
+          >
+            Revoke
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          loading={busy}
+          loadingText="Sharing…"
+          onClick={() => void share()}
+        >
+          Share
+        </Button>
+      )}
+      {error && (
+        <span role="alert" className={styles.actionsError}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }

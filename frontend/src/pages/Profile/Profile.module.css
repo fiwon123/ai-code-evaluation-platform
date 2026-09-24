@@ -259,6 +259,88 @@
   margin: 0;
 }
 
+/* Per-challenge evaluation stats */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.statsItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.statsTitle {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  overflow-wrap: anywhere;
+}
+
+.statsTitle:hover {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.statsMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.scoreChip {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+.chipSuccess {
+  color: var(--color-success);
+  background: var(--color-success-light);
+}
+
+.chipWarning {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+}
+
+.chipDanger {
+  color: var(--color-danger);
+  background: var(--color-danger-light);
+}
+
+.statsLine {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Share actions inside a completed submission row */
+.submissionActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.actionsError {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+}
+
 @media (max-width: 900px) {
   .statsRow {
     grid-template-columns: repeat(2, 1fr);

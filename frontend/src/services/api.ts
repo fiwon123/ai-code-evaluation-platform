@@ -17,6 +17,7 @@ import type {
   Submission,
   SubmissionCreatePayload,
   SubmissionListParams,
+  SubmissionStats,
   User,
 } from "../types.ts";
 
@@ -239,6 +240,7 @@ export const submissionsApi = {
     api.get<ProviderComparison>(
       `/api/submissions/comparison?challenge_id=${encodeURIComponent(challengeId)}`,
     ),
+  stats: () => api.get<SubmissionStats>("/api/submissions/stats"),
   share: (id: string) => api.post<ShareResult>(`/api/submissions/${id}/share`),
   revokeShare: (id: string) => api.del(`/api/submissions/${id}/share`),
 };

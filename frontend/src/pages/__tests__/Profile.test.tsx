@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Profile from "../Profile/Profile.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
-import { ApiError, authApi, challengesApi, submissionsApi } from "../../services/api.ts";
+import {
+  ApiError,
+  authApi,
+  challengesApi,
+  submissionsApi,
+} from "../../services/api.ts";
 
 vi.mock("../../context/AuthContext.tsx", () => ({
   useAuth: vi.fn(),
@@ -14,7 +19,7 @@ vi.mock("../../context/AuthContext.tsx", () => ({
 vi.mock("../../services/api.ts", () => ({
   authApi: { changePassword: vi.fn() },
   challengesApi: { list: vi.fn() },
-  submissionsApi: { list: vi.fn() },
+  submissionsApi: { list: vi.fn(), stats: vi.fn(), share: vi.fn(), revokeShare: vi.fn() },
   ApiError: class ApiError extends Error {
     status: number;
     detail: string;
@@ -31,6 +36,7 @@ const mockUseAuth = vi.mocked(useAuth);
 const mockChallengesList = vi.mocked(challengesApi.list);
 const mockSubmissionsList = vi.mocked(submissionsApi.list);
 const mockChangePassword = vi.mocked(authApi.changePassword);
+const mockSubmissionsStats = vi.mocked(submissionsApi.stats);
 
 const user = {
   id: "u1",
@@ -147,6 +153,7 @@ describe("Profile", () => {
       pages: 1,
     } as never);
     mockChangePassword.mockReset();
+    mockSubmissionsStats.mockResolvedValue({ items: [] } as never);
   });
 
   it("shows user identity and member since date", async () => {
@@ -343,5 +350,133 @@ describe("Profile", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Current password is incorrect",
     );
+  });
+
+  describe("evaluations dashboard", () => {
+    it("renders per-challenge evaluation stats from the server", async () => {
+      mockSubmissionsStats.mockResolvedValue({
+        items: [
+          {
+            challenge_id: "c1",
+            challenge_title: "Two Sum",
+            language: "python",
+            total_runs: 3,
+            completed_runs: 2,
+            failed_runs: 1,
+            avg_score: 80,
+            best_score: 90,
+            last_run_at: "2026-09-20T10:00:00Z",
+          },
+          {
+            challenge_id: "c2",
+            challenge_title: "Reverse String",
+            language: "go",
+            total_runs: 1,
+            completed_runs: 0,
+            failed_runs: 0,
+            avg_score: null,
+            best_score: null,
+            last_run_at: "2026-09-21T10:00:00Z",
+          },
+        ],
+      } as never);
+
+      renderPage();
+
+      expect(
+        await screen.findByRole("heading", {
+          name: /Evaluations by challenge/,
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Two Sum" })).toHaveAttribute(
+        "href",
+        "/challenges/c1",
+      );
+      expect(screen.getByText("80% avg")).toBeInTheDocument();
+      expect(
+        screen.getByText((_, el) =>
+          el?.tagName === "P" &&
+          (el?.textContent?.includes("best 90% · 3 runs · 1 failed") ?? false),
+        ),
+      ).toBeInTheDocument();
+      // A challenge with no completed runs still appears, with a gentle note.
+      expect(screen.getByText("Reverse String")).toBeInTheDocument();
+      expect(screen.getByText(/1 run · no completed runs/)).toBeInTheDocument();
+      // Headline average is computed across all challenges, not just the page.
+      expect(screen.getByText("80%")).toBeInTheDocument();
+    });
+
+    it("shows an empty state when no challenge has been evaluated", async () => {
+      renderPage();
+      expect(
+        await screen.findByText(/You haven't evaluated any challenges yet/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "Browse challenges" }),
+      ).toHaveAttribute("href", "/challenges");
+    });
+
+    it("lets a user share a completed submission from the list", async () => {
+      mockSubmissionsStats.mockResolvedValue({ items: [] } as never);
+      vi.mocked(submissionsApi.share).mockResolvedValue({
+        share_token: "tok-321",
+      } as never);
+
+      renderPage();
+
+      expect(
+        await screen.findByRole("heading", { name: /Recent submissions/ }),
+      ).toBeInTheDocument();
+      fireEvent.click(await screen.findByRole("button", { name: "Share" }));
+
+      await waitFor(() => {
+        expect(submissionsApi.share).toHaveBeenCalledWith("s1");
+      });
+      expect(await screen.findByText("Shared")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Copy link" }),
+      ).toBeInTheDocument();
+    });
+
+    it("shows shared state for already-shared submissions", async () => {
+      mockSubmissionsStats.mockResolvedValue({ items: [] } as never);
+      mockSubmissionsList.mockResolvedValue({
+        items: [
+          {
+            id: "s1",
+            challenge_id: "c1",
+            status: "completed",
+            provider: "demo",
+            code: "print(1)",
+            score: 100,
+            evaluation_result: {
+              id: "r1",
+              passed_tests: 2,
+              total_tests: 2,
+              score: 100,
+              logs: "2 passed",
+              metrics: {},
+              share_token: "already-shared",
+              created_at: "2026-09-10T00:00:00Z",
+            },
+            created_at: "2026-09-10T00:00:00Z",
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 10,
+        pages: 1,
+      } as never);
+
+      renderPage();
+
+      expect(await screen.findByText("Shared")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Copy link" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Share" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
