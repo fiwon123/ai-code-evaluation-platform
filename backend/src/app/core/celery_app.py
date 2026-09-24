@@ -6,7 +6,7 @@ celery_app = Celery(
     "app",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.evaluate"],
+    include=["app.tasks.evaluate", "app.tasks.recover"],
 )
 
 # Reliability: tasks that time out or die with a worker are retried/requeued
@@ -18,5 +18,17 @@ celery_app.conf.task_reject_on_worker_lost = True  # requeue on killed workers
 celery_app.conf.worker_prefetch_multiplier = 1  # one task per worker at a time
 celery_app.conf.broker_transport_options = {"visibility_timeout": 3600}
 celery_app.conf.result_expires = 3600  # reap task result keys after 1 hour
+
+# Periodic recovery: sweep every minute for submissions stranded in
+# pending/processing (lost broker messages, expired tasks, killed workers).
+# The schedule state file lives in /tmp so it never pollutes the repo, even
+# though `celerybeat-schedule` is gitignored.
+celery_app.conf.beat_schedule = {
+    "recover-stuck-submissions": {
+        "task": "app.tasks.recover.recover_stuck_submissions",
+        "schedule": 60.0,
+    },
+}
+celery_app.conf.beat_schedule_filename = "/tmp/celerybeat-schedule"
 
 celery_app.autodiscover_tasks(["app"])

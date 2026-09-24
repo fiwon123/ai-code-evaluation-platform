@@ -3,7 +3,8 @@
 # Replaces the old VS Code Dev Containers setup (`.devcontainer/`): a single
 # prebuilt `dev` container (bind-mounted source, deps baked at image build)
 # runs uvicorn + vite in the foreground, a `celery` service runs the
-# evaluation worker, and `postgres` / `redis` provide infra. The `sandbox`
+# evaluation worker, a `beat` service runs the periodic stale-submission
+# recovery sweep, and `postgres` / `redis` provide infra. The `sandbox`
 # service builds the air-gapped eval-sandbox image used to isolate untrusted
 # code evaluation. Use `docker compose up dev` (or push `infra-up`).
 #
@@ -66,8 +67,11 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     depends_on:
       # Celery runs with the dev sandbox by default (`docker compose up dev`)
-      # so evaluations work out of the box.
+      # so evaluations work out of the box; beat runs the stale-submission
+      # recovery sweep on the same schedule.
       celery:
+        condition: service_started
+      beat:
         condition: service_started
       postgres:
         condition: service_healthy
@@ -113,6 +117,32 @@ services:
         limits:
           cpus: "1.0"
           memory: 1G
+
+  # Celery beat — periodic scheduler. Runs the stale-submission recovery
+  # sweep every minute so rows stranded in pending/processing (lost broker
+  # messages, expired tasks, killed workers) self-heal instead of being stuck
+  # forever. A dedicated service (worker -B is deprecated in Celery >= 5);
+  # the schedule state file lives in /tmp so it never pollutes the repo.
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app beat --loglevel=info'
+    volumes:
+      - .:/sandbox/ai-code-evaluation-platform:cached
+    environment:
+      - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   # Builds the eval-sandbox image (multi-language runtimes) used to isolate
   # untrusted code execution. One-shot: builds the image, then exits.
