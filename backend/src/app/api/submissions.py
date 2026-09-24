@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from logging import getLogger
 from secrets import token_urlsafe
 from uuid import UUID
@@ -328,6 +329,17 @@ async def revoke_submission_share(
         await db.commit()
 
 
+#: Legal status transitions for the (debug/testing) PATCH endpoint. Mirrors
+#: the worker's lifecycle: queued → running → terminal, with a direct
+#: pending→terminal escape hatch for dispatch failures.
+LEGAL_TRANSITIONS: dict[str, frozenset[str]] = {
+    "pending": frozenset({"processing", "completed", "failed"}),
+    "processing": frozenset({"completed", "failed"}),
+    "completed": frozenset(),
+    "failed": frozenset(),
+}
+
+
 @router.patch("/{submission_id}", response_model=SubmissionRead)
 async def update_submission_status(
     submission_id: UUID,
@@ -338,7 +350,18 @@ async def update_submission_status(
     """Update a submission's status (owner only, internal transitions)."""
     submission = await _get_own_submission(db, submission_id, current_user)
 
+    allowed = LEGAL_TRANSITIONS.get(submission.status, frozenset())
+    if payload.status not in allowed:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"Illegal status transition '{submission.status}' → '{payload.status}'"),
+        )
+
     submission.status = payload.status
+    if payload.status == "processing" and submission.started_at is None:
+        submission.started_at = datetime.now(UTC)
+    if payload.status in ("completed", "failed"):
+        submission.phase = None
     await db.commit()
     await apublish_submission_event(submission.id, payload.status)
 

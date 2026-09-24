@@ -74,10 +74,81 @@ class TestSubmissionEvaluation:
         assert submission.score == 100.0
         assert submission.code is not None
         assert "def two_sum" in submission.code
+        # Terminal rows clear the pipeline phase but keep started_at.
+        assert submission.phase is None
+        assert submission.started_at is not None
         evaluation = session.get(EvaluationResult, submission.evaluation_result.id)
         assert evaluation.passed_tests == 2
         assert evaluation.total_tests == 2
         assert "duration_ms" in evaluation.metrics
+
+    def test_phase_is_generating_then_testing(self, monkeypatch):
+        """The worker records generator vs test-execution phase mid-run."""
+        engine = create_engine(
+            "sqlite+pysqlite:///:memory:",
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(engine, expire_on_commit=False)
+        session = session_factory()
+        submission_id = _seed(session)
+        observed: list[str | None] = []
+
+        def fake_generate(self, prompt, language="python"):
+            # Runs right after the task commits phase="generating" — read the
+            # row from a second session over the same engine.
+            with session_factory() as other:
+                observed.append(other.get(Submission, submission_id).phase)
+            return "def two_sum(nums, target):\n    return []\n"
+
+        def fake_evaluate(**kwargs):
+            # Runs right after the task commits phase="testing".
+            with session_factory() as other:
+                observed.append(other.get(Submission, submission_id).phase)
+            return SimpleNamespace(
+                passed=0, total=2, score=0.0, logs="ran", metrics={"duration_ms": 5}
+            )
+
+        monkeypatch.setattr(
+            "app.tasks.evaluate.get_llm_provider",
+            lambda name, api_key=None: type("P", (), {"generate_code": fake_generate})(),
+        )
+        monkeypatch.setattr("app.tasks.evaluate.evaluate_code", fake_evaluate)
+
+        result = _run_submission_evaluation(session, submission_id)
+
+        assert result["status"] == "completed"
+        assert observed == ["generating", "testing"]
+        session.expire_all()
+        final = session.get(Submission, submission_id)
+        assert final.phase is None
+        assert final.started_at is not None
+
+    def test_failure_clears_phase(self, monkeypatch):
+        """A failure during the testing phase resets the phase to None."""
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        monkeypatch.setattr(
+            "app.tasks.evaluate.get_llm_provider",
+            lambda name, api_key=None: type(
+                "P",
+                (),
+                {"generate_code": lambda self, prompt, language="python": "x = 1"},
+            )(),
+        )
+
+        def boom(**kwargs):
+            raise RuntimeError("sandbox exploded")
+
+        monkeypatch.setattr("app.tasks.evaluate.evaluate_code", boom)
+        result = _run_submission_evaluation(session, submission_id)
+
+        assert result["status"] == "failed"
+        session.expire_all()
+        final = session.get(Submission, submission_id)
+        assert final.phase is None
+        assert final.started_at is not None
 
     def test_unknown_submission(self):
         session = _make_sync_session()
@@ -129,9 +200,7 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type(
-                "P", (), {"generate_code": fake_generate}
-            )(),
+            lambda name, api_key=None: type("P", (), {"generate_code": fake_generate})(),
         )
         monkeypatch.setattr(
             "app.tasks.evaluate.evaluate_code",
@@ -149,6 +218,53 @@ class TestSubmissionEvaluation:
         assert fresh.status == "completed"
         # The winner's result survived; the loser's did not overwrite it.
         assert session.get(EvaluationResult, fresh.evaluation_result.id).logs == "winner"
+
+    def test_duplicate_settle_publishes_completed_event(self, monkeypatch):
+        """The silent duplicate-settle path still tells WS clients about it."""
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        published: list[tuple[object, str]] = []
+
+        def fake_publish(submission_id, event_type, **fields):
+            published.append((submission_id, event_type, fields))
+
+        monkeypatch.setattr("app.tasks.evaluate.publish_submission_event", fake_publish)
+
+        def fake_generate(self, prompt, language="python"):
+            # The winning duplicate already recorded its result mid-run.
+            session.add(
+                EvaluationResult(
+                    submission_id=submission_id,
+                    passed_tests=2,
+                    total_tests=2,
+                    score=100.0,
+                    logs="winner",
+                    metrics={},
+                )
+            )
+            session.commit()
+            return "def two_sum(nums, target):\n    return []\n"
+
+        monkeypatch.setattr(
+            "app.tasks.evaluate.get_llm_provider",
+            lambda name, api_key=None: type("P", (), {"generate_code": fake_generate})(),
+        )
+        monkeypatch.setattr(
+            "app.tasks.evaluate.evaluate_code",
+            lambda **kwargs: SimpleNamespace(
+                passed=0, total=2, score=0.0, logs="loser", metrics={}
+            ),
+        )
+
+        result = _run_submission_evaluation(session, submission_id)
+
+        assert result["duplicate"] is True
+        # A completed event must be published for the settled row.
+        assert any(event == "completed" for _, event, _ in published)
+        session.expire_all()
+        fresh = session.get(Submission, submission_id)
+        assert fresh.status == "completed"
+        assert fresh.phase is None
 
     def test_duplicate_failure_commit_race_is_noop(self, monkeypatch):
         """Failure path also backs off when a duplicate already wrote a result."""
@@ -246,9 +362,7 @@ class TestSubmissionEvaluation:
             "app.tasks.evaluate.get_llm_provider",
             lambda name, api_key=None: type("P", (), {"generate_code": boom})(),
         )
-        result = _run_submission_evaluation(
-            session, submission_id, api_key="sk-secret-key"
-        )
+        result = _run_submission_evaluation(session, submission_id, api_key="sk-secret-key")
 
         session.expire_all()
         submission = session.get(Submission, submission_id)

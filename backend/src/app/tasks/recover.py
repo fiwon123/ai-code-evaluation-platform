@@ -107,6 +107,7 @@ def _write_terminal_failure(
     session.add(result)
     submission.status = "failed"
     submission.score = 0.0
+    submission.phase = None
     session.commit()
     publish_submission_event(submission.id, "failed", error=logs)
 
@@ -174,8 +175,7 @@ def _mark_no_key_failed(session: Session, submission: Submission, now: datetime)
         },
     )
     logger.warning(
-        "Recovered stale 'pending' submission %s -> failed "
-        "(no %s available to re-dispatch %s)",
+        "Recovered stale 'pending' submission %s -> failed (no %s available to re-dispatch %s)",
         submission.id,
         env_var,
         provider,
@@ -205,8 +205,8 @@ def _run_recovery(session: Session, now: datetime | None = None) -> dict[str, in
 
         if submission.status == "pending":
             provider = (submission.provider or "demo").lower()
-            no_key_available = (
-                provider in KEYED_PROVIDERS and not os.getenv(KEYED_PROVIDERS[provider])
+            no_key_available = provider in KEYED_PROVIDERS and not os.getenv(
+                KEYED_PROVIDERS[provider]
             )
             # Hard ceiling measured from created_at: recovery bumps updated_at
             # on every re-dispatch, so updated_at can never age out a pending
@@ -214,9 +214,8 @@ def _run_recovery(session: Session, now: datetime | None = None) -> dict[str, in
             # worker is gone or the message was lost — abandon the row instead
             # of re-dispatching it forever.
             created_at = _as_aware(submission.created_at)
-            past_max_age = (
-                created_at is not None
-                and now - created_at > timedelta(minutes=PENDING_MAX_MINUTES)
+            past_max_age = created_at is not None and now - created_at > timedelta(
+                minutes=PENDING_MAX_MINUTES
             )
             if no_key_available and age > timedelta(minutes=PENDING_STALE_MINUTES):
                 # No key available to actually run the evaluation — fail fast

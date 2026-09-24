@@ -87,9 +87,7 @@ def ws_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Generator[dict]:
     def make_message() -> dict:
         return {
             "type": "message",
-            "data": json.dumps(
-                {"type": "processing", "submission_id": ids["submission_id"]}
-            ),
+            "data": json.dumps({"type": "processing", "submission_id": ids["submission_id"]}),
         }
 
     pubsub = AsyncMock()
@@ -130,9 +128,7 @@ def token_for(user_id: str) -> str:
 
 
 def connect_ws(app, submission_id: str, token: str):
-    return TestClient(app).websocket_connect(
-        f"/api/ws/submissions/{submission_id}?token={token}"
-    )
+    return TestClient(app).websocket_connect(f"/api/ws/submissions/{submission_id}?token={token}")
 
 
 def test_websocket_rejects_missing_token(ws_env: dict) -> None:
@@ -179,6 +175,68 @@ def test_websocket_sends_snapshot_then_live_updates(ws_env: dict) -> None:
         assert update["type"] == "update"
         assert update["submission_id"] == ws_env["submission_id"]
         assert update["status"] == "processing"
+        # The raw event maps to a client-safe phase.
+        assert update["phase"] == "generating"
+
+
+def test_websocket_maps_code_generated_to_phase(ws_env: dict) -> None:
+    """The ephemeral ``code_generated`` event must never leak as a status."""
+    app = ws_env["app"]
+    pubsub = ws_env["pubsub"]
+
+    # Re-script the pubsub: code_generated → completed → disconnect.
+    def make_message(event: str) -> dict:
+        return {
+            "type": "message",
+            "data": json.dumps({"type": event, "submission_id": ws_env["submission_id"]}),
+        }
+
+    pubsub.get_message = AsyncMock(
+        side_effect=[
+            make_message("code_generated"),
+            make_message("completed"),
+            WebSocketDisconnect(),
+        ]
+    )
+
+    with connect_ws(app, ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()  # snapshot
+        generated = ws.receive_json()
+        assert generated["type"] == "update"
+        assert generated["status"] == "processing"
+        assert generated["phase"] == "testing"
+
+        terminal = ws.receive_json()
+        assert terminal["status"] == "completed"
+        assert terminal["phase"] is None
+
+
+def test_websocket_ignores_unknown_events(ws_env: dict) -> None:
+    """Events that are not SubmissionStatuses are dropped, not forwarded."""
+    app = ws_env["app"]
+    pubsub = ws_env["pubsub"]
+
+    def make_message(event: str) -> dict:
+        return {
+            "type": "message",
+            "data": json.dumps({"type": event, "submission_id": ws_env["submission_id"]}),
+        }
+
+    pubsub.get_message = AsyncMock(
+        side_effect=[
+            make_message("bogus_event"),
+            make_message("processing"),
+            WebSocketDisconnect(),
+        ]
+    )
+
+    with connect_ws(app, ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()  # snapshot
+        # The bogus event is skipped; the next real one arrives cleanly.
+        update = ws.receive_json()
+        assert update["type"] == "update"
+        assert update["status"] == "processing"
+        assert update["phase"] == "generating"
 
 
 def test_websocket_cleans_up_pubsub_on_disconnect(ws_env: dict) -> None:
