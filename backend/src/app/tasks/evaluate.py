@@ -7,6 +7,7 @@ import traceback
 from pathlib import Path
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -29,6 +30,26 @@ def _redact(message: str, api_key: str | None) -> str:
     return message
 
 
+def _settle_after_duplicate(session: Session, submission_id: UUID) -> None:
+    """Normalize a submission after a duplicate race discarded our transaction.
+
+    On ``IntegrityError`` the rollback also reverts our ``status``/``score``
+    flip (it lived in the doomed transaction), which can leave the row at
+    ``processing`` next to the winner's result. Re-read the row and settle it
+    to the terminal state the winner's result implies.
+    """
+    session.expire_all()
+    current = session.get(Submission, submission_id)
+    if (
+        current is not None
+        and current.evaluation_result is not None
+        and current.status != "completed"
+    ):
+        current.status = "completed"
+        current.score = current.evaluation_result.score or 0.0
+        session.commit()
+
+
 def _run_submission_evaluation(
     session: Session,
     submission_id: UUID,
@@ -38,6 +59,20 @@ def _run_submission_evaluation(
     submission = session.get(Submission, submission_id)
     if submission is None:
         return {"status": "not_found", "submission_id": str(submission_id)}
+
+    if submission.evaluation_result is not None:
+        # Duplicate dispatch (e.g. the recovery sweep re-sent the message while
+        # the original run already wrote a result) — the row is terminal, so
+        # there is nothing left to evaluate.
+        logger.info(
+            "Duplicate evaluation for submission %s — result already exists, skipping",
+            submission_id,
+        )
+        return {
+            "status": submission.status,
+            "submission_id": str(submission_id),
+            "duplicate": True,
+        }
 
     challenge = session.get(Challenge, submission.challenge_id)
     if challenge is None:
@@ -88,7 +123,22 @@ def _run_submission_evaluation(
         session.add(result)
         submission.status = "failed"
         submission.score = 0.0
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # A duplicate dispatch raced us and already recorded a result —
+            # nothing more to write.
+            session.rollback()
+            logger.warning(
+                "Duplicate failure record for submission %s — result already exists",
+                submission.id,
+            )
+            _settle_after_duplicate(session, submission.id)
+            return {
+                "status": "failed",
+                "submission_id": str(submission.id),
+                "duplicate": True,
+            }
         publish_submission_event(submission.id, "failed", error=message)
         return {"status": "failed", "error": message}
 
@@ -103,7 +153,22 @@ def _run_submission_evaluation(
     session.add(result)
     submission.status = "completed"
     submission.score = outcome.score
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # A duplicate dispatch (recovery re-send) wrote a result first — the
+        # row is already terminal; treat this run as a no-op.
+        session.rollback()
+        logger.warning(
+            "Duplicate evaluation for submission %s — result already recorded",
+            submission.id,
+        )
+        _settle_after_duplicate(session, submission.id)
+        return {
+            "status": "completed",
+            "submission_id": str(submission.id),
+            "duplicate": True,
+        }
     publish_submission_event(submission.id, "completed", score=outcome.score)
 
     return {

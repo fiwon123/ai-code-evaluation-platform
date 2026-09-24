@@ -18,6 +18,12 @@ beat every minute and self-heals stale rows:
   rather than re-dispatching avoids double-running a possibly-alive
   evaluation).
 
+Re-dispatch is skipped for providers that need an API key when the worker has
+no key to run them with: the per-run key is never persisted (submissions.py
+forwards it straight to the task), so a re-dispatch would only fail with
+"API key missing". Those rows are failed fast instead, with a message telling
+the user to re-submit.
+
 Thresholds are deliberately generous: the worst realistic evaluation path is
 a 60s LLM call plus a 90s Go compile/test run (~2.5 min), so 10/20 minutes
 are far past any healthy execution.
@@ -26,6 +32,7 @@ are far past any healthy execution.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -36,6 +43,7 @@ from app.core.database import sync_session
 from app.core.events import publish_submission_event
 from app.models.evaluation_result import EvaluationResult
 from app.models.submission import Submission
+from app.services.llm import KEYED_PROVIDERS
 from app.tasks.evaluate import evaluate_submission
 
 logger = logging.getLogger(__name__)
@@ -46,6 +54,12 @@ PENDING_STALE_MINUTES = 10
 PROCESSING_STALE_MINUTES = 20
 
 _STALE_ERROR = "Evaluation lost before completing (worker likely restarted). Please re-submit."
+
+_NO_KEY_ERROR = (
+    "Cannot re-dispatch: {provider} was submitted with a per-run API key that "
+    "is not stored server-side, and {env_var} is not configured on the worker. "
+    "Please re-submit with a new API key."
+)
 
 
 def _utcnow() -> datetime:
@@ -78,6 +92,42 @@ def _mark_failed(session: Session, submission: Submission, now: datetime) -> Non
     )
 
 
+def _mark_no_key_failed(session: Session, submission: Submission, now: datetime) -> None:
+    """Fail a stale ``pending`` row whose provider needs an unavailable key.
+
+    The per-run API key forwarded at creation is never persisted, so a
+    re-dispatch would only fail with "API key missing" — fail the row now with
+    a clear message instead of dispatching a doomed task.
+    """
+    provider = (submission.provider or "demo").lower()
+    env_var = KEYED_PROVIDERS[provider]
+    message = _NO_KEY_ERROR.format(provider=provider, env_var=env_var)
+    result = EvaluationResult(
+        submission_id=submission.id,
+        passed_tests=0,
+        total_tests=0,
+        score=0.0,
+        logs=message,
+        metrics={
+            "error": "missing_api_key",
+            "recovered_at": now.isoformat(),
+            "provider": provider,
+        },
+    )
+    session.add(result)
+    submission.status = "failed"
+    submission.score = 0.0
+    session.commit()
+    publish_submission_event(submission.id, "failed", error=message)
+    logger.warning(
+        "Recovered stale 'pending' submission %s -> failed "
+        "(no %s available to re-dispatch %s)",
+        submission.id,
+        env_var,
+        provider,
+    )
+
+
 def _run_recovery(session: Session, now: datetime | None = None) -> dict[str, int]:
     """Re-dispatch stale ``pending`` rows and fail stale ``processing`` rows.
 
@@ -105,6 +155,13 @@ def _run_recovery(session: Session, now: datetime | None = None) -> dict[str, in
         if submission.status == "pending" and age > timedelta(
             minutes=PENDING_STALE_MINUTES
         ):
+            provider = (submission.provider or "demo").lower()
+            if provider in KEYED_PROVIDERS and not os.getenv(KEYED_PROVIDERS[provider]):
+                # No key available to actually run the evaluation — fail fast
+                # with a clear message rather than dispatching a doomed task.
+                _mark_no_key_failed(session, submission, now)
+                failed += 1
+                continue
             try:
                 evaluate_submission.delay(str(submission.id))
             except Exception:
