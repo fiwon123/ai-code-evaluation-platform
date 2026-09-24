@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
@@ -8,9 +8,10 @@ import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi } from "../services/api.ts";
-import { extractError } from "../utils/errors.ts";
 import type { Challenge } from "../types.ts";
+import { extractError } from "../utils/errors.ts";
 import { formatRelativeTime } from "../utils/formatting.ts";
+import { LANGUAGES } from "../utils/language.ts";
 import styles from "./Challenges.module.css";
 
 const PAGE_SIZE = 12;
@@ -70,13 +71,6 @@ function Challenges() {
     return () => controller.abort();
   }, [page, debouncedSearch, language]);
 
-  const languages = useMemo(() => {
-    // Keep the language dropdown populated from the current page's results;
-    // fall back to a small static set so the filter stays usable.
-    const set = new Set(challenges.map((c) => c.language).filter(Boolean));
-    return Array.from(set).sort();
-  }, [challenges]);
-
   if (loading) {
     return (
       <div className={styles.grid} aria-label="Loading challenges" role="status">
@@ -133,9 +127,9 @@ function Challenges() {
           className={styles.filterSelect}
         >
           <option value="all">All languages</option>
-          {languages.map((lang) => (
+          {LANGUAGES.map((lang) => (
             <option key={lang} value={lang}>
-              {lang}
+              {lang.charAt(0).toUpperCase() + lang.slice(1)}
             </option>
           ))}
         </SelectInput>
