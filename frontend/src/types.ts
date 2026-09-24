@@ -83,6 +83,8 @@ export interface EvaluationResult {
     passed: boolean;
     message?: string | null;
   }> | null;
+  /** Public share token — set when the owner shared this report. */
+  share_token?: string | null;
   created_at: string;
 }
 
@@ -121,6 +123,23 @@ export interface ProviderComparisonEntry {
 export interface ProviderComparison {
   challenge_id: string;
   entries: ProviderComparisonEntry[];
+}
+
+/** Per-challenge evaluation stats for a user's dashboard. */
+export interface ChallengeStatsItem {
+  challenge_id: string;
+  challenge_title: string;
+  language: string;
+  total_runs: number;
+  completed_runs: number;
+  failed_runs: number;
+  avg_score: number | null;
+  best_score: number | null;
+  last_run_at: string;
+}
+
+export interface SubmissionStats {
+  items: ChallengeStatsItem[];
 }
 
 export interface SubmissionListParams {

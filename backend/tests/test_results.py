@@ -165,3 +165,18 @@ async def test_public_result_read_unknown_token_is_404(
 ) -> None:
     response = await db_client.get(f"{RESULTS_URL}/no-such-token")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_owner_sees_share_token_on_their_submission(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    token, user = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    submission_id = await _completed_submission(
+        db_sessionmaker, user["id"], challenge["id"], share_token="s3cret-token"
+    )
+
+    response = await db_client.get(f"{SUBMISSIONS_URL}/{submission_id}", headers=auth(token))
+    assert response.status_code == 200
+    assert response.json()["evaluation_result"]["share_token"] == "s3cret-token"
