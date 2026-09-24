@@ -53,6 +53,13 @@ services:
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
       - DOCKER_ENABLED=true
       - DOCKER_IMAGE=eval-sandbox:latest
+      # Import the app package from the live bind-mounted source, never from a
+      # baked editable install: `uv sync` at image build pins the editable
+      # path at build time (previously /workspace/backend/src before the #129
+      # workspace rename), so a stale image silently runs pre-merge code
+      # (e.g. the worker discarding the recovery sweep as "unregistered").
+      # PYTHONPATH precedes site-packages in sys.path and shadows that .pth.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
       # Forward the host GITHUB_TOKEN into the dev sandbox so `gh` (which the
       # agent uses for issues/PRs) actually works INSIDE the container: the
       # read-only ~/.config/gh mount only carries an invalid/stale stored token,
@@ -112,6 +119,8 @@ services:
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
       - DOCKER_ENABLED=true
       - DOCKER_IMAGE=eval-sandbox:latest
+      # Live source (see dev service): stale images must not run baked code.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,6 +161,8 @@ services:
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      # Live source (see dev service): stale images must not run baked code.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
     depends_on:
       redis:
         condition: service_healthy
