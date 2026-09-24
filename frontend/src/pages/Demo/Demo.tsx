@@ -10,7 +10,10 @@ import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
-import { extensionForLanguage } from "../../utils/language.ts";
+import {
+  extensionForLanguage,
+  runnerForLanguage,
+} from "../../utils/language.ts";
 import styles from "./Demo.module.css";
 
 const STEPS = [
@@ -36,7 +39,7 @@ const STEPS = [
   },
 ];
 
-const KEYWORD_CHIPS = ["two sum", "fizzbuzz", "fibonacci", "palindrome"];
+const KEYWORD_CHIPS = ["two sum", "valid parentheses", "longest common prefix"];
 
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 60000; // ~60s cap before we give up
@@ -59,6 +62,7 @@ function Demo() {
     (c) => c.id === (result?.challenge_id ?? selectedId),
   );
   const resultLanguage = selectedChallenge?.language ?? "python";
+  const previewRunner = runnerForLanguage(resultLanguage);
 
   useEffect(() => {
     let cancelled = false;
@@ -260,6 +264,63 @@ function Demo() {
                   {inProgress ? "Generating…" : "Generate & evaluate"}
                 </Button>
               </div>
+
+              {selectedChallenge && (
+                <div className={styles.preview}>
+                  <div className={styles.previewHeader}>
+                    <h3 className={styles.previewTitle}>What will run</h3>
+                    <Badge variant="neutral">
+                      {selectedChallenge.language}
+                    </Badge>
+                  </div>
+                  {selectedChallenge.description && (
+                    <p className={styles.previewDescription}>
+                      {selectedChallenge.description}
+                    </p>
+                  )}
+                  {selectedChallenge.prompt && (
+                    <div className={styles.previewSection}>
+                      <p className={styles.previewLabel}>Prompt</p>
+                      <div className={styles.previewCode}>
+                        <CodeBlock
+                          code={selectedChallenge.prompt}
+                          language="text"
+                          filename="prompt.txt"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className={styles.previewSection}>
+                    <p className={styles.previewLabel}>Test suite</p>
+                    {selectedChallenge.test_code ? (
+                      <div className={styles.previewCode}>
+                        <CodeBlock
+                          code={selectedChallenge.test_code}
+                          language={selectedChallenge.language ?? "python"}
+                          filename={
+                            previewRunner?.testFilename ??
+                            `test_solution.${extensionForLanguage(
+                              selectedChallenge.language ?? "python",
+                            )}`
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <p className={styles.previewEmpty}>
+                        No test code provided for this challenge.
+                      </p>
+                    )}
+                  </div>
+                  {previewRunner && (
+                    <p className={styles.previewMeta}>
+                      Runs with <code>{previewRunner.runner}</code> — executes{" "}
+                      <code>{previewRunner.testFilename}</code> against your
+                      solution in{" "}
+                      <code>{previewRunner.solutionFilename}</code>.
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <p className={styles.runnerEmpty}>
@@ -363,8 +424,9 @@ function Demo() {
       </div>
       <p className={styles.liveHint}>
         Tip: challenges whose prompt contains a keyword like{" "}
-        <strong>"two sum"</strong> or <strong>"fizzbuzz"</strong> produce a
-        matching solution instantly — the demo provider needs no API keys.
+        <strong>"two sum"</strong>, <strong>"valid parentheses"</strong> or{" "}
+        <strong>"longest common prefix"</strong> produce a matching solution
+        instantly — the demo provider needs no API keys.
       </p>
     </div>
   );

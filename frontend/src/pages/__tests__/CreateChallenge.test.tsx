@@ -80,10 +80,29 @@ describe("CreateChallenge", () => {
     fireEvent.change(language, { target: { value: "go" } });
 
     const prompt = screen.getByLabelText(/Prompt for the LLM/) as HTMLTextAreaElement;
-    expect(prompt.placeholder).toContain("Go function twoSum");
+    expect(prompt.placeholder).toContain("Go function TwoSum");
 
     expect(screen.getByText("Test code (go test)")).toBeInTheDocument();
     const testCode = screen.getByLabelText(/Test code \(go test\)/) as HTMLTextAreaElement;
     expect(testCode.placeholder).toContain("func TestTwoSum");
+  });
+
+  it("fills title, prompt, and tests from a chosen example", () => {
+    renderPage();
+
+    const language = screen.getByLabelText(/Language/) as HTMLSelectElement;
+    fireEvent.change(language, { target: { value: "go" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Valid Parentheses" }));
+
+    const title = screen.getByLabelText(/Title/) as HTMLInputElement;
+    expect(title.value).toBe("Valid Parentheses");
+
+    const prompt = screen.getByLabelText(/Prompt for the LLM/) as HTMLTextAreaElement;
+    expect(prompt.value).toContain("ValidParentheses(s string) bool");
+
+    const testCode = screen.getByLabelText(/Test code \(go test\)/) as HTMLTextAreaElement;
+    expect(testCode.value).toContain("func TestValidParentheses");
+    expect(testCode.value).toContain("ValidParentheses(\"(]\"");
   });
 });

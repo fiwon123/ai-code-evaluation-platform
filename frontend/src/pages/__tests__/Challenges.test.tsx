@@ -143,6 +143,46 @@ describe("Challenges", () => {
     expect(screen.getByText("FizzBuzz")).toBeInTheDocument();
   });
 
+  it("always lists every supported language in the filter dropdown", async () => {
+    renderPage();
+    await screen.findByText("Two Sum");
+
+    const options = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent)
+      .filter((label) => label !== "All languages");
+
+    // Same ordering/labeling as the challenge forms (LANGUAGES constant).
+    expect(options).toEqual([
+      "Python",
+      "Javascript",
+      "Typescript",
+      "Java",
+      "Go",
+    ]);
+
+    // The dropdown must not shrink after filtering to a single language —
+    // previously it was derived from the current page's results, so picking
+    // "Go" collapsed the options to just "Go".
+    fireEvent.change(screen.getByLabelText(/Filter by language/i), {
+      target: { value: "go" },
+    });
+    await waitFor(() => expect(mockList).toHaveBeenCalled());
+
+    const afterFilter = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent)
+      .filter((label) => label !== "All languages");
+
+    expect(afterFilter).toEqual([
+      "Python",
+      "Javascript",
+      "Typescript",
+      "Java",
+      "Go",
+    ]);
+  });
+
   it("shows an empty state when there are no challenges", async () => {
     mockList.mockResolvedValue(toPaginated([]) as never);
     renderPage();

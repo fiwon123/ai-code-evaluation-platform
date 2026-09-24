@@ -99,6 +99,86 @@ async def test_create_submission_with_provider(db_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_submission_requires_api_key_for_openai(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={"challenge_id": challenge["id"], "provider": "openai"},
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "API key is required" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_submission_requires_api_key_for_anthropic(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={"challenge_id": challenge["id"], "provider": "anthropic"},
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "API key is required" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_submission_forwards_api_key_to_dispatcher(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api import submissions as submissions_module
+
+    captured: dict[str, str] = {}
+    monkeypatch.setattr(
+        submissions_module,
+        "dispatch_evaluation",
+        lambda submission_id, api_key=None: (
+            captured.setdefault("api_key", api_key),
+            True,
+        )[1],
+    )
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={
+            "challenge_id": challenge["id"],
+            "provider": "openai",
+            "api_key": "sk-secret-123",
+        },
+        headers=auth(token),
+    )
+    assert response.status_code == 201
+    assert captured["api_key"] == "sk-secret-123"
+    # The key must never be persisted or echoed back to the client.
+    body = response.json()
+    assert "api_key" not in body
+
+
+@pytest.mark.asyncio
+async def test_create_submission_does_not_return_api_key_for_demo(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    submission = await create_submission(
+        db_client, token, challenge["id"], provider="demo", api_key="sk-ignored"
+    )
+
+    assert "api_key" not in submission
+
+
+@pytest.mark.asyncio
 async def test_create_submission_inherits_challenge_language(db_client: AsyncClient) -> None:
     token, _ = await register_user(db_client)
     challenge = await create_challenge(db_client, token, language="go")
@@ -128,7 +208,11 @@ async def test_create_submission_dispatch_failure_returns_503(
     challenge = await create_challenge(db_client, token)
 
     # Simulate a dead Celery broker: dispatcher reports failure.
-    monkeypatch.setattr(submissions_module, "dispatch_evaluation", lambda submission_id: False)
+    monkeypatch.setattr(
+        submissions_module,
+        "dispatch_evaluation",
+        lambda submission_id, api_key=None: False,
+    )
 
     response = await db_client.post(
         SUBMISSIONS_URL,

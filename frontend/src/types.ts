@@ -96,6 +96,8 @@ export interface Submission {
 export interface SubmissionCreatePayload {
   challenge_id: string;
   provider: string;
+  /** Per-run LLM API key — never stored server-side. */
+  api_key?: string;
 }
 
 export interface SubmissionListParams {

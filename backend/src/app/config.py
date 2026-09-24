@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     docker_readonly_rootfs: bool = True  # immutable container filesystem
     docker_max_output_bytes: int = 65536  # cap on captured logs per evaluation
 
+    # Curated example challenges (seeded into PostgreSQL on startup)
+    seed_examples: bool = True  # set SEED_EXAMPLES=false to disable auto-seeding
+
     # Rate limiting (fixed-window counter backed by Redis)
     rate_limit_enabled: bool = True
     rate_limit_anonymous_limit: int = 60  # requests per window for anonymous clients

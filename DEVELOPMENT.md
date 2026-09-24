@@ -116,6 +116,10 @@ uv run alembic upgrade head                # migrations (automatic on dev-up)
 uv run pytest                              # backend tests
 uv run ruff check src/ tests/              # backend lint
 
+# Example challenges are auto-seeded on backend startup (SEED_EXAMPLES=true).
+# Re-run manually at any time (idempotent, system-owned rows only):
+make seed-examples                         # cd backend && uv run python -m app.seed_examples
+
 # Frontend (host)
 cd frontend && npm install
 npm run dev                                # (dev-entrypoint already does this)

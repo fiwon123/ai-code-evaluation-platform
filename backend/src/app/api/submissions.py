@@ -21,8 +21,11 @@ logger = getLogger(__name__)
 router = APIRouter()
 
 
-def dispatch_evaluation(submission_id: UUID) -> bool:
+def dispatch_evaluation(submission_id: UUID, api_key: str | None = None) -> bool:
     """Enqueue the background evaluation task.
+
+    ``api_key`` is an optional per-run LLM key forwarded straight to the
+    worker — never persisted on the submission and never logged.
 
     Returns ``True`` when the task was accepted by the broker. When the
     broker or the task module is unavailable the failure is logged and
@@ -32,7 +35,7 @@ def dispatch_evaluation(submission_id: UUID) -> bool:
     try:
         from app.tasks.evaluate import evaluate_submission
 
-        evaluate_submission.delay(str(submission_id))
+        evaluate_submission.delay(str(submission_id), api_key=api_key)
         return True
     except Exception:
         logger.exception("Failed to dispatch evaluation for submission %s", submission_id)
@@ -83,7 +86,7 @@ async def create_submission(
     db.add(submission)
     await db.commit()
 
-    if not dispatch_evaluation(submission.id):
+    if not dispatch_evaluation(submission.id, api_key=payload.api_key):
         submission.status = "failed"
         await db.commit()
         await apublish_submission_event(

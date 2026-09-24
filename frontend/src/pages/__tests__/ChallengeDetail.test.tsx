@@ -114,15 +114,50 @@ describe("ChallengeDetail", () => {
     await screen.findByRole("heading", { name: "Two Sum" });
 
     fireEvent.click(screen.getByLabelText(/OpenAI/));
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "sk-test-123" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
 
     await waitFor(() => {
       expect(mockSubmissionsCreate).toHaveBeenCalledWith({
         challenge_id: "c1",
         provider: "openai",
+        api_key: "sk-test-123",
       });
     });
     expect(navigate).toHaveBeenCalledWith("/submissions/s1");
+  });
+
+  it("requires an API key before submitting to key-required providers", async () => {
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+
+    fireEvent.click(screen.getByLabelText(/Anthropic/));
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /Enter your Anthropic API key/,
+    );
+    expect(mockSubmissionsCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not send an api_key for the demo provider", async () => {
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    await waitFor(() => {
+      expect(mockSubmissionsCreate).toHaveBeenCalledWith({
+        challenge_id: "c1",
+        provider: "demo",
+      });
+    });
   });
 
   it("shows the login link when unauthenticated", async () => {
