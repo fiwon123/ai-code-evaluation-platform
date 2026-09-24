@@ -27,6 +27,7 @@ const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Pricing = lazy(() => import("./pages/Pricing/Pricing.tsx"));
 const Profile = lazy(() => import("./pages/Profile/Profile.tsx"));
 const Register = lazy(() => import("./pages/Register.tsx"));
+const SharedResultPage = lazy(() => import("./pages/SharedResultPage.tsx"));
 const SubmissionDetail = lazy(() => import("./pages/SubmissionDetail.tsx"));
 
 function PageFallback() {
@@ -58,6 +59,11 @@ function App() {
                   path="/challenges/:id"
                   element={<ChallengeDetail />}
                 />
+                {/* Public share-link destination — no account required. */}
+                <Route
+                  path="/results/:token"
+                  element={<SharedResultPage />}
+                />
                 <Route element={<ProtectedRoute />}>
                   <Route
                     path="/challenges/new"
@@ -67,10 +73,10 @@ function App() {
                     path="/challenges/:id/edit"
                     element={<EditChallenge />}
                   />
-                  <Route
-                    path="/submissions/:id"
-                    element={<SubmissionDetail />}
-                  />
+<Route
+                  path="/submissions/:id"
+                  element={<SubmissionDetail />}
+                />
                   <Route path="/profile" element={<Profile />} />
                 </Route>
                 <Route element={<AdminRoute />}>
