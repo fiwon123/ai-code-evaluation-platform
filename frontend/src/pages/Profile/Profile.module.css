@@ -216,6 +216,25 @@
   color: var(--color-text);
 }
 
+.durationText {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.waitingText {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.delayedTag {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
 .emptyCard {
   display: flex;
   flex-direction: column;

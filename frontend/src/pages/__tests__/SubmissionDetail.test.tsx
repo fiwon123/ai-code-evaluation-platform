@@ -70,7 +70,79 @@ describe("SubmissionDetail", () => {
     expect(await screen.findByText("100%")).toBeInTheDocument();
     expect(screen.getByText("2/2")).toBeInTheDocument();
     expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    // The recorded execution duration is promoted to a first-class stat.
+    expect(screen.getByText("Duration")).toBeInTheDocument();
+    expect(screen.getByText("12ms")).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows a live elapsed counter and an estimate while processing", async () => {
+    const processing = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "processing",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: new Date(Date.now() - 12_000).toISOString(),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(processing), { status: 200 }),
+    );
+
+    renderPage(60_000);
+
+    expect(await screen.findByText(/Running your evaluation/i)).toBeInTheDocument();
+    expect(screen.getByText(/Elapsed:/)).toBeInTheDocument();
+    expect(screen.getByText("12s")).toBeInTheDocument();
+    expect(screen.getByText(/under a minute/)).toBeInTheDocument();
+    expect(screen.getByText(/refreshes automatically/)).toBeInTheDocument();
+    expect(screen.queryByText(/taking longer than usual/i)).not.toBeInTheDocument();
+  });
+
+  it("mentions compilation for java evaluations", async () => {
+    const processing = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "pending",
+      language: "java",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: new Date().toISOString(),
+    };
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(processing), { status: 200 }),
+    );
+
+    renderPage(60_000);
+
+    expect(await screen.findByText(/Waiting in the evaluation queue/i)).toBeInTheDocument();
+    expect(screen.getByText(/up to ~2 minutes \(includes compilation\)/)).toBeInTheDocument();
+  });
+
+  it("warns when an in-progress submission has been running too long", async () => {
+    const stale = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "processing",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+    };
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(stale), { status: 200 }));
+
+    renderPage(60_000);
+
+    expect(await screen.findByText(/taking longer than usual/i)).toBeInTheDocument();
+    expect(screen.getByText(/3m 0\d+s/)).toBeInTheDocument();
   });
 
   it("does not poll again once complete", async () => {

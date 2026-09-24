@@ -21,6 +21,22 @@
   margin: 0 0 var(--space-2);
 }
 
+.estimate {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-2);
+  line-height: 1.5;
+}
+
+.delayed {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
 .muted {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);

@@ -6,11 +6,20 @@ import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
+import { useNow } from "../hooks/useNow.ts";
 import { submissionsApi } from "../services/api.ts";
 import type { Submission } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
-import { extensionForLanguage } from "../utils/language.ts";
-import { statusVariant } from "../utils/formatting.ts";
+import {
+  extensionForLanguage,
+  evaluationEstimate,
+} from "../utils/language.ts";
+import {
+  formatDurationMs,
+  formatElapsed,
+  isDelayed,
+  statusVariant,
+} from "../utils/formatting.ts";
 import styles from "./SubmissionDetail.module.css";
 
 const POLL_INTERVAL_MS = 1500;
@@ -88,6 +97,12 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
     }
   }, [liveSubmission]);
 
+  // Tick the elapsed counter while the evaluation is still running. Derived
+  // from state so this hook runs unconditionally (before the early returns).
+  const inProgress =
+    submission?.status === "pending" || submission?.status === "processing";
+  const now = useNow(inProgress);
+
   if (loading) {
     return (
       <div role="status" aria-label="Loading submission">
@@ -111,7 +126,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
   }
 
   const result = submission.evaluation_result;
-  const inProgress = submission.status === "pending" || submission.status === "processing";
+  const durationMs = result?.metrics.duration_ms;
 
   return (
     <div className={styles.page}>
@@ -127,9 +142,22 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
       {inProgress ? (
         <Card>
           <p className={styles.progressText}>
-            Your submission is being processed… the page refreshes
+            {submission.status === "pending"
+              ? "Waiting in the evaluation queue…"
+              : "Running your evaluation…"}
+          </p>
+          <p className={styles.estimate}>
+            Elapsed: <strong>{formatElapsed(submission.created_at, now)}</strong>
+            {" · "}Most evaluations finish in{" "}
+            {evaluationEstimate(submission.language)}. The page refreshes
             automatically.
           </p>
+          {isDelayed(submission.created_at, now) && (
+            <p role="status" className={styles.delayed}>
+              This is taking longer than usual — the worker may be busy or
+              down. Check back in a minute.
+            </p>
+          )}
           <p className={styles.muted}>
             Queued at {new Date(submission.created_at).toLocaleString()} ·
             provider: <code>{submission.provider ?? "demo"}</code>
@@ -151,6 +179,12 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
             <Card>
               <p className={styles.statLabel}>Status</p>
               <p className={styles.statValue}>{submission.status}</p>
+            </Card>
+            <Card>
+              <p className={styles.statLabel}>Duration</p>
+              <p className={styles.statValue}>
+                {typeof durationMs === "number" ? formatDurationMs(durationMs) : "—"}
+              </p>
             </Card>
           </div>
 

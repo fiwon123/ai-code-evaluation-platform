@@ -73,7 +73,15 @@ const submissions = [
     provider: "demo",
     code: "print(1)",
     score: 100,
-    evaluation_result: null,
+    evaluation_result: {
+      id: "r1",
+      passed_tests: 2,
+      total_tests: 2,
+      score: 100,
+      logs: "2 passed",
+      metrics: { duration_ms: 4200 },
+      created_at: "2026-09-10T00:00:00Z",
+    },
     created_at: "2026-09-10T00:00:00Z",
   },
   {
@@ -170,6 +178,20 @@ describe("Profile", () => {
     expect(screen.getByText("failed")).toBeInTheDocument();
     expect(screen.getByText("pending")).toBeInTheDocument();
     expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
+  });
+
+  it("shows the recorded duration next to a completed score", async () => {
+    renderPage();
+    await screen.findByText("alice");
+    expect(screen.getByText(/· 4\.2s/)).toBeInTheDocument();
+  });
+
+  it("shows a live waiting time on in-progress submissions", async () => {
+    renderPage();
+    await screen.findByText("alice");
+    // s3 has been pending since 2026-09-08, so it reads as hours + "delayed".
+    expect(screen.getByText(/waiting \d+h/)).toBeInTheDocument();
+    expect(screen.getByText("delayed")).toBeInTheDocument();
   });
 
   it("changes the password and clears the form on success", async () => {

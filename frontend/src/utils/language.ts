@@ -84,6 +84,27 @@ export function runnerForLanguage(language: string): LanguageRunnerInfo | null {
 }
 
 /**
+ * Human-readable duration estimate for an evaluation in the given language.
+ * Mirrors backend budgets (config.py `evaluation_timeout=30`; Java +30s and
+ * Go +60s for compilation in language_runner.py) plus the 60s LLM HTTP
+ * timeout, so the worst realistic path is ~2 minutes. Deliberately hedged —
+ * LLM latency varies.
+ */
+export function evaluationEstimate(language: string | null): string {
+  switch (language) {
+    case "java":
+    case "go":
+      return "up to ~2 minutes (includes compilation)";
+    case "python":
+    case "javascript":
+    case "typescript":
+      return "about 10–30 seconds";
+    default:
+      return "under a minute";
+  }
+}
+
+/**
  * Curated example challenges — 2-3 per language. Each prompt keyword resolves
  * to a canned solution in the backend demo provider (mock_provider.py), and
  * each test suite targets that solution's exact exported names, so pasting an

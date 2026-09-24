@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Demo from "./Demo.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
-import { challengesApi } from "../../services/api.ts";
+import { challengesApi, submissionsApi } from "../../services/api.ts";
 
 vi.mock("../../context/AuthContext.tsx", () => ({
   useAuth: vi.fn(),
@@ -28,6 +28,7 @@ vi.mock("../../services/api.ts", () => ({
 
 const mockUseAuth = vi.mocked(useAuth);
 const mockList = vi.mocked(challengesApi.list);
+const mockCreate = vi.mocked(submissionsApi.create);
 
 const pythonChallenge = {
   id: "py1",
@@ -182,5 +183,43 @@ describe("Demo page preview", () => {
     expect(
       await screen.findByText("Register page"),
     ).toBeInTheDocument();
+  });
+
+  it("tells a logged-in user how long the run takes while generating", async () => {
+    mockUseAuth.mockReturnValue({
+      user: {
+        id: "u1",
+        email: "alice@example.com",
+        username: "alice",
+        is_admin: false,
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      token: "t",
+      initializing: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+    });
+    mockCreate.mockResolvedValue({
+      id: "s1",
+      challenge_id: "py1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    } as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    expect(
+      await screen.findByText(/usually takes 10–30 seconds/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/updates automatically/)).toBeInTheDocument();
   });
 });

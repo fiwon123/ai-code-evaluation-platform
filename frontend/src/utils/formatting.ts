@@ -40,3 +40,53 @@ export function formatRelativeTime(iso: string): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString();
 }
+
+/** Format an elapsed duration as a live counter, e.g. "12s", "2m 05s", "1h 04m". */
+export function formatElapsedMs(elapsedMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const seconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  }
+  if (totalMinutes > 0) {
+    return `${totalMinutes}m ${String(seconds).padStart(2, "0")}s`;
+  }
+  return `${seconds}s`;
+}
+
+/**
+ * Format how long it has been since an ISO timestamp, e.g. "12s" or "2m 05s".
+ * Pass a ticking `nowMs` (see `useNow`) so the value stays live.
+ */
+export function formatElapsed(iso: string, nowMs = Date.now()): string {
+  return formatElapsedMs(nowMs - Date.parse(iso));
+}
+
+/** Format a recorded duration in milliseconds, e.g. "850ms", "4.2s", "1m 30s". */
+export function formatDurationMs(ms: number): string {
+  const rounded = Math.abs(Math.round(ms));
+  const totalSeconds = Math.floor(rounded / 1000);
+  if (totalSeconds >= 60) {
+    const seconds = totalSeconds % 60;
+    return `${Math.floor(totalSeconds / 60)}m ${String(seconds).padStart(2, "0")}s`;
+  }
+  if (rounded < 1000) {
+    return `${rounded}ms`;
+  }
+  return `${(rounded / 1000).toFixed(1)}s`;
+}
+
+/**
+ * After this much time an in-progress submission is considered stuck: the
+ * worst realistic path is a 60s LLM call plus 90s of Go test execution, so
+ * anything beyond ~2 minutes deserves a "taking longer than usual" warning.
+ */
+export const STALE_AFTER_MS = 120_000;
+
+/** True when more than STALE_AFTER_MS have elapsed since an ISO timestamp. */
+export function isDelayed(iso: string, nowMs = Date.now()): boolean {
+  return nowMs - Date.parse(iso) > STALE_AFTER_MS;
+}

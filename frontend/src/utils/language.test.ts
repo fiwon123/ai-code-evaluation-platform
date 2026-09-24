@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LANGUAGES,
   LANGUAGE_EXAMPLES,
+  evaluationEstimate,
   examplesForLanguage,
   languageGuide,
 } from "./language.ts";
@@ -59,5 +60,24 @@ describe("languageGuide", () => {
     const guide = languageGuide("ruby");
     expect(guide.prompt).toContain("two_sum");
     expect(guide.extension).toBe("txt");
+  });
+});
+
+describe("evaluationEstimate", () => {
+  it("gives the short estimate for quick-to-run languages", () => {
+    for (const lang of ["python", "javascript", "typescript"]) {
+      expect(evaluationEstimate(lang)).toBe("about 10–30 seconds");
+    }
+  });
+
+  it("warns about compilation for java and go", () => {
+    for (const lang of ["java", "go"]) {
+      expect(evaluationEstimate(lang)).toContain("up to ~2 minutes");
+    }
+  });
+
+  it("falls back for unknown or missing language", () => {
+    expect(evaluationEstimate("ruby")).toBe("under a minute");
+    expect(evaluationEstimate(null)).toBe("under a minute");
   });
 });
