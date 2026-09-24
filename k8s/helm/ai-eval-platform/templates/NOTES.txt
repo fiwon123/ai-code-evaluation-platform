@@ -4,6 +4,7 @@ Components:
   Backend:     {{ include "ai-eval-platform.fullname" . }}-backend   ({{ .Values.backend.replicas }} replicas)
   Frontend:    {{ include "ai-eval-platform.fullname" . }}-frontend  ({{ .Values.frontend.replicas }} replicas)
   Worker:      {{ include "ai-eval-platform.fullname" . }}-worker    ({{ .Values.worker.replicas }} replicas)
+  Beat:        {{ include "ai-eval-platform.fullname" . }}-beat      ({{ .Values.beat.replicas }} replicas — periodic stale-submission recovery sweep)
   Postgres:    enabled={{ .Values.postgres.enabled }}
   Redis:       enabled={{ .Values.redis.enabled }}
   Autoscaling: enabled={{ .Values.autoscaling.enabled }}

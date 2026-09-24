@@ -2,7 +2,8 @@ apiVersion: v2
 name: ai-eval-platform
 description: >-
   AI Code Evaluation Platform — HTTP API (FastAPI), React frontend (nginx),
-  Celery worker, PostgreSQL (StatefulSet) and Redis.
+  Celery worker + beat (periodic stale-submission recovery), PostgreSQL
+  (StatefulSet) and Redis.
 type: application
 version: 0.6.0
 appVersion: "0.6.0"
