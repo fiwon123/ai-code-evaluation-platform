@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import traceback
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -47,7 +48,14 @@ def _settle_after_duplicate(session: Session, submission_id: UUID) -> None:
     ):
         current.status = "completed"
         current.score = current.evaluation_result.score or 0.0
+        current.phase = None
         session.commit()
+        # The duplicate run that won did so silently (its commit raced ours),
+        # so announce the terminal state — the WS-connected page would
+        # otherwise never learn the row finished.
+        publish_submission_event(
+            current.id, "completed", score=current.evaluation_result.score or 0.0
+        )
 
 
 def _run_submission_evaluation(
@@ -82,6 +90,8 @@ def _run_submission_evaluation(
         return {"status": "failed", "error": "challenge not found"}
 
     submission.status = "processing"
+    submission.started_at = datetime.now(UTC)
+    submission.phase = "generating"
     session.commit()
     publish_submission_event(submission.id, "processing")
 
@@ -92,6 +102,7 @@ def _run_submission_evaluation(
         provider = get_llm_provider(provider_name, api_key=api_key)
         code = provider.generate_code(challenge.prompt, challenge.language)
         submission.code = code
+        submission.phase = "testing"
         session.commit()
         publish_submission_event(submission.id, "code_generated")
 
@@ -123,6 +134,7 @@ def _run_submission_evaluation(
         session.add(result)
         submission.status = "failed"
         submission.score = 0.0
+        submission.phase = None
         try:
             session.commit()
         except IntegrityError:
@@ -153,6 +165,7 @@ def _run_submission_evaluation(
     session.add(result)
     submission.status = "completed"
     submission.score = outcome.score
+    submission.phase = None
     try:
         session.commit()
     except IntegrityError:

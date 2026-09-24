@@ -42,6 +42,30 @@ HEARTBEAT_INTERVAL_SECONDS = 15
 CLOSE_NOT_AUTHENTICATED = 4401
 CLOSE_FORBIDDEN = 4403
 
+#: Events the worker publishes mid-pipeline mapped to the phase they imply.
+PHASE_BY_EVENT = {"processing": "generating", "code_generated": "testing"}
+#: Terminal events — forwarded with the phase cleared.
+TERMINAL_STATUSES = frozenset({"completed", "failed"})
+#: Status events that can arrive from the PATCH endpoint directly.
+STATUS_EVENTS = frozenset({"pending", "processing", "completed", "failed"})
+
+
+def _map_event_to_update(payload: dict) -> dict | None:
+    """Translate a pub/sub event into a client-safe ``{status, phase}`` pair.
+
+    Returns None for events that do not map to a SubmissionStatus (the PATCH
+    endpoint can publish arbitrary event types; forwarding them as ``status``
+    would corrupt client state).
+    """
+    event_type = payload.get("type", "")
+    if event_type in PHASE_BY_EVENT:
+        return {"status": "processing", "phase": PHASE_BY_EVENT[event_type]}
+    if event_type in TERMINAL_STATUSES:
+        return {"status": event_type, "phase": None}
+    if event_type in STATUS_EVENTS:
+        return {"status": event_type, "phase": None}
+    return None
+
 
 async def _load_submission_snapshot(submission_id: UUID, user_id: UUID) -> dict | None:
     """Serialize a user's submission (or None if it does not exist)."""
@@ -71,7 +95,7 @@ async def submission_updates(
         if not token:
             raise ValueError("missing token")
         user_id = UUID(decode_access_token(token))
-    except (jwt.PyJWTError, ValueError, TypeError):
+    except jwt.PyJWTError, ValueError, TypeError:
         await websocket.close(code=CLOSE_NOT_AUTHENTICATED)
         return
 
@@ -96,22 +120,29 @@ async def submission_updates(
                 await websocket.send_text(json.dumps({"type": "ping"}))
                 continue
 
-            # Pub/sub payloads carry the new status in ``type``; forward them
-            # without an extra DB round-trip (the worker/API already know it).
+            # Map a pub/sub event to a client-safe status/phase pair. The
+            # worker emits ``processing``, ``code_generated``, then a terminal
+            # event; forwarding the raw event type would hand clients an
+            # invalid status ("code_generated" is not a SubmissionStatus).
             data = message.get("data")
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
             try:
                 payload = json.loads(data) if isinstance(data, str) else {}
-            except (TypeError, json.JSONDecodeError):
+            except TypeError, json.JSONDecodeError:
                 continue
-            event_type = payload.get("type", "update")
+            mapped = _map_event_to_update(payload)
+            if mapped is None:
+                # Unknown/unsupported event — drop it instead of corrupting
+                # client state (the PATCH endpoint can publish arbitrary
+                # strings, e.g. "code_generated" or junk).
+                continue
             await websocket.send_text(
                 json.dumps(
                     {
                         "type": "update",
                         "submission_id": str(submission_id),
-                        "status": event_type,
+                        **mapped,
                     }
                 )
             )

@@ -9,6 +9,7 @@ import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
 import { useNow } from "../hooks/useNow.ts";
 import { submissionsApi } from "../services/api.ts";
+import { SUBMISSION_POLL_MS } from "../constants/polling.ts";
 import type { Submission } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import {
@@ -22,8 +23,7 @@ import {
 } from "../utils/formatting.ts";
 import styles from "./SubmissionDetail.module.css";
 
-const POLL_INTERVAL_MS = 1500;
-const DEFAULT_POLL_INTERVAL_MS = POLL_INTERVAL_MS;
+const DEFAULT_POLL_INTERVAL_MS = SUBMISSION_POLL_MS;
 
 function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollIntervalMs?: number }) {
   const { id } = useParams<{ id: string }>();
@@ -103,6 +103,25 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
     submission?.status === "pending" || submission?.status === "processing";
   const now = useNow(inProgress);
 
+  // Elapsed time measures from when evaluation actually began once the row is
+  // processing (started_at), falling back to creation while still queued.
+  const elapsedFrom =
+    submission?.status === "processing" && submission?.started_at
+      ? submission.started_at
+      : submission?.created_at ?? "";
+
+  // Human-readable phase label while processing ("generating" = LLM call in
+  // flight, "testing" = code generated, tests running). Rows without a phase
+  // (legacy data / PATCHed states) fall back to the generic wording.
+  const phaseLabel =
+    submission?.status === "processing"
+      ? submission.phase === "generating"
+        ? "Generating code…"
+        : submission.phase === "testing"
+          ? "Running tests…"
+          : "Running your evaluation…"
+      : null;
+
   if (loading) {
     return (
       <div role="status" aria-label="Loading submission">
@@ -143,15 +162,20 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
           <p className={styles.progressText}>
             {submission.status === "pending"
               ? "Waiting in the evaluation queue…"
-              : "Running your evaluation…"}
+              : (phaseLabel ?? "Running your evaluation…")}
           </p>
           <p className={styles.estimate}>
-            Elapsed: <strong>{formatElapsed(submission.created_at, now)}</strong>
+            Elapsed: <strong>{formatElapsed(elapsedFrom, now)}</strong>
             {" · "}Most evaluations finish in{" "}
             {evaluationEstimate(submission.language)}. The page refreshes
             automatically.
           </p>
-          {isDelayed(submission.created_at, now) &&
+          {isDelayed(
+            submission.status === "processing" && submission.started_at
+              ? submission.started_at
+              : submission.created_at,
+            now,
+          ) &&
             (submission.status === "pending" &&
             isSeverelyDelayed(submission.created_at, now) ? (
               <p role="status" className={styles.delayed}>
@@ -167,8 +191,10 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
               </p>
             ))}
           <p className={styles.muted}>
-            Queued at {new Date(submission.created_at).toLocaleString()} ·
-            provider: <code>{submission.provider ?? "demo"}</code>
+            Queued at {new Date(submission.created_at).toLocaleString()}
+            {submission.started_at &&
+              ` · started at ${new Date(submission.started_at).toLocaleTimeString()}`}
+            {" · "}provider: <code>{submission.provider ?? "demo"}</code>
           </p>
         </Card>
       ) : result ? (

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChallengeDetail from "../ChallengeDetail.tsx";
@@ -243,6 +243,47 @@ describe("ChallengeDetail", () => {
         provider: "demo",
       });
     });
+  });
+
+  it("gives up a provider that never produces a result past the severe-delay window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+    // The leaderboard never advances for demo → the run is effectively lost.
+    mockSubmissionsComparison.mockResolvedValue({
+      challenge_id: "c1",
+      entries: [],
+    } as never);
+
+    renderPage();
+    // Mount effects resolve on microtasks — flush them; findBy*/waitFor must
+    // be avoided here because they wait on real timers, which are mocked.
+    await act(async () => {});
+    await act(async () => {});
+    expect(screen.getByRole("heading", { name: "Two Sum" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run" })[0]);
+    await act(async () => {});
+    expect(mockSubmissionsCreate).toHaveBeenCalledWith({
+      challenge_id: "c1",
+      provider: "demo",
+    });
+    // Enter the running state — an in-flight counter + Running badge render.
+    await act(async () => {});
+    expect(screen.getByText("Running…")).toBeInTheDocument();
+
+    // Advance past the severe-delay window; the poll loop drops the provider
+    // and terminates instead of polling forever.
+    await vi.advanceTimersByTimeAsync(10 * 60_000 + 2_000);
+    expect(screen.getByText("No result")).toBeInTheDocument();
+    expect(screen.getByText(/Took too long/)).toBeInTheDocument();
+
+    const callsAtGiveUp = mockSubmissionsComparison.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(30_000);
+    // Polling has stopped — no further comparison fetches despite big advance.
+    expect(screen.getByText("No result")).toBeInTheDocument();
+    expect(mockSubmissionsComparison.mock.calls.length).toBe(callsAtGiveUp);
+    vi.useRealTimers();
   });
 
   it("requires an API key when running a keyed provider from the panel", async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
@@ -8,10 +8,18 @@ import ConfirmDialog from "../components/ConfirmDialog/ConfirmDialog.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../services/api.ts";
+import { COMPARE_POLL_MS } from "../constants/polling.ts";
+import { useNow } from "../hooks/useNow.ts";
 import type { Challenge, ProviderComparisonEntry } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
-import { formatDurationMs, scoreVariant } from "../utils/formatting.ts";
+import {
+  formatDurationMs,
+  formatElapsedMs,
+  scoreVariant,
+  SEVERE_DELAY_AFTER_MS,
+  STALE_AFTER_MS,
+} from "../utils/formatting.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import styles from "./ChallengeDetail.module.css";
 
@@ -38,8 +46,6 @@ const PROVIDERS = [
   },
 ];
 
-const COMPARE_POLL_MS = 1500;
-
 function ChallengeDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -61,6 +67,13 @@ function ChallengeDetail() {
   // provider → run count observed at submit time; cleared once a newer run
   // shows up in the comparison (meaning the new evaluation completed).
   const [runningMap, setRunningMap] = useState<Record<string, number>>({});
+  // provider → wall-clock ms when its run was submitted (ref: read from the
+  // poll loop without re-running effects or capturing stale closures).
+  const runningSinceRef = useRef<Record<string, number>>({});
+  // Providers whose run never produced a result and exceeded the severe-delay
+  // window — they are dropped from runningMap so the poll terminates and the
+  // card shows a "no result" state instead of spinning forever.
+  const [gaveUpMap, setGaveUpMap] = useState<Record<string, boolean>>({});
   // Optional API keys entered directly in the comparison panel.
   const [runnerKeys, setRunnerKeys] = useState<Record<string, string>>({});
 
@@ -86,12 +99,25 @@ function ChallengeDetail() {
         setComparison(data.entries);
         setComparisonError(null);
 
-        // Drop providers whose run count advanced since we submitted.
+        // Drop providers whose run count advanced since we submitted. Any
+        // provider still in flight beyond the severe-delay window has almost
+        // certainly failed (the worker auto-fails stale rows server-side) —
+        // mark it as such and stop polling it so the leaderboard can't poll
+        // forever on a silently lost evaluation.
+        const pastSevereDelay = Date.now() - SEVERE_DELAY_AFTER_MS;
         const next: Record<string, number> = {};
         for (const provider of Object.keys(runningMap)) {
           const entry = data.entries.find((e) => e.provider === provider);
           if (!entry || entry.runs <= runningMap[provider]) {
+            const sinceMs = runningSinceRef.current[provider];
+            if (sinceMs !== undefined && sinceMs < pastSevereDelay) {
+              setGaveUpMap((prev) => ({ ...prev, [provider]: true }));
+              delete runningSinceRef.current[provider];
+              continue;
+            }
             next[provider] = runningMap[provider];
+          } else {
+            delete runningSinceRef.current[provider];
           }
         }
         setRunningMap(next);
@@ -115,6 +141,10 @@ function ChallengeDetail() {
     // Poll cadence is driven by runningMap; re-scheduling on every runningMap
     // change could double-poll, so refresh only when its non-empty state flips.
   }, [user, challenge?.id, runningCount > 0]);
+
+  // Tick elapsed time while any provider run is in flight so the leaderboard
+  // can show a live "running for 42s" counter + stuck warnings.
+  const nowMs = useNow(runningCount > 0);
 
   useEffect(() => {
     if (!id) {
@@ -211,6 +241,15 @@ function ChallengeDetail() {
         ...(key ? { api_key: key } : {}),
       });
       setRunningMap((prev) => ({ ...prev, [providerValue]: runsBefore }));
+      runningSinceRef.current[providerValue] = Date.now();
+      setGaveUpMap((prev) => {
+        if (!prev[providerValue]) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[providerValue];
+        return next;
+      });
       showToast(`${providerInfo?.name ?? providerValue} evaluation started.`, "success");
     } catch (err) {
       setComparisonError(extractError(err));
@@ -444,8 +483,14 @@ function ChallengeDetail() {
             {PROVIDERS.map((p) => {
               const entry = comparison?.find((e) => e.provider === p.value);
                 const running = Boolean(runningMap[p.value]);
+                const gaveUp = Boolean(gaveUpMap[p.value]);
                 const isBest =
                   entry != null && entry.runs > 0 && entry.score === bestScore;
+                const runningSince = runningSinceRef.current[p.value];
+                const runningElapsed =
+                  running && runningSince !== undefined
+                    ? formatElapsedMs(nowMs - runningSince)
+                    : null;
                 return (
                   <div
                     key={p.value}
@@ -457,10 +502,16 @@ function ChallengeDetail() {
                       <span className={styles.providerCardName}>{p.name}</span>
                       {isBest && <Badge variant="success">Best</Badge>}
                       {running && <Badge variant="primary">Running…</Badge>}
+                      {gaveUp && <Badge variant="danger">No result</Badge>}
                     </div>
                     <p className={styles.providerCardDesc}>{p.description}</p>
 
-                    {entry ? (
+                    {gaveUp ? (
+                      <p className={styles.noResultText}>
+                        Took too long — no result was produced. Re-run to try
+                        again.
+                      </p>
+                    ) : entry ? (
                       <div className={styles.providerCardStats}>
                         <span className={`${styles.providerScore} ${styles[`score${scoreVariant(entry.score)}`]}`}>
                           {entry.score}%
@@ -475,6 +526,15 @@ function ChallengeDetail() {
                       </div>
                     ) : (
                       <p className={styles.muted}>No runs yet.</p>
+                    )}
+
+                    {running && runningElapsed && (
+                      <p className={styles.runningMeta}>
+                        {runningElapsed}
+                        {runningSince !== undefined &&
+                          nowMs - runningSince > STALE_AFTER_MS &&
+                          " · taking longer than expected"}
+                      </p>
                     )}
 
                     {p.requiresKey && (

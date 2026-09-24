@@ -390,6 +390,46 @@ async def test_update_submission_status(db_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_update_submission_status_illegal_transition(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    submission = await create_submission(db_client, token, challenge["id"])
+
+    # pending → processing is legal…
+    response = await db_client.patch(
+        f"{SUBMISSIONS_URL}/{submission['id']}",
+        json={"status": "processing"},
+        headers=auth(token),
+    )
+    assert response.status_code == 200
+
+    # …but processing → pending and completed → processing are not.
+    response = await db_client.patch(
+        f"{SUBMISSIONS_URL}/{submission['id']}",
+        json={"status": "pending"},
+        headers=auth(token),
+    )
+    assert response.status_code == 409
+    assert "Illegal status transition" in response.json()["detail"]
+
+    response = await db_client.patch(
+        f"{SUBMISSIONS_URL}/{submission['id']}",
+        json={"status": "completed"},
+        headers=auth(token),
+    )
+    assert response.status_code == 200
+
+    response = await db_client.patch(
+        f"{SUBMISSIONS_URL}/{submission['id']}",
+        json={"status": "processing"},
+        headers=auth(token),
+    )
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_update_submission_status_invalid(db_client: AsyncClient) -> None:
     token, _ = await register_user(db_client)
     challenge = await create_challenge(db_client, token)

@@ -133,6 +133,11 @@ class SubmissionRead(BaseModel):
     user_id: UUID
     challenge_id: UUID
     status: str
+    #: Pipeline phase while processing: ``"generating"`` or ``"testing"``;
+    #: None when pending or terminal.
+    phase: str | None = None
+    #: When evaluation began (status → processing); None while queued.
+    started_at: datetime | None = None
     provider: str | None
     language: str | None
     code: str | None
