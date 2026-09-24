@@ -135,6 +135,7 @@ class TestRun:
             "--tb=short",
             "-p",
             "no:cacheprovider",
+            "-rA",
         ]
         assert kwargs["working_dir"] == "/code"
         assert kwargs["user"] == "nobody"

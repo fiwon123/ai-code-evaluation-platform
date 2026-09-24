@@ -36,6 +36,9 @@ class EvaluationOutcome:
     score: float = 0.0
     logs: str = ""
     metrics: dict[str, Any] = field(default_factory=dict)
+    #: Per-test-case breakdown: list of ``{name, passed, message}`` dicts.
+    #: Empty when the runner output carries no per-test detail.
+    test_results: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -50,6 +53,29 @@ class EvaluationOutcome:
 def parse_summary(output: str) -> tuple[int, int]:
     """Parse pytest's summary line into (passed, total) counts."""
     return parse_pytest(output)
+
+
+def parse_outcome(output: str, runner: LanguageRunner) -> EvaluationOutcome:
+    """Reduce runner logs to an :class:`EvaluationOutcome`.
+
+    Uses the runner's detail parser when available (it also yields the
+    per-test breakdown) and falls back to the aggregate counts otherwise.
+    Shared by the subprocess and Docker sandbox paths so both produce the
+    same metrics, score, and test_results.
+    """
+    if runner.parse_detail is not None:
+        passed, total, test_results = runner.parse_detail(output)
+    else:
+        passed, total = runner.parse(output)
+        test_results = []
+    score = round((passed / total) * 100, 1) if total else 0.0
+    return EvaluationOutcome(
+        passed=passed,
+        total=total,
+        score=score,
+        logs=output,
+        test_results=test_results,
+    )
 
 
 def run_tests(
@@ -185,17 +211,10 @@ def _evaluate_code_subprocess(
         shutil.rmtree(workdir, ignore_errors=True)
 
     output = result.stdout + result.stderr
-    passed, total = runner.parse(output)
-    score = round((passed / total) * 100, 1) if total else 0.0
-
-    return EvaluationOutcome(
-        passed=passed,
-        total=total,
-        score=score,
-        logs=output,
-        metrics={
-            "language": runner.language,
-            "returncode": result.returncode,
-            "duration_ms": int((time.monotonic() - started) * 1000),
-        },
-    )
+    outcome = parse_outcome(output, runner)
+    outcome.metrics = {
+        "language": runner.language,
+        "returncode": result.returncode,
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
+    return outcome

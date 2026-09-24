@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from app.config import settings
-from app.services.evaluation import EvaluationOutcome
+from app.services.evaluation import EvaluationOutcome, parse_outcome
 from app.services.language_runner import LanguageRunner, get_runner
 
 if TYPE_CHECKING:
@@ -201,19 +201,12 @@ class DockerSandbox:
                 },
             )
 
-        passed, total = runner.parse(output)
-        score = round((passed / total) * 100, 1) if total else 0.0
-
-        return EvaluationOutcome(
-            passed=passed,
-            total=total,
-            score=score,
-            logs=output,
-            metrics={
-                "backend": "docker",
-                "language": runner.language,
-                "returncode": returncode,
-                "duration_ms": elapsed_ms,
-                "image": self.image,
-            },
-        )
+        outcome = parse_outcome(output, runner)
+        outcome.metrics = {
+            "backend": "docker",
+            "language": runner.language,
+            "returncode": returncode,
+            "duration_ms": elapsed_ms,
+            "image": self.image,
+        }
+        return outcome
