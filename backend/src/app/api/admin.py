@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,7 +15,15 @@ from app.models.user import User
 from app.schemas.challenge import ChallengeRead
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.submission import SubmissionRead
-from app.schemas.user import AdminUserUpdate, PlatformStats, UserRead
+from app.schemas.user import (
+    AdminUserUpdate,
+    DailySubmissionStat,
+    LanguageStat,
+    PlatformStats,
+    StatusCount,
+    TopChallengeStat,
+    UserRead,
+)
 
 router = APIRouter()
 
@@ -196,9 +205,7 @@ async def platform_stats(
     challenges_result = await db.execute(select(func.count()).select_from(Challenge))
     submissions_result = await db.execute(select(func.count()).select_from(Submission))
     completed_result = await db.execute(
-        select(func.count())
-        .select_from(Submission)
-        .where(Submission.status == "completed")
+        select(func.count()).select_from(Submission).where(Submission.status == "completed")
     )
     failed_result = await db.execute(
         select(func.count()).select_from(Submission).where(Submission.status == "failed")
@@ -212,6 +219,91 @@ async def platform_stats(
         select(func.avg(Submission.score)).where(Submission.status == "completed")
     )
 
+    # --- Breakdown groups (chart data for the dashboard) ---------------------
+    # Counts per status (all six SubmissionStatus values, zero-filled).
+    status_rows = (
+        await db.execute(
+            select(Submission.status, func.count())
+            .group_by(Submission.status)
+            .where(Submission.status.is_not(None))
+        )
+    ).all()
+    status_counts = {row[0]: row[1] for row in status_rows}
+    submissions_by_status = [
+        StatusCount(status=s, count=status_counts.get(s, 0))
+        for s in ("pending", "processing", "completed", "failed")
+    ]
+
+    # Per-language aggregates (null language groups under "").
+    lang_rows = (
+        await db.execute(
+            select(
+                func.coalesce(Submission.language, ""),
+                func.count(),
+                func.avg(Submission.score).filter(Submission.status == "completed"),
+            )
+            .group_by(Submission.language)
+            .order_by(func.count().desc())
+        )
+    ).all()
+    submissions_by_language = [
+        LanguageStat(
+            language=row[0] or "unknown",
+            count=row[1],
+            avg_score=row[2],
+        )
+        for row in lang_rows
+    ]
+
+    # Top challenges by run count, with their average completed score.
+    top_rows = (
+        await db.execute(
+            select(
+                Submission.challenge_id,
+                Challenge.title,
+                func.count().label("runs"),
+                func.avg(Submission.score).filter(Submission.status == "completed"),
+            )
+            .join(Challenge, Challenge.id == Submission.challenge_id)
+            .group_by(Submission.challenge_id, Challenge.title)
+            .order_by(func.count().desc(), Challenge.title)
+            .limit(5)
+        )
+    ).all()
+    top_challenges = [
+        TopChallengeStat(
+            challenge_id=row[0],
+            title=row[1],
+            runs=row[2],
+            avg_score=row[3],
+        )
+        for row in top_rows
+    ]
+
+    # Activity for the last 14 calendar days (UTC), bucketed in Python so the
+    # query stays portable across Postgres and sqlite (no date_trunc).
+    since = (datetime.now(UTC) - timedelta(days=13)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    recent_rows = (
+        await db.execute(
+            select(Submission.created_at)
+            .where(Submission.created_at >= since)
+            .order_by(Submission.created_at)
+        )
+    ).scalars()
+    daily_counts: dict[str, int] = {}
+    for created_at in recent_rows:
+        day = created_at.astimezone(UTC).date().isoformat() if created_at else None
+        if day:
+            daily_counts[day] = daily_counts.get(day, 0) + 1
+    submissions_last_14_days: list[DailySubmissionStat] = []
+    for offset in range(14):
+        day = (since + timedelta(days=offset)).date().isoformat()
+        submissions_last_14_days.append(
+            DailySubmissionStat(date=day, count=daily_counts.get(day, 0))
+        )
+
     return PlatformStats(
         total_users=users_result.scalar_one(),
         total_challenges=challenges_result.scalar_one(),
@@ -220,4 +312,8 @@ async def platform_stats(
         failed_submissions=failed_result.scalar_one(),
         pending_submissions=pending_result.scalar_one(),
         average_score=avg_result.scalar_one(),
+        submissions_by_status=submissions_by_status,
+        submissions_by_language=submissions_by_language,
+        top_challenges=top_challenges,
+        submissions_last_14_days=submissions_last_14_days,
     )
