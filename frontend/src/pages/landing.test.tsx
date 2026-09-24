@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import About from "./About/About.tsx";
 import Demo from "./Demo/Demo.tsx";
 import Features from "./Features/Features.tsx";
+import Home from "./Home/Home.tsx";
 import Pricing from "./Pricing/Pricing.tsx";
 
 vi.mock("../services/api.ts", () => ({
@@ -88,5 +89,22 @@ describe("landing pages", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/open-source platform/i)).toBeInTheDocument();
     expect(screen.getByText("FastAPI")).toBeInTheDocument();
+  });
+
+
+  it("renders the Home hero with the animated sample report", () => {
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole("img", { name: "Sample score 88 / 100" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Sample evaluation report"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("✓ two_sum_basic")).toBeInTheDocument();
+    expect(screen.getByText("✗ two_sum_unsorted")).toBeInTheDocument();
   });
 });

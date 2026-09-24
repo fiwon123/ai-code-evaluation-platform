@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Demo from "./Demo.tsx";
+import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
 
@@ -26,7 +27,15 @@ vi.mock("../../services/api.ts", () => ({
     }
   },
 }));
+vi.mock("../../hooks/useSubmissionSocket.ts", () => ({
+  useSubmissionSocket: vi.fn(() => ({
+    liveSubmission: null,
+    state: "closed",
+  })),
+}));
 
+
+const mockUseSubmissionSocket = vi.mocked(useSubmissionSocket);
 const mockUseAuth = vi.mocked(useAuth);
 const mockList = vi.mocked(challengesApi.list);
 const mockCreate = vi.mocked(submissionsApi.create);
@@ -114,6 +123,10 @@ describe("Demo page preview", () => {
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
+    });
+    mockUseSubmissionSocket.mockReturnValue({
+      liveSubmission: null,
+      state: "closed",
     });
     mockList.mockResolvedValue({
       items: [pythonChallenge, goChallenge, jsChallenge],
@@ -304,5 +317,97 @@ afterEach(() => {
     expect(
       error.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it("shows the live pipeline phase and elapsed time while generating", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
+    mockUseSubmissionSocket.mockReturnValue({
+      liveSubmission: {
+        id: "s1",
+        challenge_id: "py1",
+        status: "processing",
+        phase: "testing",
+        provider: "demo",
+        code: null,
+        score: null,
+        evaluation_result: null,
+        started_at: "2026-01-01T00:00:05Z",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:10Z",
+      },
+      state: "open",
+    } as never);
+    mockCreate.mockResolvedValue({
+      id: "s1",
+      challenge_id: "py1",
+      status: "processing",
+      phase: "testing",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      started_at: "2026-01-01T00:00:05Z",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:10Z",
+    } as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    expect(
+      await screen.findByText(/Running tests….*elapsed/, { selector: "[role=status]" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows per-test breakdown rows and the language runner chip after completion", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
+    mockCreate.mockResolvedValue({
+      id: "s1",
+      challenge_id: "py1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    } as never);
+    mockGet.mockResolvedValue({
+      id: "s1",
+      challenge_id: "py1",
+      status: "completed",
+      provider: "demo",
+      code: "def two_sum(nums, target):\n  pass",
+      score: 88,
+      evaluation_result: {
+        score: 88,
+        passed_tests: 2,
+        total_tests: 3,
+        test_results: [
+          { name: "test_two_sum_basic", passed: true },
+          { name: "test_two_sum_duplicates", passed: true },
+          { name: "test_two_sum_unsorted", passed: false, message: "expected [0,1]" },
+        ],
+      },
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:10Z",
+    } as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    expect(
+      await screen.findByRole("img", { name: "Score 88 / 100" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Per-test breakdown" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("test_two_sum_basic")).toBeInTheDocument();
+    expect(screen.getByText("test_two_sum_unsorted")).toBeInTheDocument();
+    expect(screen.getByText(/runs with/)).toBeInTheDocument();
   });
 });

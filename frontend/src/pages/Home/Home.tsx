@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import styles from "./Home.module.css";
 
 const FEATURES = [
@@ -74,6 +75,19 @@ function Home() {
               Get started free
             </Button>
           </Link>
+        </div>
+
+        {/* Animated sample report — the evaluation outcome at a glance */}
+        <div
+          className={styles.sampleReport}
+          aria-label="Sample evaluation report"
+        >
+          <ScoreRing value={88} label="Sample score" />
+          <ul className={styles.sampleTests} aria-hidden="true">
+            <li className={styles.sampleTestPass}>✓ two_sum_basic</li>
+            <li className={styles.sampleTestPass}>✓ two_sum_duplicates</li>
+            <li className={styles.sampleTestFail}>✗ two_sum_unsorted</li>
+          </ul>
         </div>
 
         {/* Animated pipeline */}
