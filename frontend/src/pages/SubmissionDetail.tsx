@@ -18,6 +18,7 @@ import {
   formatDurationMs,
   formatElapsed,
   isDelayed,
+  isSeverelyDelayed,
   statusVariant,
 } from "../utils/formatting.ts";
 import styles from "./SubmissionDetail.module.css";
@@ -152,12 +153,21 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
             {evaluationEstimate(submission.language)}. The page refreshes
             automatically.
           </p>
-          {isDelayed(submission.created_at, now) && (
-            <p role="status" className={styles.delayed}>
-              This is taking longer than usual — the server may be busy.
-              Check back in a minute.
-            </p>
-          )}
+          {isDelayed(submission.created_at, now) &&
+            (submission.status === "pending" &&
+            isSeverelyDelayed(submission.created_at, now) ? (
+              <p role="status" className={styles.delayed}>
+                This evaluation has been waiting over 10 minutes and may never
+                start — the evaluation worker is likely offline. It will be
+                marked as failed automatically; you can re-submit from the
+                challenge page.
+              </p>
+            ) : (
+              <p role="status" className={styles.delayed}>
+                This is taking longer than usual — the server may be busy.
+                Check back in a minute.
+              </p>
+            ))}
           <p className={styles.muted}>
             Queued at {new Date(submission.created_at).toLocaleString()} ·
             provider: <code>{submission.provider ?? "demo"}</code>

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Profile from "../Profile/Profile.tsx";
@@ -189,9 +190,87 @@ describe("Profile", () => {
   it("shows a live waiting time on in-progress submissions", async () => {
     renderPage();
     await screen.findByText("alice");
-    // s3 has been pending since 2026-09-08, so it reads as hours + "delayed".
+    // s3 has been pending since 2026-09-08, so it reads as hours — and, being
+    // far past the 10-minute severe tier, it escalates to the "stuck" tag.
     expect(screen.getByText(/waiting \d+h/)).toBeInTheDocument();
+    expect(screen.getByText("stuck")).toBeInTheDocument();
+  });
+
+  it("escalates a pending submission stuck over 10 minutes to 'stuck'", async () => {
+    // s3 has been pending since 2026-09-08 — far past the 10-minute severe
+    // delay tier, so the list shows the dangerous "stuck" tag (mirroring the
+    // detail page's "may never start" warning) instead of the mild "delayed".
+    renderPage();
+    await screen.findByText("alice");
+    expect(screen.getByText("stuck")).toBeInTheDocument();
+    expect(screen.queryByText("delayed")).not.toBeInTheDocument();
+  });
+
+  it("keeps the mild 'delayed' tag for a pending submission under the severe tier", async () => {
+    mockSubmissionsList.mockResolvedValue({
+      items: [
+        ...submissions.filter((s) => s.id !== "s3"),
+        {
+          id: "s3",
+          challenge_id: "c1",
+          status: "pending",
+          provider: "demo",
+          code: null,
+          score: null,
+          evaluation_result: null,
+          // Pending since ~3 minutes ago: past the 2-min mild threshold, well
+          // under the 10-min severe threshold.
+          created_at: new Date(Date.now() - 3 * 60_000).toISOString(),
+        },
+      ],
+      total: 3,
+      page: 1,
+      page_size: 10,
+      pages: 1,
+    } as never);
+    renderPage();
+    await screen.findByText("alice");
+    expect(screen.getByText(/waiting \d+m/)).toBeInTheDocument();
     expect(screen.getByText("delayed")).toBeInTheDocument();
+    expect(screen.queryByText("stuck")).not.toBeInTheDocument();
+  });
+
+  it("polls the submissions list while a submission is still in progress", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = {
+        id: "s4",
+        challenge_id: "c1",
+        status: "pending",
+        provider: "demo",
+        code: null,
+        score: null,
+        evaluation_result: null,
+        created_at: new Date().toISOString(),
+      };
+      mockSubmissionsList.mockResolvedValue({
+        items: [pending],
+        total: 1,
+        page: 1,
+        page_size: 10,
+        pages: 1,
+      } as never);
+      renderPage();
+
+      // The mount effects (challenges/submissions load + first poll) resolve
+      // on microtasks. Flush them with act — findBy*/waitFor must be avoided
+      // here because they wait on real timers, which are mocked.
+      await act(async () => {});
+      await act(async () => {});
+      expect(screen.getByText("alice")).toBeInTheDocument();
+      const callsBefore = mockSubmissionsList.mock.calls.length;
+
+      // Advance past the 5s poll interval; the in-progress row keeps polling.
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(mockSubmissionsList.mock.calls.length).toBeGreaterThan(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("changes the password and clears the form on success", async () => {

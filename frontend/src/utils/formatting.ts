@@ -92,3 +92,21 @@ export const STALE_AFTER_MS = 120_000;
 export function isDelayed(iso: string, nowMs = Date.now()): boolean {
   return nowMs - Date.parse(iso) > STALE_AFTER_MS;
 }
+
+/**
+ * After this much time a *pending* submission is considered severely delayed:
+ * the backend's recovery sweep re-dispatches pending rows after "10 minutes
+ * stale" (PENDING_STALE_MINUTES) and abandons — marks failed — any row that
+ * never started within 60 minutes of creation (PENDING_MAX_MINUTES, the "kill
+ * switch"). So a row stuck this long means the worker/queue is likely down and
+ * the UI should escalate the message rather than keep saying "taking longer
+ * than usual". Mirrors the backend's 10-minute stale re-dispatch cadence
+ * (600_000 ms = 10 min), well before the 60-minute kill switch, so users get a
+ * heads-up before the auto-fail.
+ */
+export const SEVERE_DELAY_AFTER_MS = 600_000;
+
+/** True when more than SEVERE_DELAY_AFTER_MS have elapsed since an ISO timestamp. */
+export function isSeverelyDelayed(iso: string, nowMs = Date.now()): boolean {
+  return nowMs - Date.parse(iso) > SEVERE_DELAY_AFTER_MS;
+}
