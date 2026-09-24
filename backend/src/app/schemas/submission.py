@@ -71,6 +71,36 @@ class ProviderComparisonRead(BaseModel):
     entries: list[ProviderComparisonEntry]
 
 
+class ShareResultRead(BaseModel):
+    """Share token for a completed evaluation report."""
+
+    share_token: str
+
+
+class SharedResultRead(BaseModel):
+    """Public, unauthenticated view of a shared evaluation report.
+
+    Includes just enough challenge context for a viewer to understand what
+    was evaluated, plus the full report (code, tests, metrics). Never
+    includes the sharing user's identity or the raw submission record.
+    """
+
+    challenge_id: UUID
+    challenge_title: str
+    challenge_prompt: str
+    language: str
+    provider: str
+    status: str
+    created_at: datetime
+    code: str | None
+    score: float
+    passed_tests: int
+    total_tests: int
+    logs: str
+    metrics: dict[str, Any]
+    test_results: list[dict[str, Any]] | None = None
+
+
 class SubmissionRead(BaseModel):
     """Submission representation with optional nested evaluation result."""
 

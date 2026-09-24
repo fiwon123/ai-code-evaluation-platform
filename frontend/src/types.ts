@@ -131,6 +131,33 @@ export interface SubmissionListParams {
   provider?: string;
 }
 
+/** Share token for a completed evaluation report. */
+export interface ShareResult {
+  share_token: string;
+}
+
+/** Public view of a shared report (no auth required to fetch). */
+export interface SharedResult {
+  challenge_id: string;
+  challenge_title: string;
+  challenge_prompt: string;
+  language: string;
+  provider: string;
+  status: SubmissionStatus;
+  created_at: string;
+  code: string | null;
+  score: number;
+  passed_tests: number;
+  total_tests: number;
+  logs: string;
+  metrics: Record<string, unknown>;
+  test_results?: Array<{
+    name: string;
+    passed: boolean;
+    message?: string | null;
+  }> | null;
+}
+
 export interface AdminUserUpdate {
   is_admin?: boolean;
   is_active?: boolean;

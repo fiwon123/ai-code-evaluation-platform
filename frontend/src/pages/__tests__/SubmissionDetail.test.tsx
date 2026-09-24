@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubmissionDetail from "../SubmissionDetail.tsx";
@@ -374,5 +374,141 @@ describe("SubmissionDetail", () => {
     renderPage();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Submission not found");
+  });
+
+  it("shares a completed report and shows the public link", async () => {
+    const completed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "completed",
+      provider: "demo",
+      code: "x = 1",
+      score: 100,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 1,
+        total_tests: 1,
+        score: 100,
+        logs: "1 passed",
+        metrics: {},
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ share_token: "share-token-123" }), { status: 200 }),
+      );
+
+    renderPage(60_000);
+
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Share result" }));
+
+    const input = await screen.findByLabelText("Shareable result URL");
+    expect(input).toHaveValue("http://localhost:3000/results/share-token-123");
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+
+    // The share Copy button is the input's sibling (CodeBlock has its own).
+    fireEvent.click(input.nextElementSibling as HTMLElement);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      "http://localhost:3000/results/share-token-123",
+    );
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+
+    const shareCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(shareCall?.[0]).toBe("http://localhost:8000/api/submissions/s1/share");
+  });
+
+  it("revokes a shared link", async () => {
+    const completed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "completed",
+      provider: "demo",
+      code: "x = 1",
+      score: 100,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 1,
+        total_tests: 1,
+        score: 100,
+        logs: "1 passed",
+        metrics: {},
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(completed), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ share_token: "share-token-123" }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    renderPage(60_000);
+
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Share result" }));
+    await screen.findByLabelText("Shareable result URL");
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Shareable result URL")).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Share result" })).toBeInTheDocument();
+    const revokeCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "DELETE",
+    );
+    expect(revokeCall?.[0]).toBe("http://localhost:8000/api/submissions/s1/share");
+  });
+
+  it("surfaces sharing errors", async () => {
+    const completed = {
+      id: "s1",
+      challenge_id: "c1",
+      status: "completed",
+      provider: "demo",
+      code: "x = 1",
+      score: 100,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 1,
+        total_tests: 1,
+        score: 100,
+        logs: "1 passed",
+        metrics: {},
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(completed), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "Sharing is unavailable" }), {
+          status: 500,
+        }),
+      );
+
+    renderPage(60_000);
+
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Share result" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sharing is unavailable",
+    );
   });
 });

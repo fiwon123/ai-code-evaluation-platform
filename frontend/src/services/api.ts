@@ -12,6 +12,8 @@ import type {
   PlatformStats,
   ProviderComparison,
   RegisterPayload,
+  ShareResult,
+  SharedResult,
   Submission,
   SubmissionCreatePayload,
   SubmissionListParams,
@@ -237,6 +239,13 @@ export const submissionsApi = {
     api.get<ProviderComparison>(
       `/api/submissions/comparison?challenge_id=${encodeURIComponent(challengeId)}`,
     ),
+  share: (id: string) => api.post<ShareResult>(`/api/submissions/${id}/share`),
+  revokeShare: (id: string) => api.del(`/api/submissions/${id}/share`),
+};
+
+export const resultsApi = {
+  getByToken: (token: string) =>
+    api.get<SharedResult>(`/api/results/${encodeURIComponent(token)}`),
 };
 
 export const adminApi = {
