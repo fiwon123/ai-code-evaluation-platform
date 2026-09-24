@@ -76,6 +76,13 @@ export interface EvaluationResult {
   score: number;
   logs: string;
   metrics: Record<string, unknown>;
+  /** Per-test-case breakdown: `[{name, passed, message}]`; absent for
+   *  runners/results that carry no per-test detail. */
+  test_results?: Array<{
+    name: string;
+    passed: boolean;
+    message?: string | null;
+  }> | null;
   created_at: string;
 }
 

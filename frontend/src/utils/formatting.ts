@@ -110,3 +110,46 @@ export const SEVERE_DELAY_AFTER_MS = 600_000;
 export function isSeverelyDelayed(iso: string, nowMs = Date.now()): boolean {
   return nowMs - Date.parse(iso) > SEVERE_DELAY_AFTER_MS;
 }
+
+/** Score buckets drive the report's ring/badge color. */
+export type ScoreVariant = "success" | "warning" | "danger";
+
+/**
+ * Map an evaluation score (0–100) to a color variant:
+ * ≥80 success (green), 60–79 warning (amber), <60 danger (red).
+ */
+export function scoreVariant(score: number): ScoreVariant {
+  if (score >= 80) {
+    return "success";
+  }
+  if (score >= 60) {
+    return "warning";
+  }
+  return "danger";
+}
+
+const METRIC_LABELS: Record<string, string> = {
+  backend: "Backend",
+  duration_ms: "Duration (ms)",
+  image: "Image",
+  language: "Language",
+  returncode: "Return code",
+  error: "Error",
+};
+
+/**
+ * Turn a raw metric key into a readable label: known keys get a curated
+ * label, anything else falls back to sentence case (`llm_latency_ms` →
+ * "Llm Latency Ms" — pass a nicer key in `METRIC_LABELS` for polish).
+ */
+export function humanizeMetricKey(key: string): string {
+  const label = METRIC_LABELS[key];
+  if (label) {
+    return label;
+  }
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}

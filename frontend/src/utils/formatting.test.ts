@@ -4,8 +4,10 @@ import {
   formatElapsed,
   formatElapsedMs,
   formatRelativeTime,
+  humanizeMetricKey,
   isDelayed,
   isSeverelyDelayed,
+  scoreVariant,
   statusVariant,
   STALE_AFTER_MS,
   SEVERE_DELAY_AFTER_MS,
@@ -110,5 +112,39 @@ describe("isSeverelyDelayed / SEVERE_DELAY_AFTER_MS", () => {
 describe("formatRelativeTime", () => {
   it("formats recent times as just now", () => {
     expect(formatRelativeTime(new Date().toISOString())).toBe("just now");
+  });
+});
+
+describe("scoreVariant", () => {
+  it("returns success at 80 and above", () => {
+    expect(scoreVariant(100)).toBe("success");
+    expect(scoreVariant(80)).toBe("success");
+  });
+
+  it("returns warning between 60 and 79", () => {
+    expect(scoreVariant(79)).toBe("warning");
+    expect(scoreVariant(60)).toBe("warning");
+  });
+
+  it("returns danger below 60", () => {
+    expect(scoreVariant(59)).toBe("danger");
+    expect(scoreVariant(0)).toBe("danger");
+  });
+});
+
+describe("humanizeMetricKey", () => {
+  it("uses curated labels for known keys", () => {
+    expect(humanizeMetricKey("duration_ms")).toBe("Duration (ms)");
+    expect(humanizeMetricKey("returncode")).toBe("Return code");
+    expect(humanizeMetricKey("language")).toBe("Language");
+    expect(humanizeMetricKey("backend")).toBe("Backend");
+  });
+
+  it("falls back to sentence case for unknown keys", () => {
+    expect(humanizeMetricKey("llm_latency_ms")).toBe("Llm Latency Ms");
+  });
+
+  it("handles empty keys", () => {
+    expect(humanizeMetricKey("")).toBe("");
   });
 });
