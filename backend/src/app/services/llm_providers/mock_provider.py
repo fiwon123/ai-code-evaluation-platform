@@ -21,6 +21,8 @@ _PY_SOLUTIONS: dict[str, str] = {
     ),
     "fizzbuzz": (
         "def fizzbuzz(n):\n"
+        "    if n <= 0:\n"
+        "        return []\n"
         "    result = []\n"
         "    for i in range(1, n + 1):\n"
         "        if i % 15 == 0:\n"
@@ -32,6 +34,30 @@ _PY_SOLUTIONS: dict[str, str] = {
         "        else:\n"
         "            result.append(str(i))\n"
         "    return result\n"
+    ),
+    "valid_parentheses": (
+        "def valid_parentheses(s):\n"
+        "    pairs = {')': '(', ']': '[', '}': '{'}\n"
+        "    stack = []\n"
+        "    for ch in s:\n"
+        "        if ch in pairs:\n"
+        "            if not stack or stack.pop() != pairs[ch]:\n"
+        "                return False\n"
+        "        elif ch in '([{':\n"
+        "            stack.append(ch)\n"
+        "    return not stack\n"
+    ),
+    "longest_common_prefix": (
+        "def longest_common_prefix(strs):\n"
+        "    if not strs:\n"
+        "        return ''\n"
+        "    prefix = strs[0]\n"
+        "    for s in strs[1:]:\n"
+        "        while not s.startswith(prefix):\n"
+        "            prefix = prefix[:-1]\n"
+        "            if not prefix:\n"
+        "                return ''\n"
+        "    return prefix\n"
     ),
     "fibonacci": (
         "def fibonacci(n):\n"
@@ -89,6 +115,7 @@ _JS_SOLUTIONS: dict[str, str] = {
     ),
     "fizzbuzz": (
         "function fizzBuzz(n) {\n"
+        "  if (n <= 0) return [];\n"
         "  const result = [];\n"
         "  for (let i = 1; i <= n; i++) {\n"
         "    if (i % 15 === 0) result.push('FizzBuzz');\n"
@@ -99,6 +126,35 @@ _JS_SOLUTIONS: dict[str, str] = {
         "  return result;\n"
         "}\n"
         "module.exports = { fizzBuzz };\n"
+    ),
+    "valid_parentheses": (
+        "function validParentheses(s) {\n"
+        "  const pairs = { ')': '(', ']': '[', '}': '{' };\n"
+        "  const stack = [];\n"
+        "  for (const ch of s) {\n"
+        "    if (pairs[ch]) {\n"
+        "      if (stack.pop() !== pairs[ch]) return false;\n"
+        "    } else if (ch === '(' || ch === '[' || ch === '{') {\n"
+        "      stack.push(ch);\n"
+        "    }\n"
+        "  }\n"
+        "  return stack.length === 0;\n"
+        "}\n"
+        "module.exports = { validParentheses };\n"
+    ),
+    "longest_common_prefix": (
+        "function longestCommonPrefix(strs) {\n"
+        "  if (strs.length === 0) return '';\n"
+        "  let prefix = strs[0];\n"
+        "  for (let i = 1; i < strs.length; i++) {\n"
+        "    while (!strs[i].startsWith(prefix)) {\n"
+        "      prefix = prefix.slice(0, -1);\n"
+        "      if (prefix === '') return '';\n"
+        "    }\n"
+        "  }\n"
+        "  return prefix;\n"
+        "}\n"
+        "module.exports = { longestCommonPrefix };\n"
     ),
     "fibonacci": (
         "function fibonacci(n) {\n"
@@ -176,6 +232,7 @@ _TS_SOLUTIONS: dict[str, str] = {
     ),
     "fizzbuzz": (
         "export function fizzBuzz(n: number): string[] {\n"
+        "  if (n <= 0) return [];\n"
         "  const result: string[] = [];\n"
         "  for (let i = 1; i <= n; i++) {\n"
         "    if (i % 15 === 0) result.push('FizzBuzz');\n"
@@ -184,6 +241,33 @@ _TS_SOLUTIONS: dict[str, str] = {
         "    else result.push(String(i));\n"
         "  }\n"
         "  return result;\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "export function validParentheses(s: string): boolean {\n"
+        "  const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };\n"
+        "  const stack: string[] = [];\n"
+        "  for (const ch of s) {\n"
+        "    if (pairs[ch]) {\n"
+        "      if (stack.pop() !== pairs[ch]) return false;\n"
+        "    } else if (ch === '(' || ch === '[' || ch === '{') {\n"
+        "      stack.push(ch);\n"
+        "    }\n"
+        "  }\n"
+        "  return stack.length === 0;\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "export function longestCommonPrefix(strs: string[]): string {\n"
+        "  if (strs.length === 0) return '';\n"
+        "  let prefix = strs[0];\n"
+        "  for (let i = 1; i < strs.length; i++) {\n"
+        "    while (!strs[i].startsWith(prefix)) {\n"
+        "      prefix = prefix.slice(0, -1);\n"
+        "      if (prefix === '') return '';\n"
+        "    }\n"
+        "  }\n"
+        "  return prefix;\n"
         "}\n"
     ),
     "fibonacci": (
@@ -262,6 +346,7 @@ _JAVA_SOLUTIONS: dict[str, str] = {
         "public class Solution {\n"
         "    public static List<String> fizzBuzz(int n) {\n"
         "        List<String> result = new ArrayList<>();\n"
+        "        if (n <= 0) return result;\n"
         "        for (int i = 1; i <= n; i++) {\n"
         '            if (i % 15 == 0) result.add("FizzBuzz");\n'
         '            else if (i % 3 == 0) result.add("Fizz");\n'
@@ -269,6 +354,52 @@ _JAVA_SOLUTIONS: dict[str, str] = {
         "            else result.add(String.valueOf(i));\n"
         "        }\n"
         "        return result;\n"
+        "    }\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "import java.util.ArrayDeque;\n"
+        "import java.util.Deque;\n"
+        "\n"
+        "public class Solution {\n"
+        "    public static boolean validParentheses(String s) {\n"
+        "        Deque<Character> stack = new ArrayDeque<>();\n"
+        "        for (char ch : s.toCharArray()) {\n"
+        "            switch (ch) {\n"
+        "                case '(':\n"
+        "                case '[':\n"
+        "                case '{':\n"
+        "                    stack.push(ch);\n"
+        "                    break;\n"
+        "                case ')':\n"
+        "                    if (stack.isEmpty() || stack.pop() != '(') return false;\n"
+        "                    break;\n"
+        "                case ']':\n"
+        "                    if (stack.isEmpty() || stack.pop() != '[') return false;\n"
+        "                    break;\n"
+        "                case '}':\n"
+        "                    if (stack.isEmpty() || stack.pop() != '{') return false;\n"
+        "                    break;\n"
+        "                default:\n"
+        "                    break;\n"
+        "            }\n"
+        "        }\n"
+        "        return stack.isEmpty();\n"
+        "    }\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "public class Solution {\n"
+        "    public static String longestCommonPrefix(String[] strs) {\n"
+        "        if (strs.length == 0) return \"\";\n"
+        "        String prefix = strs[0];\n"
+        "        for (int i = 1; i < strs.length; i++) {\n"
+        "            while (!strs[i].startsWith(prefix)) {\n"
+        "                prefix = prefix.substring(0, prefix.length() - 1);\n"
+        "                if (prefix.isEmpty()) return \"\";\n"
+        "            }\n"
+        "        }\n"
+        "        return prefix;\n"
         "    }\n"
         "}\n"
     ),
@@ -382,6 +513,9 @@ _GO_SOLUTIONS: dict[str, str] = {
         "\n"
         "func FizzBuzz(n int) []string {\n"
         "    result := make([]string, 0, n)\n"
+        "    if n <= 0 {\n"
+        "        return result\n"
+        "    }\n"
         "    for i := 1; i <= n; i++ {\n"
         "        switch {\n"
         "        case i%15 == 0:\n"
@@ -395,6 +529,56 @@ _GO_SOLUTIONS: dict[str, str] = {
         "        }\n"
         "    }\n"
         "    return result\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "package main\n"
+        "\n"
+        "func ValidParentheses(s string) bool {\n"
+        "    stack := make([]byte, 0, len(s))\n"
+        "    for i := 0; i < len(s); i++ {\n"
+        "        switch s[i] {\n"
+        "        case '(', '[', '{':\n"
+        "            stack = append(stack, s[i])\n"
+        "        case ')':\n"
+        "            if len(stack) == 0 || stack[len(stack)-1] != '(' {\n"
+        "                return false\n"
+        "            }\n"
+        "            stack = stack[:len(stack)-1]\n"
+        "        case ']':\n"
+        "            if len(stack) == 0 || stack[len(stack)-1] != '[' {\n"
+        "                return false\n"
+        "            }\n"
+        "            stack = stack[:len(stack)-1]\n"
+        "        case '}':\n"
+        "            if len(stack) == 0 || stack[len(stack)-1] != '{' {\n"
+        "                return false\n"
+        "            }\n"
+        "            stack = stack[:len(stack)-1]\n"
+        "        }\n"
+        "    }\n"
+        "    return len(stack) == 0\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "package main\n"
+        "\n"
+        'import "strings"\n'
+        "\n"
+        "func LongestCommonPrefix(strs []string) string {\n"
+        "    if len(strs) == 0 {\n"
+        "        return \"\"\n"
+        "    }\n"
+        "    prefix := strs[0]\n"
+        "    for _, s := range strs[1:] {\n"
+        "        for !strings.HasPrefix(s, prefix) {\n"
+        "            prefix = prefix[:len(prefix)-1]\n"
+        "            if prefix == \"\" {\n"
+        "                return \"\"\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "    return prefix\n"
         "}\n"
     ),
     "fibonacci": (
@@ -574,6 +758,8 @@ _CAMEL_ALIASES: dict[str, str] = {
     "reversestring": "reverse",
     "isprime": "is_prime",
     "fizzbuzz": "fizzbuzz",
+    "validparentheses": "valid_parentheses",
+    "longestcommonprefix": "longest_common_prefix",
     "fibonacci": "fibonacci",
     "palindrome": "palindrome",
 }

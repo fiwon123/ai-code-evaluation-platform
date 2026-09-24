@@ -12,7 +12,11 @@ import {
   useFieldId,
 } from "../components/Input/Input.tsx";
 import { extractError } from "../utils/errors.ts";
-import { LANGUAGES, languageGuide } from "../utils/language.ts";
+import {
+  LANGUAGES,
+  examplesForLanguage,
+  languageGuide,
+} from "../utils/language.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 
 export default function CreateChallenge() {
@@ -28,11 +32,23 @@ export default function CreateChallenge() {
   const [submitting, setSubmitting] = useState(false);
 
   const guide = languageGuide(language);
+  const examples = examplesForLanguage(language);
   const titleId = useFieldId("title");
   const languageId = useFieldId("language");
   const descriptionId = useFieldId("description");
   const promptId = useFieldId("prompt");
   const testCodeId = useFieldId("test-code");
+  const exampleId = useFieldId("example");
+
+  function applyExample(index: number) {
+    const example = examples[index];
+    if (!example) {
+      return;
+    }
+    setTitle(example.title);
+    setPrompt(example.prompt);
+    setTestCode(example.testCode);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,6 +128,22 @@ export default function CreateChallenge() {
               placeholder="Given an array of integers, return the indices of the two numbers that add up to a target."
               rows={3}
             />
+          </Field>
+
+          <Field id={exampleId} label="Start from an example">
+            <div className={styles.examples}>
+              {examples.map((example, index) => (
+                <Button
+                  key={example.title}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => applyExample(index)}
+                >
+                  {example.title}
+                </Button>
+              ))}
+            </div>
           </Field>
 
           <Field
