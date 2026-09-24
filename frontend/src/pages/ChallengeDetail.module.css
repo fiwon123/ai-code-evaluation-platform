@@ -227,3 +227,106 @@
     position: static;
   }
 }
+/* --- provider comparison --- */
+
+.comparison {
+  margin-top: var(--space-6);
+}
+
+.comparisonHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.leaderboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.providerCard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.providerCard:hover {
+  border-color: var(--color-border-hover);
+}
+
+.providerRunning {
+  border-color: var(--color-primary, #2563eb);
+}
+
+.providerCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.providerCardName {
+  font-weight: 700;
+}
+
+.providerCardDesc {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.providerCardStats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.providerScore {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+}
+
+.scoreSuccess {
+  color: var(--color-success);
+}
+
+.scoreWarning {
+  color: var(--color-warning);
+}
+
+.scoreDanger {
+  color: var(--color-danger);
+}
+
+.providerStatLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.providerStatDetail {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.runnerKeyInput {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.runnerKeyInput:focus {
+  outline: none;
+  border-color: var(--color-primary, #2563eb);
+}

@@ -10,6 +10,7 @@ import type {
   LoginPayload,
   PaginatedResponse,
   PlatformStats,
+  ProviderComparison,
   RegisterPayload,
   Submission,
   SubmissionCreatePayload,
@@ -232,6 +233,10 @@ export const submissionsApi = {
       options,
     ),
   get: (id: string) => api.get<Submission>(`/api/submissions/${id}`),
+  comparison: (challengeId: string) =>
+    api.get<ProviderComparison>(
+      `/api/submissions/comparison?challenge_id=${encodeURIComponent(challengeId)}`,
+    ),
 };
 
 export const adminApi = {

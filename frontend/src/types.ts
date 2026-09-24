@@ -107,6 +107,22 @@ export interface SubmissionCreatePayload {
   api_key?: string;
 }
 
+/** Aggregated evaluation stats for one provider on a challenge. */
+export interface ProviderComparisonEntry {
+  provider: string;
+  runs: number;
+  score: number;
+  passed_tests: number;
+  total_tests: number;
+  duration_ms: number;
+  last_run_at: string;
+}
+
+export interface ProviderComparison {
+  challenge_id: string;
+  entries: ProviderComparisonEntry[];
+}
+
 export interface SubmissionListParams {
   page?: number;
   page_size?: number;
