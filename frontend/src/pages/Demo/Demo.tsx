@@ -346,8 +346,8 @@ function Demo() {
           {inProgress && (
             <Card className={styles.resultCard}>
               <p className={styles.progressText}>
-                ⏳ Generating code and running tests… this page updates
-                automatically.
+                ⏳ Generating code and running tests… usually takes 10–30
+                seconds. This page updates automatically.
               </p>
             </Card>
           )}

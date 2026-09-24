@@ -8,10 +8,17 @@ import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
+import { useNow } from "../../hooks/useNow.ts";
 import { authApi, challengesApi, submissionsApi } from "../../services/api.ts";
 import { extractError, extractFieldErrors } from "../../utils/errors.ts";
 import type { Challenge, Submission } from "../../types.ts";
-import { formatRelativeTime, statusVariant } from "../../utils/formatting.ts";
+import {
+  formatDurationMs,
+  formatElapsed,
+  formatRelativeTime,
+  isDelayed,
+  statusVariant,
+} from "../../utils/formatting.ts";
 import styles from "./Profile.module.css";
 
 const PAGE_SIZE = 10;
@@ -30,6 +37,12 @@ function Profile() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Live elapsed ticks only while at least one submission is still running.
+  const hasInProgress = submissions.some(
+    (s) => s.status === "pending" || s.status === "processing",
+  );
+  const now = useNow(hasInProgress);
 
   // Password change form
   const [currentPassword, setCurrentPassword] = useState("");
@@ -342,28 +355,54 @@ function Profile() {
           ) : (
             <>
               <div className={styles.submissionList}>
-                {submissions.map((submission) => (
-                  <Card key={submission.id} padding="compact" className={styles.submissionItem}>
-                    <Link
-                      to={`/submissions/${submission.id}`}
-                      className={styles.submissionLink}
+                {submissions.map((submission) => {
+                  const inProgress =
+                    submission.status === "pending" ||
+                    submission.status === "processing";
+                  const durationMs =
+                    submission.evaluation_result?.metrics.duration_ms;
+                  return (
+                    <Card
+                      key={submission.id}
+                      padding="compact"
+                      className={styles.submissionItem}
                     >
-                      <span className={styles.submissionTop}>
-                        <Badge variant={statusVariant(submission.status)}>
-                          {submission.status}
-                        </Badge>
-                        <span className={styles.metaDate}>
-                          {formatRelativeTime(submission.created_at)}
+                      <Link
+                        to={`/submissions/${submission.id}`}
+                        className={styles.submissionLink}
+                      >
+                        <span className={styles.submissionTop}>
+                          <Badge variant={statusVariant(submission.status)}>
+                            {submission.status}
+                          </Badge>
+                          {inProgress ? (
+                            <span className={styles.waitingText}>
+                              waiting {formatElapsed(submission.created_at, now)}
+                            </span>
+                          ) : (
+                            <span className={styles.metaDate}>
+                              {formatRelativeTime(submission.created_at)}
+                            </span>
+                          )}
+                          {inProgress && isDelayed(submission.created_at, now) && (
+                            <span className={styles.delayedTag}>delayed</span>
+                          )}
                         </span>
-                      </span>
-                      <span className={styles.submissionScore}>
-                        {submission.score !== null
-                          ? `${submission.score}%`
-                          : "—"}
-                      </span>
-                    </Link>
-                  </Card>
-                ))}
+                        <span className={styles.submissionScore}>
+                          {submission.score !== null
+                            ? `${submission.score}%`
+                            : "—"}
+                          {typeof durationMs === "number" && (
+                            <span className={styles.durationText}>
+                              {" "}
+                              · {formatDurationMs(durationMs)}
+                            </span>
+                          )}
+                        </span>
+                      </Link>
+                    </Card>
+                  );
+                })}
               </div>
               <Pagination
                 page={submissionPage}
