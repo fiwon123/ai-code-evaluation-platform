@@ -17,7 +17,7 @@ vi.mock("../../context/AuthContext.tsx", () => ({
 
 vi.mock("../../services/api.ts", () => ({
   challengesApi: { get: vi.fn(), remove: vi.fn() },
-  submissionsApi: { create: vi.fn() },
+  submissionsApi: { create: vi.fn(), comparison: vi.fn() },
   ApiError: class ApiError extends Error {
     status: number;
     detail: string;
@@ -35,6 +35,7 @@ const mockNavigate = vi.mocked(useNavigate);
 const mockChallengesGet = vi.mocked(challengesApi.get);
 const mockChallengesRemove = vi.mocked(challengesApi.remove);
 const mockSubmissionsCreate = vi.mocked(submissionsApi.create);
+const mockSubmissionsComparison = vi.mocked(submissionsApi.comparison);
 
 const challenge = {
   id: "c1",
@@ -83,6 +84,10 @@ describe("ChallengeDetail", () => {
     });
     mockChallengesGet.mockResolvedValue(challenge as never);
     mockNavigate.mockReturnValue(vi.fn());
+    mockSubmissionsComparison.mockResolvedValue({
+      challenge_id: "c1",
+      entries: [],
+    } as never);
   });
 
   afterEach(() => {
@@ -113,7 +118,7 @@ describe("ChallengeDetail", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Two Sum" });
 
-    fireEvent.click(screen.getByLabelText(/OpenAI/));
+    fireEvent.click(screen.getByRole("radio", { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText("API key"), {
       target: { value: "sk-test-123" },
     });
@@ -135,7 +140,7 @@ describe("ChallengeDetail", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Two Sum" });
 
-    fireEvent.click(screen.getByLabelText(/Anthropic/));
+    fireEvent.click(screen.getByRole("radio", { name: /Anthropic/ }));
     fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -173,6 +178,87 @@ describe("ChallengeDetail", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Two Sum" });
     expect(screen.getByRole("link", { name: /Log in/ })).toBeInTheDocument();
+    // Comparison panel is auth-only.
+    expect(screen.queryByText("Compare providers")).not.toBeInTheDocument();
+  });
+
+  it("renders the provider leaderboard with a best badge", async () => {
+    mockSubmissionsComparison.mockResolvedValue({
+      challenge_id: "c1",
+      entries: [
+        {
+          provider: "demo",
+          runs: 2,
+          score: 90,
+          passed_tests: 4,
+          total_tests: 4,
+          duration_ms: 1200,
+          last_run_at: "2026-01-01T00:00:00Z",
+        },
+        {
+          provider: "openai",
+          runs: 1,
+          score: 100,
+          passed_tests: 2,
+          total_tests: 2,
+          duration_ms: 800,
+          last_run_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+    } as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+
+    expect(await screen.findByText("Compare providers")).toBeInTheDocument();
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("90%")).toBeInTheDocument();
+    expect(screen.getAllByText("Best")).toHaveLength(1);
+    expect(screen.getByText("avg over 2 runs")).toBeInTheDocument();
+    // Anthropic has no runs → placeholder card.
+    expect(screen.getAllByText("No runs yet.")).toHaveLength(1);
+  });
+
+  it("shows placeholder cards when nothing has run", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+    await screen.findByText("Compare providers");
+    // All three providers are listed with a run affordance.
+    expect(screen.getAllByText("No runs yet.")).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "Run" })).toHaveLength(3);
+  });
+
+  it("runs the demo provider from the comparison panel", async () => {
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+    await screen.findByText("Compare providers");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run" })[0]);
+
+    await waitFor(() => {
+      expect(mockSubmissionsCreate).toHaveBeenCalledWith({
+        challenge_id: "c1",
+        provider: "demo",
+      });
+    });
+  });
+
+  it("requires an API key when running a keyed provider from the panel", async () => {
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+    await screen.findByText("Compare providers");
+
+    // Third card is Anthropic (requires a key; none entered).
+    fireEvent.click(screen.getAllByRole("button", { name: "Run" })[2]);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /Enter your Anthropic API key/,
+    );
+    expect(mockSubmissionsCreate).not.toHaveBeenCalled();
   });
 
   it("surfaces submission errors", async () => {

@@ -52,6 +52,25 @@ class EvaluationResultRead(BaseModel):
     created_at: datetime
 
 
+class ProviderComparisonEntry(BaseModel):
+    """Aggregated evaluation stats for one provider on a challenge."""
+
+    provider: str
+    runs: int
+    score: float
+    passed_tests: float
+    total_tests: float
+    duration_ms: float
+    last_run_at: datetime
+
+
+class ProviderComparisonRead(BaseModel):
+    """Per-provider comparison of the current user's evaluations."""
+
+    challenge_id: UUID
+    entries: list[ProviderComparisonEntry]
+
+
 class SubmissionRead(BaseModel):
     """Submission representation with optional nested evaluation result."""
 

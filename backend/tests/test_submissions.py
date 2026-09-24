@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC
 
 import pytest
 from httpx import AsyncClient
@@ -417,3 +418,178 @@ async def test_update_submission_status_forbidden_for_other_user(
         headers=auth(other_token),
     )
     assert response.status_code == 404
+
+
+# --- provider comparison -----------------------------------------------------
+
+
+async def _insert_completed_run(
+    session_factory,
+    user_id: uuid.UUID,
+    challenge_id: uuid.UUID,
+    *,
+    provider: str,
+    score: float,
+    passed: int,
+    total: int,
+    duration_ms: int,
+    created_at: str | None = None,
+) -> None:
+    """Persist a completed submission + evaluation result directly (worker is
+    mocked in API tests, so real evaluation rows never appear otherwise)."""
+    from datetime import datetime
+
+    from app.models.evaluation_result import EvaluationResult
+    from app.models.submission import Submission
+
+    async with session_factory() as session:
+        submission = Submission(
+            user_id=user_id,
+            challenge_id=challenge_id,
+            status="completed",
+            provider=provider,
+            language="python",
+            code="x",
+            created_at=(
+                datetime.fromisoformat(created_at).replace(tzinfo=UTC) if created_at else None
+            ),
+        )
+        session.add(submission)
+        await session.flush()
+        session.add(
+            EvaluationResult(
+                submission_id=submission.id,
+                passed_tests=passed,
+                total_tests=total,
+                score=score,
+                metrics={"duration_ms": duration_ms},
+            )
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_provider_comparison_requires_auth(db_client: AsyncClient) -> None:
+    response = await db_client.get(
+        f"{SUBMISSIONS_URL}/comparison",
+        params={"challenge_id": str(uuid.uuid4())},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_provider_comparison_requires_challenge_id(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    response = await db_client.get(f"{SUBMISSIONS_URL}/comparison", headers=auth(token))
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_provider_comparison_aggregates_own_runs(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    token, user = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    challenge_id = uuid.UUID(challenge["id"])
+    own_id = uuid.UUID(user["id"])
+
+    # demo: two completed runs (100+50)/2 = 75, pass (2+1)/2 = 1.5, dur 1000ms
+    await _insert_completed_run(
+        db_sessionmaker,
+        own_id,
+        challenge_id,
+        provider="demo",
+        score=100.0,
+        passed=2,
+        total=2,
+        duration_ms=1200,
+    )
+    await _insert_completed_run(
+        db_sessionmaker,
+        own_id,
+        challenge_id,
+        provider="demo",
+        score=50.0,
+        passed=1,
+        total=2,
+        duration_ms=800,
+    )
+    # anthropic: one completed run — should rank above demo (90 > 75)
+    await _insert_completed_run(
+        db_sessionmaker,
+        own_id,
+        challenge_id,
+        provider="anthropic",
+        score=90.0,
+        passed=2,
+        total=2,
+        duration_ms=600,
+    )
+    # pending demo run must be ignored
+    from app.models.submission import Submission
+
+    async with db_sessionmaker() as session:
+        session.add(
+            Submission(
+                user_id=own_id,
+                challenge_id=challenge_id,
+                status="pending",
+                provider="demo",
+                language="python",
+            )
+        )
+        await session.commit()
+
+    # another user's completed run on the same challenge must be excluded
+    other_token, other_user = await register_user(db_client)
+    await _insert_completed_run(
+        db_sessionmaker,
+        uuid.UUID(other_user["id"]),
+        challenge_id,
+        provider="demo",
+        score=10.0,
+        passed=0,
+        total=2,
+        duration_ms=500,
+    )
+
+    response = await db_client.get(
+        f"{SUBMISSIONS_URL}/comparison",
+        params={"challenge_id": challenge["id"]},
+        headers=auth(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["challenge_id"] == challenge["id"]
+
+    by_provider = {entry["provider"]: entry for entry in body["entries"]}
+    assert set(by_provider) == {"demo", "anthropic"}
+    assert by_provider["demo"]["runs"] == 2
+    assert by_provider["demo"]["score"] == 75.0
+    assert by_provider["demo"]["passed_tests"] == 1.5
+    assert by_provider["demo"]["total_tests"] == 2.0
+    assert by_provider["demo"]["duration_ms"] == 1000.0
+    assert by_provider["anthropic"]["runs"] == 1
+    assert by_provider["anthropic"]["score"] == 90.0
+    # Sorted best average score first.
+    assert [entry["provider"] for entry in body["entries"]] == [
+        "anthropic",
+        "demo",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_provider_comparison_empty_when_no_runs(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    response = await db_client.get(
+        f"{SUBMISSIONS_URL}/comparison",
+        params={"challenge_id": challenge["id"]},
+        headers=auth(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["entries"] == []

@@ -8,9 +8,10 @@ import ConfirmDialog from "../components/ConfirmDialog/ConfirmDialog.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../services/api.ts";
-import type { Challenge } from "../types.ts";
+import type { Challenge, ProviderComparisonEntry } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
+import { formatDurationMs, scoreVariant } from "../utils/formatting.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import styles from "./ChallengeDetail.module.css";
 
@@ -37,6 +38,8 @@ const PROVIDERS = [
   },
 ];
 
+const COMPARE_POLL_MS = 1500;
+
 function ChallengeDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -52,8 +55,66 @@ function ChallengeDetail() {
   const [apiKey, setApiKey] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Provider comparison (leaderboard of the user's runs for this challenge).
+  const [comparison, setComparison] = useState<ProviderComparisonEntry[] | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  // provider → run count observed at submit time; cleared once a newer run
+  // shows up in the comparison (meaning the new evaluation completed).
+  const [runningMap, setRunningMap] = useState<Record<string, number>>({});
+  // Optional API keys entered directly in the comparison panel.
+  const [runnerKeys, setRunnerKeys] = useState<Record<string, string>>({});
+
   const selectedProvider = PROVIDERS.find((p) => p.value === provider);
   const requiresKey = selectedProvider?.requiresKey ?? false;
+  const runningCount = Object.keys(runningMap).length;
+
+  // Load + poll the comparison while any provider run is in flight.
+  useEffect(() => {
+    if (!user || !challenge) {
+      return;
+    }
+    const challengeId = challenge.id;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function refresh() {
+      try {
+        const data = await submissionsApi.comparison(challengeId);
+        if (cancelled) {
+          return;
+        }
+        setComparison(data.entries);
+        setComparisonError(null);
+
+        // Drop providers whose run count advanced since we submitted.
+        const next: Record<string, number> = {};
+        for (const provider of Object.keys(runningMap)) {
+          const entry = data.entries.find((e) => e.provider === provider);
+          if (!entry || entry.runs <= runningMap[provider]) {
+            next[provider] = runningMap[provider];
+          }
+        }
+        setRunningMap(next);
+        if (Object.keys(next).length > 0 && !cancelled) {
+          timer = window.setTimeout(() => void refresh(), COMPARE_POLL_MS);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setComparisonError(extractError(err));
+        }
+      }
+    }
+
+    void refresh();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+    // Poll cadence is driven by runningMap; re-scheduling on every runningMap
+    // change could double-poll, so refresh only when its non-empty state flips.
+  }, [user, challenge?.id, runningCount > 0]);
 
   useEffect(() => {
     if (!id) {
@@ -127,6 +188,44 @@ function ChallengeDetail() {
       setSubmitting(false);
     }
   }
+
+  async function runProvider(providerValue: string) {
+    if (!challenge) {
+      return;
+    }
+    const providerInfo = PROVIDERS.find((p) => p.value === providerValue);
+    const key = runnerKeys[providerValue]?.trim();
+    if (providerInfo?.requiresKey && !key) {
+      setComparisonError(
+        `Enter your ${providerInfo.name} API key to add it to the comparison.`,
+      );
+      return;
+    }
+    setComparisonError(null);
+    const runsBefore =
+      comparison?.find((e) => e.provider === providerValue)?.runs ?? 0;
+    try {
+      await submissionsApi.create({
+        challenge_id: challenge.id,
+        provider: providerValue,
+        ...(key ? { api_key: key } : {}),
+      });
+      setRunningMap((prev) => ({ ...prev, [providerValue]: runsBefore }));
+      showToast(`${providerInfo?.name ?? providerValue} evaluation started.`, "success");
+    } catch (err) {
+      setComparisonError(extractError(err));
+    }
+  }
+
+  async function handleRunAll() {
+    setComparisonError(null);
+    const toRun = PROVIDERS.filter((p) => !runningMap[p.value]);
+    await Promise.all(toRun.map((p) => runProvider(p.value)));
+  }
+
+  const bestScore = comparison
+    ? Math.max(0, ...comparison.filter((e) => e.runs > 0).map((e) => e.score))
+    : 0;
 
   if (loading) {
     return (
@@ -313,6 +412,105 @@ function ChallengeDetail() {
           </Card>
         </aside>
       </div>
+
+      {user && (
+        <Card className={styles.comparison}>
+          <div className={styles.comparisonHeader}>
+            <div>
+              <h2 className={styles.sectionTitle}>Compare providers</h2>
+              <p className={styles.muted}>
+                Side-by-side results of every evaluation you&apos;ve run for
+                this challenge.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={runningCount > 0}
+              loadingText="Running…"
+              onClick={() => void handleRunAll()}
+            >
+              Run all providers
+            </Button>
+          </div>
+
+          {comparisonError && (
+            <p role="alert" className={styles.errorText}>
+              {comparisonError}
+            </p>
+          )}
+
+          <div className={styles.leaderboard}>
+            {PROVIDERS.map((p) => {
+              const entry = comparison?.find((e) => e.provider === p.value);
+                const running = Boolean(runningMap[p.value]);
+                const isBest =
+                  entry != null && entry.runs > 0 && entry.score === bestScore;
+                return (
+                  <div
+                    key={p.value}
+                    className={`${styles.providerCard} ${
+                      running ? styles.providerRunning : ""
+                    }`}
+                  >
+                    <div className={styles.providerCardHeader}>
+                      <span className={styles.providerCardName}>{p.name}</span>
+                      {isBest && <Badge variant="success">Best</Badge>}
+                      {running && <Badge variant="primary">Running…</Badge>}
+                    </div>
+                    <p className={styles.providerCardDesc}>{p.description}</p>
+
+                    {entry ? (
+                      <div className={styles.providerCardStats}>
+                        <span className={`${styles.providerScore} ${styles[`score${scoreVariant(entry.score)}`]}`}>
+                          {entry.score}%
+                        </span>
+                        <span className={styles.providerStatLabel}>
+                          avg over {entry.runs} run{entry.runs === 1 ? "" : "s"}
+                        </span>
+                        <span className={styles.providerStatDetail}>
+                          {entry.passed_tests}/{entry.total_tests} tests ·{" "}
+                          {formatDurationMs(entry.duration_ms)}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className={styles.muted}>No runs yet.</p>
+                    )}
+
+                    {p.requiresKey && (
+                      <input
+                        type="password"
+                        className={styles.runnerKeyInput}
+                        placeholder="API key (optional)"
+                        aria-label={`${p.name} API key for comparison`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={runnerKeys[p.value] ?? ""}
+                        onChange={(event) =>
+                          setRunnerKeys((prev) => ({
+                            ...prev,
+                            [p.value]: event.target.value,
+                          }))
+                        }
+                      />
+                    )}
+
+                    <Button
+                      variant={entry ? "ghost" : "secondary"}
+                      size="sm"
+                      disabled={running}
+                      loading={running}
+                      loadingText="Queued…"
+                      onClick={() => void runProvider(p.value)}
+                    >
+                      {entry ? "Re-run" : "Run"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+        </Card>
+      )}
 
       <ConfirmDialog
         open={confirmDeleteOpen}
