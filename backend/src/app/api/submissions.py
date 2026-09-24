@@ -11,10 +11,17 @@ from app.core.database import get_session
 from app.core.events import apublish_submission_event
 from app.core.security import get_current_user
 from app.models.challenge import Challenge
+from app.models.evaluation_result import EvaluationResult
 from app.models.submission import Submission
 from app.models.user import User
 from app.schemas.pagination import PaginatedResponse
-from app.schemas.submission import SubmissionCreate, SubmissionRead, SubmissionUpdate
+from app.schemas.submission import (
+    ProviderComparisonEntry,
+    ProviderComparisonRead,
+    SubmissionCreate,
+    SubmissionRead,
+    SubmissionUpdate,
+)
 
 logger = getLogger(__name__)
 
@@ -141,6 +148,64 @@ async def list_submissions(
         page_size=page_size,
         pages=pages,
     )
+
+
+@router.get("/comparison", response_model=ProviderComparisonRead)
+async def get_provider_comparison(
+    challenge_id: UUID = Query(..., description="Challenge to compare providers for"),
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> ProviderComparisonRead:
+    """Aggregate the current user's completed evaluations per provider.
+
+    Lets a challenge page show a side-by-side leaderboard of how each LLM
+    provider performed (average score, pass rate, and latency across runs).
+    Only the caller's own completed submissions are included.
+    """
+    rows = (
+        await db.execute(
+            select(Submission, EvaluationResult)
+            .join(EvaluationResult, EvaluationResult.submission_id == Submission.id)
+            .where(
+                Submission.user_id == current_user.id,
+                Submission.challenge_id == challenge_id,
+                Submission.status == "completed",
+            )
+        )
+    ).all()
+
+    by_provider: dict[str, list[Submission, EvaluationResult]] = {}
+    for submission, result in rows:
+        provider = submission.provider or "demo"
+        by_provider.setdefault(provider, []).append((submission, result))
+
+    entries: list[ProviderComparisonEntry] = []
+    for provider, runs in by_provider.items():
+        score = sum(r.score for _, r in runs) / len(runs)
+        passed = sum(r.passed_tests for _, r in runs) / len(runs)
+        total = sum(r.total_tests for _, r in runs) / len(runs)
+        durations = [
+            elapsed
+            for _, r in runs
+            if isinstance((elapsed := r.metrics.get("duration_ms")), (int, float))
+        ]
+        duration_ms = sum(durations) / len(durations) if durations else 0.0
+        last_run_at = max((s.created_at for s, _ in runs))
+        entries.append(
+            ProviderComparisonEntry(
+                provider=provider,
+                runs=len(runs),
+                score=round(score, 1),
+                passed_tests=round(passed, 1),
+                total_tests=round(total, 1),
+                duration_ms=round(duration_ms, 1),
+                last_run_at=last_run_at,
+            )
+        )
+
+    # Best average score first, then most runs — deterministic for the UI.
+    entries.sort(key=lambda e: (-e.score, -e.runs, e.provider))
+    return ProviderComparisonRead(challenge_id=challenge_id, entries=entries)
 
 
 @router.get("/{submission_id}", response_model=SubmissionRead)
