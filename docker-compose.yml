@@ -75,7 +75,7 @@ services:
       celery:
         condition: service_healthy
       beat:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -155,6 +155,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      # Beat persists its schedule to /tmp/celerybeat-schedule* (shelve db):
+      # written at startup and every 3 min while ticking (Celery sync_every),
+      # so a deadlocked or wedged beat stops refreshing the file. Failing the
+      # check when the newest schedule file is older than 5 min catches a
+      # process that is alive but no longer ticking — which otherwise silently
+      # stops the stale-submission recovery sweep.
+      test: ["CMD-SHELL", "test -n \"$(find /tmp -maxdepth 1 -name 'celerybeat-schedule*' -mmin -5 2>/dev/null)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
