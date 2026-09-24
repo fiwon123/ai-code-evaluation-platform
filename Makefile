@@ -35,15 +35,20 @@ dev-frontend: ## Start frontend dev server on the host
 dev-celery: ## Start celery worker on the host
 	cd $(BACKEND_DIR) && uv run celery -A app.core.celery_app:celery_app worker --loglevel=info
 
-dev-all: ## Start backend + celery + frontend on the host (background, /tmp/*.log)
+dev-beat: ## Start celery beat (stale-submission recovery sweep) on the host
+	cd $(BACKEND_DIR) && uv run celery -A app.core.celery_app:celery_app beat --loglevel=info
+
+dev-all: ## Start backend + celery + beat + frontend on the host (background, /tmp/*.log)
 	@echo "Starting development services..."
 	@cd $(BACKEND_DIR) && nohup uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
 	@cd $(BACKEND_DIR) && nohup uv run celery -A app.core.celery_app:celery_app worker --loglevel=info > /tmp/celery.log 2>&1 &
+	@cd $(BACKEND_DIR) && nohup uv run celery -A app.core.celery_app:celery_app beat --loglevel=info > /tmp/beat.log 2>&1 &
 	@cd $(FRONTEND_DIR) && nohup npm run dev -- --host 0.0.0.0 > /tmp/frontend.log 2>&1 &
 	@sleep 2
 	@echo "  Backend:  http://localhost:8000  (logs: /tmp/backend.log)"
 	@echo "  Frontend: http://localhost:5173  (logs: /tmp/frontend.log)"
 	@echo "  Celery:   running                (logs: /tmp/celery.log)"
+	@echo "  Beat:     running                (logs: /tmp/beat.log)"
 
 seed-examples: ## Seed the curated example challenges into the DB (idempotent)
 	cd $(BACKEND_DIR) && uv run python -m app.seed_examples
@@ -97,8 +102,8 @@ dev-restart: preflight ## Stop and restart the dev sandbox in one step (data kep
 	$(COMPOSE) down
 	$(COMPOSE) up dev
 
-dev-log: ## Tail dev sandbox + celery worker logs
-	$(COMPOSE) logs -f dev celery
+dev-log: ## Tail dev sandbox + celery worker + beat logs
+	$(COMPOSE) logs -f dev celery beat
 
 dev-exec: ## Open a shell inside the dev sandbox
 	$(COMPOSE) exec dev zsh
