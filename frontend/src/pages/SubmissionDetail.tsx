@@ -154,8 +154,8 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
           </p>
           {isDelayed(submission.created_at, now) && (
             <p role="status" className={styles.delayed}>
-              This is taking longer than usual — the worker may be busy or
-              down. Check back in a minute.
+              This is taking longer than usual — the server may be busy.
+              Check back in a minute.
             </p>
           )}
           <p className={styles.muted}>
@@ -223,7 +223,11 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
           </Card>
 
           <Link to={`/challenges/${submission.challenge_id}`}>
-            <Button variant="secondary">Back to challenge</Button>
+            <Button
+              variant={submission.status === "failed" ? "primary" : "secondary"}
+            >
+              {submission.status === "failed" ? "Try again" : "Back to challenge"}
+            </Button>
           </Link>
         </div>
       ) : (
@@ -231,6 +235,11 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
           <p role="alert" className={styles.errorText}>
             Evaluation failed — no result was produced.
           </p>
+          <div className={styles.retry}>
+            <Link to={`/challenges/${submission.challenge_id}`}>
+              <Button>Try again</Button>
+            </Link>
+          </div>
         </Card>
       )}
     </div>
