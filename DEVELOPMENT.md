@@ -13,9 +13,10 @@ You (host editor)  ──edit──▶  workspace (bind mount)
                                    │  hot reload (uvicorn --reload + vite HMR)
                                    ▼
 docker compose up dev  ──▶  dev (uvicorn :8000 + vite :5173)
-                           celery (evaluation worker)
-                           postgres (:5432) · redis (:6379)
-                           eval-sandbox image (isolated test containers)
+                            celery (evaluation worker)
+                            beat (periodic stale-submission recovery sweep)
+                            postgres (:5432) · redis (:6379)
+                            eval-sandbox image (isolated test containers)
 ```
 
 opencode (the AI coding agent) can run **on the host** or **inside the `dev`
@@ -24,9 +25,9 @@ container** (`scripts/open-in-sandbox.sh`). Both see the same files.
 ## Start / stop
 
 ```bash
-make dev-up        # START: build (once) + dev + celery + postgres + redis + sandbox
+make dev-up        # START: build (once) + dev + celery + beat + postgres + redis + sandbox
                    # foreground with combined logs — Ctrl+C stops it
-make dev-log       # tail dev + celery logs without stopping
+make dev-log       # tail dev + celery + beat logs without stopping
 make dev-restart   # stop + start in one step (data kept, ends in foreground logs)
 make dev-down      # STOP: tear down the stack (postgres data volume kept)
 make dev-up        # RESTART: fast, no rebuild, data still there
@@ -140,3 +141,14 @@ make check                                 # backend lint+tests, frontend lint+b
 | `make dev-up` errors "opencode not found" | Install opencode (see above) — only required for the sandboxed-agent mounts |
 | Working tree owned by root (from an old sandbox) | `sudo chown -R "$USER": "$(pwd)"` |
 | Docker unavailable | Backend falls back to subprocess execution (`DOCKER_ENABLED=false`) |
+| Submissions stuck "pending" for hours | The recovery sweep (Celery beat) must be running: `docker compose ps` should show `beat` healthy. Stale `pending` rows are re-dispatched after 10 min and **abandoned (failed) 60 min after creation** (`PENDING_MAX_MINUTES` in `backend/src/app/tasks/recover.py`). The Profile/SubmissionDetail UI shows "stuck"/"waiting over 10 minutes" in the meantime. |
+
+## Recovery sweep (Celery beat)
+
+A submission can strand in `pending`/`processing` (lost broker message, expired
+task, killed worker). The **beat** service runs `recover_stuck_submissions`
+every minute to self-heal: stale `pending` rows are re-dispatched (bounded by a
+60-minute kill switch — older rows are marked `failed`), stale `processing`
+rows are marked `failed`. On Kubernetes the beat Deployment ships in the base
+manifests (`k8s/base/beat.yaml`); do not scale it above 1 replica (double
+dispatch risk).
