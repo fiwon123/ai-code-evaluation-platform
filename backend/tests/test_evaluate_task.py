@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from sqlalchemy import create_engine
@@ -82,6 +83,106 @@ class TestSubmissionEvaluation:
         session = _make_sync_session()
         result = _run_submission_evaluation(session, uuid4())
         assert result["status"] == "not_found"
+
+    def test_duplicate_dispatch_skips_when_result_exists(self, monkeypatch):
+        """A completed submission re-dispatched by recovery is a no-op."""
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        assert _run_submission_evaluation(session, submission_id)["status"] == "completed"
+
+        calls = []
+
+        def fake_get(name, api_key=None):
+            calls.append(name)
+            return type(
+                "P",
+                (),
+                {"generate_code": lambda self, prompt, language="python": ""},
+            )()
+
+        monkeypatch.setattr("app.tasks.evaluate.get_llm_provider", fake_get)
+        result = _run_submission_evaluation(session, submission_id)
+
+        assert result["status"] == "completed"
+        assert result["duplicate"] is True
+        assert calls == []  # provider never invoked — nothing to evaluate
+
+    def test_duplicate_success_commit_race_is_noop(self, monkeypatch):
+        """If a concurrent run writes the result first, this run backs off."""
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        def fake_generate(self, prompt, language="python"):
+            # Simulate the duplicate run winning: a result already exists.
+            session.add(
+                EvaluationResult(
+                    submission_id=submission_id,
+                    passed_tests=2,
+                    total_tests=2,
+                    score=100.0,
+                    logs="winner",
+                    metrics={},
+                )
+            )
+            session.commit()
+            return "def two_sum(nums, target):\n    return []\n"
+
+        monkeypatch.setattr(
+            "app.tasks.evaluate.get_llm_provider",
+            lambda name, api_key=None: type(
+                "P", (), {"generate_code": fake_generate}
+            )(),
+        )
+        monkeypatch.setattr(
+            "app.tasks.evaluate.evaluate_code",
+            lambda **kwargs: SimpleNamespace(
+                passed=0, total=2, score=0.0, logs="loser", metrics={}
+            ),
+        )
+
+        result = _run_submission_evaluation(session, submission_id)
+
+        assert result["status"] == "completed"
+        assert result["duplicate"] is True
+        session.expire_all()
+        fresh = session.get(Submission, submission_id)
+        assert fresh.status == "completed"
+        # The winner's result survived; the loser's did not overwrite it.
+        assert session.get(EvaluationResult, fresh.evaluation_result.id).logs == "winner"
+
+    def test_duplicate_failure_commit_race_is_noop(self, monkeypatch):
+        """Failure path also backs off when a duplicate already wrote a result."""
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        def boom(self, prompt, language="python"):
+            session.add(
+                EvaluationResult(
+                    submission_id=submission_id,
+                    passed_tests=2,
+                    total_tests=2,
+                    score=100.0,
+                    logs="winner",
+                    metrics={},
+                )
+            )
+            session.commit()
+            raise RuntimeError("LLM down")
+
+        monkeypatch.setattr(
+            "app.tasks.evaluate.get_llm_provider",
+            lambda name, api_key=None: type("P", (), {"generate_code": boom})(),
+        )
+
+        result = _run_submission_evaluation(session, submission_id)
+
+        assert result["status"] == "failed"
+        assert result["duplicate"] is True
+        session.expire_all()
+        fresh = session.get(Submission, submission_id)
+        # Row-level outcome is whatever the winner recorded — no crash, no
+        # orphaned processing state.
+        assert fresh.status == "completed"
 
     def test_failed_generation_marks_failed(self, monkeypatch):
         session = _make_sync_session()

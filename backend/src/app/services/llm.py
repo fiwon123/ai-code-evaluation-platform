@@ -7,6 +7,12 @@ from app.services.llm_providers.openai_provider import OpenAIProvider
 
 _PROVIDERS = {"demo": MockProvider, "openai": OpenAIProvider, "anthropic": AnthropicProvider}
 
+#: Providers that need an API key to generate code, mapped to the environment
+#: variable the worker falls back to when no per-run key is supplied. Mirrors
+#: ``KEY_REQUIRED_PROVIDERS`` in app/schemas/submission.py (validation) and the
+#: requiresKey list in frontend/src/pages/ChallengeDetail.tsx — keep in sync.
+KEYED_PROVIDERS = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+
 
 def get_llm_provider(name: str | None = None, api_key: str | None = None) -> LLMProvider:
     """Return an LLM provider by name (falling back to configured default).

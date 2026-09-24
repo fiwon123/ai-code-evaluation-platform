@@ -36,7 +36,7 @@ def _make_sync_session():
     return sessionmaker(engine, expire_on_commit=False)()
 
 
-def _seed(session, status: str, updated_at: datetime | None = None):
+def _seed(session, status: str, updated_at: datetime | None = None, provider: str = "demo"):
     """Seed a fresh user + challenge + submission (unique per call)."""
     user = User(
         email=f"recover-{uuid4().hex[:8]}@example.com",
@@ -59,7 +59,7 @@ def _seed(session, status: str, updated_at: datetime | None = None):
         user_id=user.id,
         challenge_id=challenge.id,
         status=status,
-        provider="demo",
+        provider=provider,
         language="python",
     )
     session.add(submission)
@@ -139,6 +139,94 @@ class TestRecoverStalePending:
         assert _as_utc(fresh.updated_at) == T0 - timedelta(
             minutes=PENDING_STALE_MINUTES + 1
         )
+
+
+class TestRecoverKeyedProviders:
+    """Per-run API keys are never persisted — re-dispatch must not run a
+    doomed task for keyed providers when no worker key is available."""
+
+    def test_keyed_provider_without_env_key_fails_fast(self, monkeypatch):
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+            provider="openai",
+        )
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+        publish = Mock()
+        monkeypatch.setattr("app.tasks.recover.publish_submission_event", publish)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 0, "failed": 1}
+        delay.assert_not_called()
+        session.expire_all()
+        fresh = session.get(Submission, submission.id)
+        assert fresh.status == "failed"
+        assert fresh.score == 0.0
+        result = session.get(EvaluationResult, fresh.evaluation_result.id)
+        assert result.logs == (
+            "Cannot re-dispatch: openai was submitted with a per-run API key "
+            "that is not stored server-side, and OPENAI_API_KEY is not "
+            "configured on the worker. Please re-submit with a new API key."
+        )
+        assert result.metrics["error"] == "missing_api_key"
+        publish.assert_called_once_with(fresh.id, "failed", error=ANY)
+
+    def test_anthropic_without_env_key_fails_fast(self, monkeypatch):
+        session = _make_sync_session()
+        _seed(
+            session,
+            "pending",
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+            provider="anthropic",
+        )
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 0, "failed": 1}
+        delay.assert_not_called()
+
+    def test_keyed_provider_with_env_key_redispatches(self, monkeypatch):
+        """A configured env key means re-dispatch can actually run."""
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+            provider="openai",
+        )
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 1, "failed": 0}
+        delay.assert_called_once_with(str(submission.id))
+
+    def test_demo_provider_redispatches_without_any_key(self, monkeypatch):
+        """Non-keyed providers are unaffected by the key check."""
+        session = _make_sync_session()
+        submission = _seed(
+            session,
+            "pending",
+            updated_at=T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1),
+            provider="demo",
+        )
+        delay = Mock()
+        monkeypatch.setattr("app.tasks.recover.evaluate_submission.delay", delay)
+
+        summary = _run_recovery(session, now=T0)
+
+        assert summary == {"dispatched": 1, "failed": 0}
+        delay.assert_called_once_with(str(submission.id))
 
 
 class TestRecoverStaleProcessing:
