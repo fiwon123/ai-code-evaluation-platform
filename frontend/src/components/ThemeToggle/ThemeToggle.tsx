@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState } from "react";
+import { isTheme, THEME_MEDIA_QUERY, THEME_STORAGE_KEY } from "../../utils/theme.ts";
+import type { Theme } from "../../utils/theme.ts";
 import styles from "./ThemeToggle.module.css";
 
-type Theme = "light" | "dark";
-
-const STORAGE_KEY = "theme";
-const MEDIA = "(prefers-color-scheme: dark)";
+// The pre-paint pass in `public/theme-init.js` has already resolved and applied
+// the theme by the time this component mounts; this only keeps React's copy in
+// step and persists explicit choices. The literals it needs live in
+// `src/utils/theme.ts` so the two implementations cannot drift.
 
 function systemTheme(): Theme {
   if (typeof window !== "undefined" && window.matchMedia) {
-    return window.matchMedia(MEDIA).matches ? "dark" : "light";
+    return window.matchMedia(THEME_MEDIA_QUERY).matches ? "dark" : "light";
   }
   return "light";
 }
 
 function storedTheme(): Theme | null {
   try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    return value === "light" || value === "dark" ? value : null;
+    const value = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return isTheme(value) ? value : null;
   } catch {
     return null;
   }
@@ -36,7 +38,7 @@ export default function ThemeToggle() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
-      window.localStorage.setItem(STORAGE_KEY, theme);
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch {
       /* storage unavailable — theme still applies for this session */
     }
@@ -46,7 +48,7 @@ export default function ThemeToggle() {
   // (e.g. from another tab).
   useEffect(() => {
     if (!window.matchMedia) return;
-    const media = window.matchMedia(MEDIA);
+    const media = window.matchMedia(THEME_MEDIA_QUERY);
     function sync() {
       const stored = storedTheme();
       // Only follow the system when the user hasn't chosen explicitly.

@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>AI Code Evaluation Platform</title>
+    <!--
+      Applies the stored/system theme before the first paint. Must stay
+      synchronous (no type="module", no defer/async) and must remain an external
+      file: the production CSP is `script-src 'self'`, so an inline script here
+      would be blocked. Keep in sync with src/utils/theme.ts.
+    -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>
