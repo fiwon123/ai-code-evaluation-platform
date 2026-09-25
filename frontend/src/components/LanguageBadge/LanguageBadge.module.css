@@ -22,7 +22,7 @@
   padding: 0 4px;
   border-radius: var(--radius-sm);
   background: var(--lang-color);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: calc(var(--font-size-xs) - 1px);
   font-weight: 700;
   line-height: 1.5;

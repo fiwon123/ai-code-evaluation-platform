@@ -149,7 +149,7 @@
 }
 
 .table tbody tr:hover {
-  background: var(--color-surface-hover, var(--color-surface));
+  background: var(--color-surface);
 }
 
 .cellStrong {
@@ -266,7 +266,7 @@
 }
 
 .statusBarDanger {
-  background: linear-gradient(90deg, var(--color-danger, #dc2626), #ef4444);
+  background: linear-gradient(90deg, var(--color-danger), #ef4444);
 }
 
 .statusCount {
