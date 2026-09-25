@@ -270,7 +270,7 @@
 }
 
 .providerRunning {
-  border-color: var(--color-primary, #2563eb);
+  border-color: var(--color-primary);
 }
 
 .runningMeta {
@@ -347,5 +347,5 @@
 
 .runnerKeyInput:focus {
   outline: none;
-  border-color: var(--color-primary, #2563eb);
+  border-color: var(--color-primary);
 }

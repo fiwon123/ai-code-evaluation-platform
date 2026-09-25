@@ -29,6 +29,17 @@ forbidden in component styles.
   (`--font-size-3xl`, not `--font-3xl`; `--color-text-muted`, not `--color-muted`).
 - Components may apply existing tokens but must not introduce new raw values
   inline. New colors require adding a token to both `:root` and `[data-theme="dark"]`.
+- **No inline fallbacks on a color token** — write `var(--color-danger)`, never
+  `var(--color-danger, #dc2626)`. Every color token exists in both palettes, so a
+  fallback is dead weight; worse, it hides a typo. A fallback on a token that is
+  *never defined* is worse still: it renders silently and the intended style
+  never applies (this is how the admin table row hover became a no-op).
+  `design-tokens.test.ts` fails on both.
+- The only raw values allowed in component CSS are decorative ones that are not
+  theme colors: the mock IDE chrome in `Features.module.css` and the second
+  gradient stop of the admin status bar. Everything else reads a token. Inline
+  SVG attributes such as `Logo`'s `stroke="#ffffff"` cannot take `var()` and are
+  exempt for the same reason.
 
 ## Theming
 
@@ -63,50 +74,77 @@ per-theme primary tokens rather than fixed hex values:
 --gradient-title: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
 ```
 
-That composition is why titles need **no light-mode override**: light resolves
-to `#1d4ed8 → #1e40af` (5.9:1 and 7.8:1 on `--color-bg`) and dark to
-`#3b82f6 → #60a5fa` (5.2:1 and 7.5:1), so the gradient is legible in both
-themes. Do not "fix" a title that looks off in light mode by neutralizing the
+That composition is why titles need **no light-mode override**: both palettes
+resolve it to a pair of primary stops that clear WCAG AA (4.5:1) against
+`--color-bg`, so the gradient is legible in either theme.
+`src/styles/theme-contrast.test.ts` asserts that ratio, which means a palette
+change that breaks the title fails the suite instead of shipping.
+Do not "fix" a title that looks off in light mode by neutralizing the
 clip (`background: none; background-clip: initial`) — that reintroduces the
 per-page divergence the component exists to remove, and
 `src/styles/theme-contrast.test.ts` fails on both that and on a contrast drop.
 
+The `hero` variant sweeps a wider gradient. Its range is not a matter of taste:
+because the heading is transparent text, the gradient must cover the text box
+for the *whole* animation, which caps `background-position` at
+`1 / (background-size - 1)`. `hero-sweep.test.ts` enforces that.
+
 ## Color tokens
 
-### Semantic palette (both themes)
+**Values are not repeated in this document.** `src/styles/globals.css` is the
+single source of truth for both palettes; this file records *which* token to
+reach for and what it is for. Duplicating the hexes here is what let the tables
+drift out of sync in the first place, so
+`src/styles/design-tokens.test.ts` fails if a color token is undocumented, if a
+documented token no longer exists, or if a value is copied back into a table
+below.
 
-| Token | Light | Dark | Usage |
-|-------|-------|------|-------|
-| `--color-primary` | `#2563eb` | `#3b82f6` | Primary actions, links |
-| `--color-primary-hover` | `#1d4ed8` | `#60a5fa` | Primary button hover |
-| `--color-primary-light` | `#dbeafe` | `#1e3a5f` | Primary-tinted surfaces |
-| `--color-secondary` | `#64748b` | `#94a3b8` | Secondary text/actions |
-| `--color-success` | `#16a34a` | `#22c55e` | Positive status |
-| `--color-success-light` | `#dcfce7` | `#14532d` | Success-tinted surfaces |
-| `--color-warning` | `#f59e0b` | `#f59e0b` | Warning status |
-| `--color-warning-strong` | `#b45309` | `#fbbf24` | Warning text on tinted bg |
-| `--color-warning-light` | `#fef3c7` | `#78350f` | Warning-tinted surfaces |
-| `--color-danger` | `#dc2626` | `#f87171` | Errors, destructive actions |
-| `--color-danger-hover` | `#b91c1c` | `#fca5a5` | Destructive button hover |
-| `--color-danger-light` | `#fee2e2` | `#7f1d1d` | Error-tinted surfaces |
+### Accent and status
 
-### Neutrals
+| Token | Used for |
+|-------|----------|
+| `--color-primary` | Primary actions, links, focus accents |
+| `--color-primary-hover` | Primary button hover |
+| `--color-primary-light` | Primary-tinted surfaces |
+| `--color-secondary` | Reserved — secondary text uses `--color-text-secondary`; no current use |
+| `--color-success` | Positive status, pass indicators |
+| `--color-success-light` | Success-tinted surfaces |
+| `--color-warning` | Warning status |
+| `--color-warning-strong` | Warning text on a tinted background |
+| `--color-warning-light` | Warning-tinted surfaces |
+| `--color-danger` | Errors, destructive actions |
+| `--color-danger-hover` | Destructive button hover |
+| `--color-danger-light` | Error-tinted surfaces |
 
-| Token | Light | Dark | Usage |
-|-------|-------|------|-------|
-| `--color-bg` | `#f1f5f9` | `#0b1220` | Page background |
-| `--color-bg-subtle` | `#eff6ff` | `#111c34` | Subtle background accents |
-| `--color-bg-gradient` | blue→slate | slate→dark | Landing hero gradient |
-| `--color-surface` | `#ffffff` | `#111a2e` | Cards, panels |
-| `--color-surface-secondary` | `#f8fafc` | `#0e1626` | Nested surfaces |
-| `--color-border` | `#e2e8f0` | `#24324a` | Borders, dividers |
-| `--color-border-hover` | `#cbd5e1` | `#38506f` | Border hover states |
-| `--color-text` | `#0f172a` | `#e2e8f0` | Body text |
-| `--color-text-secondary` | `#475569` | `#94a3b8` | Secondary text |
-| `--color-text-muted` | `#94a3b8` | `#64748b` | Placeholders, meta |
-| `--color-header` | white 80% | dark 85% | Sticky header background |
-| `--color-on-accent` | `#ffffff` | `#ffffff` | Text on colored surfaces |
-| `--color-code-bg/header/border/text` | dark slate family | — | Code blocks (dark in both themes) |
+### Surfaces and text
+
+| Token | Used for |
+|-------|----------|
+| `--color-bg` | Page background |
+| `--color-bg-subtle` | Subtle background accents |
+| `--color-bg-gradient` | Landing hero gradient |
+| `--color-surface` | Cards, panels, table rows |
+| `--color-surface-secondary` | Nested surfaces |
+| `--color-surface-raised` | Raised surfaces (menus, popovers) |
+| `--color-divider` | Dividers and separators |
+| `--color-border` | Borders |
+| `--color-border-hover` | Border hover states |
+| `--color-text` | Body text, headings |
+| `--color-text-secondary` | Secondary text, labels |
+| `--color-text-muted` | Placeholders, meta text |
+| `--color-focus-ring` | Focus ring color |
+| `--color-on-accent` | Text on colored surfaces (button labels, active pagination, badges) |
+
+### Code surfaces
+
+Dark in both themes, for readability.
+
+| Token | Used for |
+|-------|----------|
+| `--color-code-bg` | Code block background |
+| `--color-code-header` | Code block header bar |
+| `--color-code-border` | Code block border |
+| `--color-code-text` | Code text |
 
 ## Typography
 
@@ -136,7 +174,10 @@ values only inside tokens such as borders/shadows.
 
 - Radii: `--radius-sm` (4px), `--radius-md` (8px, default for cards/buttons),
   `--radius-lg` (12px), `--radius-xl` (16px), `--radius-full` (pill).
-- Shadows: `--shadow-sm/md/lg` for elevation; cards default to `--shadow-sm`.
+- Elevation: `--shadow-card` is the default card/panel shadow and
+  `--shadow-elevated` is for menus, dialogs and popovers. Both are defined per
+  theme, so elevation darkens with the palette. `--shadow-sm/md/lg` are legacy
+  aliases with no current use — do not reach for them in new code.
 - Transitions: `--transition-fast` (150ms) for hovers, `--transition-base`
   (200ms) for theme/color changes.
 
