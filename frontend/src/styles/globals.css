@@ -113,6 +113,19 @@
     var(--color-primary-hover)
   );
 
+  /* Code-surface severity. The code surface is dark in *both* palettes, so these
+     are theme-independent and live here rather than being duplicated per theme.
+     They are deliberately not the page status tokens: on the dark code surface
+     light-mode `--color-danger` (#dc2626) manages only 3.70:1 and
+     `--color-text-muted` 2.36:1, so reusing them would have shipped unreadable
+     logs in light mode. Every value below clears 4.5:1 against both
+     `--color-code-bg` values; `theme-contrast.test.ts` asserts it. */
+  --color-code-muted: #94a3b8;
+  --color-code-error: #f87171;
+  --color-code-warn: #fbbf24;
+  --color-code-ok: #4ade80;
+  --color-code-gutter: #1e293b;
+
   /* Typography */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", monospace;

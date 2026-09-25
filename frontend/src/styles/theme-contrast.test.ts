@@ -71,6 +71,15 @@ function themeTokens(selector: string): Record<string, string> {
 const LIGHT = themeTokens(':root,\n[data-theme="light"]');
 const DARK = themeTokens('[data-theme="dark"]');
 
+/** Tokens declared outside both palette blocks (theme-independent). */
+const BASE = (() => {
+  const tokens: Record<string, string> = {};
+  for (const match of GLOBALS.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8})\s*;/g)) {
+    tokens[match[1]!] ??= match[2]!;
+  }
+  return tokens;
+})();
+
 /** Every hex stop inside the title gradient must clear this against its background. */
 const MIN_CONTRAST = 4.5;
 
@@ -91,6 +100,53 @@ describe("title gradient contrast", () => {
       expect(
         ratio,
         `--${stop} (${tokens[stop]}) on --color-bg (${tokens["color-bg"]}) is only ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+  });
+});
+
+/**
+ * The code surface is dark in BOTH palettes, so severity tokens defined outside
+ * the palette blocks still have to clear contrast against both `--color-code-bg`
+ * values. Without this, the tempting `var(--color-danger)` shorthand would pass
+ * every check and still render light-mode failure logs at 3.70:1.
+ */
+/** Glob keys keep their `../` prefix, so match on the suffix. */
+const CODE_BLOCK_CSS =
+  Object.entries(MODULE_CSS).find(([path]) =>
+    path.endsWith("components/CodeBlock/CodeBlock.module.css"),
+  )?.[1] ?? "";
+
+const CODE_SEVERITY_TOKENS = [
+  "color-code-muted",
+  "color-code-error",
+  "color-code-warn",
+  "color-code-ok",
+];
+
+describe("code surface severity contrast", () => {
+  it("does not fall back to the page status tokens on the code surface", () => {
+    const module = CODE_BLOCK_CSS;
+    expect(module, "CodeBlock.module.css must be reachable through the glob").not.toBe("");
+    const declarations = [...module.matchAll(/color:\s*([^;]+);/g)].map((m) => m[1]!.trim());
+    const severityColors = declarations.filter((value) => /^var\(--color-code-/.test(value));
+    expect(severityColors.length).toBeGreaterThanOrEqual(CODE_SEVERITY_TOKENS.length);
+    for (const value of severityColors) {
+      expect(value, `${value} must be a code-surface token`).toMatch(/^var\(--color-code-/);
+    }
+  });
+
+  it.each([
+    ["light", LIGHT],
+    ["dark", DARK],
+  ] as const)("every severity token clears %s-theme contrast on the code background", (_theme, tokens) => {
+    for (const token of CODE_SEVERITY_TOKENS) {
+      const value = BASE[token];
+      expect(value, `${token} must be defined once, outside the palette blocks`).toBeDefined();
+      const ratio = contrastRatio(value!, tokens["color-code-bg"]!);
+      expect(
+        ratio,
+        `--${token} (${value}) on --color-code-bg (${tokens["color-code-bg"]}) is only ${ratio.toFixed(2)}:1`,
       ).toBeGreaterThanOrEqual(MIN_CONTRAST);
     }
   });
