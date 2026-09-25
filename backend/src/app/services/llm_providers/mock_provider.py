@@ -97,6 +97,22 @@ _PY_SOLUTIONS: dict[str, str] = {
     "sum": ("def sum_list(nums):\n    return sum(nums)\n"),
     "sort": ("def sort_list(items):\n    return sorted(items)\n"),
     "max": ("def find_max(nums):\n    if not nums:\n        return None\n    return max(nums)\n"),
+    "trapping_rain_water": (
+        "def trap_rain_water(heights):\n"
+        "    left, right = 0, len(heights) - 1\n"
+        "    left_max = right_max = 0\n"
+        "    total = 0\n"
+        "    while left < right:\n"
+        "        if heights[left] < heights[right]:\n"
+        "            left_max = max(left_max, heights[left])\n"
+        "            total += left_max - heights[left]\n"
+        "            left += 1\n"
+        "        else:\n"
+        "            right_max = max(right_max, heights[right])\n"
+        "            total += right_max - heights[right]\n"
+        "            right -= 1\n"
+        "    return total\n"
+    ),
 }
 
 # --- JavaScript -------------------------------------------------------------
@@ -215,6 +231,25 @@ _JS_SOLUTIONS: dict[str, str] = {
         "}\n"
         "module.exports = { findMax };\n"
     ),
+    "trapping_rain_water": (
+        "function trapRainWater(heights) {\n"
+        "  let left = 0, right = heights.length - 1;\n"
+        "  let leftMax = 0, rightMax = 0, total = 0;\n"
+        "  while (left < right) {\n"
+        "    if (heights[left] < heights[right]) {\n"
+        "      leftMax = Math.max(leftMax, heights[left]);\n"
+        "      total += leftMax - heights[left];\n"
+        "      left++;\n"
+        "    } else {\n"
+        "      rightMax = Math.max(rightMax, heights[right]);\n"
+        "      total += rightMax - heights[right];\n"
+        "      right--;\n"
+        "    }\n"
+        "  }\n"
+        "  return total;\n"
+        "}\n"
+        "module.exports = { trapRainWater };\n"
+    ),
 }
 
 # --- TypeScript -------------------------------------------------------------
@@ -315,6 +350,27 @@ _TS_SOLUTIONS: dict[str, str] = {
         "export function findMax(nums: number[]): number | null {\n"
         "  if (nums.length === 0) return null;\n"
         "  return Math.max(...nums);\n"
+        "}\n"
+    ),
+    "trapping_rain_water": (
+        "export function trapRainWater(heights: number[]): number {\n"
+        "  let left = 0;\n"
+        "  let right = heights.length - 1;\n"
+        "  let leftMax = 0;\n"
+        "  let rightMax = 0;\n"
+        "  let total = 0;\n"
+        "  while (left < right) {\n"
+        "    if (heights[left] < heights[right]) {\n"
+        "      leftMax = Math.max(leftMax, heights[left]);\n"
+        "      total += leftMax - heights[left];\n"
+        "      left++;\n"
+        "    } else {\n"
+        "      rightMax = Math.max(rightMax, heights[right]);\n"
+        "      total += rightMax - heights[right];\n"
+        "      right--;\n"
+        "    }\n"
+        "  }\n"
+        "  return total;\n"
         "}\n"
     ),
 }
@@ -484,6 +540,26 @@ _JAVA_SOLUTIONS: dict[str, str] = {
         "        int max = nums[0];\n"
         "        for (int num : nums) if (num > max) max = num;\n"
         "        return max;\n"
+        "    }\n"
+        "}\n"
+    ),
+    "trapping_rain_water": (
+        "public class Solution {\n"
+        "    public static int trapRainWater(int[] heights) {\n"
+        "        int left = 0, right = heights.length - 1;\n"
+        "        int leftMax = 0, rightMax = 0, total = 0;\n"
+        "        while (left < right) {\n"
+        "            if (heights[left] < heights[right]) {\n"
+        "                leftMax = Math.max(leftMax, heights[left]);\n"
+        "                total += leftMax - heights[left];\n"
+        "                left++;\n"
+        "            } else {\n"
+        "                rightMax = Math.max(rightMax, heights[right]);\n"
+        "                total += rightMax - heights[right];\n"
+        "                right--;\n"
+        "            }\n"
+        "        }\n"
+        "        return total;\n"
         "    }\n"
         "}\n"
     ),
@@ -700,6 +776,695 @@ _GO_SOLUTIONS: dict[str, str] = {
         "    return &max\n"
         "}\n"
     ),
+    "trapping_rain_water": (
+        "package main\n"
+        "\n"
+        "func TrapRainWater(heights []int) int {\n"
+        "    left, right := 0, len(heights)-1\n"
+        "    leftMax, rightMax, total := 0, 0, 0\n"
+        "    for left < right {\n"
+        "        if heights[left] < heights[right] {\n"
+        "            if heights[left] > leftMax {\n"
+        "                leftMax = heights[left]\n"
+        "            }\n"
+        "            total += leftMax - heights[left]\n"
+        "            left++\n"
+        "        } else {\n"
+        "            if heights[right] > rightMax {\n"
+        "                rightMax = heights[right]\n"
+        "            }\n"
+        "            total += rightMax - heights[right]\n"
+        "            right--\n"
+        "        }\n"
+        "    }\n"
+        "    return total\n"
+        "}\n"
+    ),
+}
+
+# --- C -----------------------------------------------------------------------
+_C_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "#include <stdlib.h>\n"
+        "\n"
+        "int* two_sum(int* nums, int nums_size, int target, int* return_size) {\n"
+        "    for (int i = 0; i < nums_size; i++) {\n"
+        "        for (int j = i + 1; j < nums_size; j++) {\n"
+        "            if (nums[i] + nums[j] == target) {\n"
+        "                int* result = malloc(2 * sizeof(int));\n"
+        "                result[0] = i;\n"
+        "                result[1] = j;\n"
+        "                *return_size = 2;\n"
+        "                return result;\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "    *return_size = 0;\n"
+        "    return NULL;\n"
+        "}\n"
+    ),
+    "fizzbuzz": (
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "#include <string.h>\n"
+        "\n"
+        "char** fizzbuzz(int n, int* return_size) {\n"
+        "    if (n <= 0) {\n"
+        "        *return_size = 0;\n"
+        "        return NULL;\n"
+        "    }\n"
+        "    char** result = malloc((size_t)n * sizeof(char*));\n"
+        "    for (int i = 1; i <= n; i++) {\n"
+        "        const char* value;\n"
+        "        char number[32];\n"
+        "        if (i % 15 == 0) {\n"
+        '            value = "FizzBuzz";\n'
+        "        } else if (i % 3 == 0) {\n"
+        '            value = "Fizz";\n'
+        "        } else if (i % 5 == 0) {\n"
+        '            value = "Buzz";\n'
+        "        } else {\n"
+        '            snprintf(number, sizeof(number), "%d", i);\n'
+        "            value = number;\n"
+        "        }\n"
+        "        size_t len = strlen(value) + 1;\n"
+        "        result[i - 1] = malloc(len);\n"
+        "        memcpy(result[i - 1], value, len);\n"
+        "    }\n"
+        "    *return_size = n;\n"
+        "    return result;\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "#include <stdbool.h>\n"
+        "\n"
+        "bool valid_parentheses(const char* s) {\n"
+        "    char stack[512];\n"
+        "    int top = 0;\n"
+        "    for (const char* p = s; *p; p++) {\n"
+        "        if (*p == '(' || *p == '[' || *p == '{') {\n"
+        "            if (top >= 512) return false;\n"
+        "            stack[top++] = *p;\n"
+        "        } else if (*p == ')' || *p == ']' || *p == '}') {\n"
+        "            if (top == 0) return false;\n"
+        "            char open = stack[--top];\n"
+        "            if ((*p == ')' && open != '(') ||\n"
+        "                (*p == ']' && open != '[') ||\n"
+        "                (*p == '}' && open != '{')) {\n"
+        "                return false;\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "    return top == 0;\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "#include <stdlib.h>\n"
+        "#include <string.h>\n"
+        "\n"
+        "char* longest_common_prefix(char** strs, int strs_size) {\n"
+        "    if (strs_size == 0) {\n"
+        "        char* empty = malloc(1);\n"
+        "        empty[0] = '\\0';\n"
+        "        return empty;\n"
+        "    }\n"
+        "    size_t prefix_len = strlen(strs[0]);\n"
+        "    for (int i = 1; i < strs_size; i++) {\n"
+        "        size_t other_len = strlen(strs[i]);\n"
+        "        size_t limit = prefix_len < other_len ? prefix_len : other_len;\n"
+        "        size_t match = 0;\n"
+        "        while (match < limit && strs[i][match] == strs[0][match]) {\n"
+        "            match++;\n"
+        "        }\n"
+        "        prefix_len = match;\n"
+        "        if (prefix_len == 0) break;\n"
+        "    }\n"
+        "    char* result = malloc(prefix_len + 1);\n"
+        "    memcpy(result, strs[0], prefix_len);\n"
+        "    result[prefix_len] = '\\0';\n"
+        "    return result;\n"
+        "}\n"
+    ),
+    "fibonacci": (
+        "#include <stdlib.h>\n"
+        "\n"
+        "long long* fibonacci(int n, int* return_size) {\n"
+        "    if (n <= 0) {\n"
+        "        *return_size = 0;\n"
+        "        return NULL;\n"
+        "    }\n"
+        "    long long* seq = malloc((size_t)n * sizeof(long long));\n"
+        "    if (n >= 1) seq[0] = 0;\n"
+        "    if (n >= 2) seq[1] = 1;\n"
+        "    for (int i = 2; i < n; i++) {\n"
+        "        seq[i] = seq[i - 1] + seq[i - 2];\n"
+        "    }\n"
+        "    *return_size = n;\n"
+        "    return seq;\n"
+        "}\n"
+    ),
+}
+
+# --- C++ ---------------------------------------------------------------------
+_CPP_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "#include <unordered_map>\n"
+        "#include <vector>\n"
+        "\n"
+        "std::vector<int> two_sum(const std::vector<int>& nums, int target) {\n"
+        "    std::unordered_map<int, int> seen;\n"
+        "    for (int i = 0; i < static_cast<int>(nums.size()); i++) {\n"
+        "        int complement = target - nums[i];\n"
+        "        auto it = seen.find(complement);\n"
+        "        if (it != seen.end()) return {it->second, i};\n"
+        "        seen[nums[i]] = i;\n"
+        "    }\n"
+        "    return {};\n"
+        "}\n"
+    ),
+    "fizzbuzz": (
+        "#include <string>\n"
+        "#include <vector>\n"
+        "\n"
+        "std::vector<std::string> fizzbuzz(int n) {\n"
+        "    std::vector<std::string> result;\n"
+        "    if (n <= 0) return result;\n"
+        "    result.reserve(static_cast<size_t>(n));\n"
+        "    for (int i = 1; i <= n; i++) {\n"
+        '        if (i % 15 == 0) result.emplace_back("FizzBuzz");\n'
+        '        else if (i % 3 == 0) result.emplace_back("Fizz");\n'
+        '        else if (i % 5 == 0) result.emplace_back("Buzz");\n'
+        "        else result.push_back(std::to_string(i));\n"
+        "    }\n"
+        "    return result;\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "#include <string>\n"
+        "#include <unordered_map>\n"
+        "#include <vector>\n"
+        "\n"
+        "bool valid_parentheses(const std::string& s) {\n"
+        "    std::unordered_map<char, char> pairs = {{')', '('}, {']', '['}, {'}', '{'}};\n"
+        "    std::vector<char> stack;\n"
+        "    for (char ch : s) {\n"
+        "        auto it = pairs.find(ch);\n"
+        "        if (it != pairs.end()) {\n"
+        "            if (stack.empty() || stack.back() != it->second) return false;\n"
+        "            stack.pop_back();\n"
+        "        } else if (ch == '(' || ch == '[' || ch == '{') {\n"
+        "            stack.push_back(ch);\n"
+        "        }\n"
+        "    }\n"
+        "    return stack.empty();\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "#include <string>\n"
+        "#include <vector>\n"
+        "\n"
+        "std::string longest_common_prefix(const std::vector<std::string>& strs) {\n"
+        '    if (strs.empty()) return "";\n'
+        "    std::string prefix = strs[0];\n"
+        "    for (size_t i = 1; i < strs.size(); i++) {\n"
+        "        while (strs[i].rfind(prefix, 0) != 0) {\n"
+        "            prefix.pop_back();\n"
+        '            if (prefix.empty()) return "";\n'
+        "        }\n"
+        "    }\n"
+        "    return prefix;\n"
+        "}\n"
+    ),
+    "fibonacci": (
+        "#include <vector>\n"
+        "\n"
+        "std::vector<long long> fibonacci(int n) {\n"
+        "    std::vector<long long> seq;\n"
+        "    if (n <= 0) return seq;\n"
+        "    seq.reserve(static_cast<size_t>(n));\n"
+        "    seq.push_back(0);\n"
+        "    if (n >= 2) {\n"
+        "        seq.push_back(1);\n"
+        "        for (int i = 2; i < n; i++) seq.push_back(seq[i - 1] + seq[i - 2]);\n"
+        "    }\n"
+        "    return seq;\n"
+        "}\n"
+    ),
+}
+
+# --- Rust --------------------------------------------------------------------
+_RUST_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "use std::collections::HashMap;\n"
+        "\n"
+        "pub fn two_sum(nums: &[i32], target: i32) -> Vec<i32> {\n"
+        "    let mut seen: HashMap<i32, usize> = HashMap::new();\n"
+        "    for (i, &num) in nums.iter().enumerate() {\n"
+        "        let complement = target - num;\n"
+        "        if let Some(&j) = seen.get(&complement) {\n"
+        "            return vec![j as i32, i as i32];\n"
+        "        }\n"
+        "        seen.insert(num, i);\n"
+        "    }\n"
+        "    vec![]\n"
+        "}\n"
+    ),
+    "fizzbuzz": (
+        "pub fn fizzbuzz(n: i32) -> Vec<String> {\n"
+        "    if n <= 0 { return Vec::new(); }\n"
+        "    (1..=n)\n"
+        "        .map(|i| {\n"
+        '            if i % 15 == 0 { "FizzBuzz".to_string() }\n'
+        '            else if i % 3 == 0 { "Fizz".to_string() }\n'
+        '            else if i % 5 == 0 { "Buzz".to_string() }\n'
+        "            else { i.to_string() }\n"
+        "        })\n"
+        "        .collect()\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "pub fn valid_parentheses(s: &str) -> bool {\n"
+        "    let mut stack: Vec<char> = Vec::new();\n"
+        "    for ch in s.chars() {\n"
+        "        match ch {\n"
+        "            '(' | '[' | '{' => stack.push(ch),\n"
+        "            ')' => {\n"
+        "                if stack.pop() != Some('(') { return false; }\n"
+        "            }\n"
+        "            ']' => {\n"
+        "                if stack.pop() != Some('[') { return false; }\n"
+        "            }\n"
+        "            '}' => {\n"
+        "                if stack.pop() != Some('{') { return false; }\n"
+        "            }\n"
+        "            _ => {}\n"
+        "        }\n"
+        "    }\n"
+        "    stack.is_empty()\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "pub fn longest_common_prefix(strs: &[&str]) -> String {\n"
+        "    if strs.is_empty() { return String::new(); }\n"
+        "    let mut prefix = strs[0].to_string();\n"
+        "    for s in strs.iter().skip(1) {\n"
+        "        while !s.starts_with(&prefix) {\n"
+        "            prefix.pop();\n"
+        "            if prefix.is_empty() { return String::new(); }\n"
+        "        }\n"
+        "    }\n"
+        "    prefix\n"
+        "}\n"
+    ),
+    "fibonacci": (
+        "pub fn fibonacci(n: i32) -> Vec<i64> {\n"
+        "    if n <= 0 { return Vec::new(); }\n"
+        "    let mut seq: Vec<i64> = Vec::with_capacity(n as usize);\n"
+        "    if n >= 1 { seq.push(0); }\n"
+        "    if n >= 2 { seq.push(1); }\n"
+        "    while (seq.len() as i32) < n {\n"
+        "        let next = seq[seq.len() - 1] + seq[seq.len() - 2];\n"
+        "        seq.push(next);\n"
+        "    }\n"
+        "    seq\n"
+        "}\n"
+    ),
+}
+
+# --- PHP ---------------------------------------------------------------------
+_PHP_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "<?php\n"
+        "\n"
+        "function two_sum(array $nums, int $target): array {\n"
+        "    $seen = [];\n"
+        "    foreach ($nums as $i => $num) {\n"
+        "        $complement = $target - $num;\n"
+        "        if (array_key_exists($complement, $seen)) {\n"
+        "            return [$seen[$complement], $i];\n"
+        "        }\n"
+        "        $seen[$num] = $i;\n"
+        "    }\n"
+        "    return [];\n"
+        "}\n"
+    ),
+    "fizzbuzz": (
+        "<?php\n"
+        "\n"
+        "function fizzbuzz(int $n): array {\n"
+        "    if ($n <= 0) return [];\n"
+        "    $result = [];\n"
+        "    for ($i = 1; $i <= $n; $i++) {\n"
+        "        if ($i % 15 === 0) { $result[] = 'FizzBuzz'; }\n"
+        "        elseif ($i % 3 === 0) { $result[] = 'Fizz'; }\n"
+        "        elseif ($i % 5 === 0) { $result[] = 'Buzz'; }\n"
+        "        else { $result[] = (string) $i; }\n"
+        "    }\n"
+        "    return $result;\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "<?php\n"
+        "\n"
+        "function valid_parentheses(string $s): bool {\n"
+        "    $pairs = [')' => '(', ']' => '[', '}' => '{'];\n"
+        "    $stack = [];\n"
+        "    for ($i = 0; $i < strlen($s); $i++) {\n"
+        "        $ch = $s[$i];\n"
+        "        if (isset($pairs[$ch])) {\n"
+        "            if (array_pop($stack) !== $pairs[$ch]) return false;\n"
+        "        } elseif ($ch === '(' || $ch === '[' || $ch === '{') {\n"
+        "            $stack[] = $ch;\n"
+        "        }\n"
+        "    }\n"
+        "    return empty($stack);\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "<?php\n"
+        "\n"
+        "function longest_common_prefix(array $strs): string {\n"
+        "    if (count($strs) === 0) return '';\n"
+        "    $prefix = $strs[0];\n"
+        "    for ($i = 1; $i < count($strs); $i++) {\n"
+        "        while (strpos($strs[$i], $prefix) !== 0) {\n"
+        "            $prefix = substr($prefix, 0, -1);\n"
+        "            if ($prefix === '') return '';\n"
+        "        }\n"
+        "    }\n"
+        "    return $prefix;\n"
+        "}\n"
+    ),
+    "fibonacci": (
+        "<?php\n"
+        "\n"
+        "function fibonacci(int $n): array {\n"
+        "    if ($n <= 0) return [];\n"
+        "    $seq = [0];\n"
+        "    if ($n === 1) return $seq;\n"
+        "    $seq[] = 1;\n"
+        "    for ($i = 2; $i < $n; $i++) {\n"
+        "        $seq[] = $seq[$i - 1] + $seq[$i - 2];\n"
+        "    }\n"
+        "    return $seq;\n"
+        "}\n"
+    ),
+}
+
+# --- Ruby --------------------------------------------------------------------
+_RUBY_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "def two_sum(nums, target)\n"
+        "  seen = {}\n"
+        "  nums.each_with_index do |num, i|\n"
+        "    complement = target - num\n"
+        "    return [seen[complement], i] if seen.key?(complement)\n"
+        "    seen[num] = i\n"
+        "  end\n"
+        "  []\n"
+        "end\n"
+    ),
+    "fizzbuzz": (
+        "def fizzbuzz(n)\n"
+        "  return [] if n <= 0\n"
+        "  (1..n).map do |i|\n"
+        "    if i % 15 == 0\n"
+        "      'FizzBuzz'\n"
+        "    elsif i % 3 == 0\n"
+        "      'Fizz'\n"
+        "    elsif i % 5 == 0\n"
+        "      'Buzz'\n"
+        "    else\n"
+        "      i.to_s\n"
+        "    end\n"
+        "  end\n"
+        "end\n"
+    ),
+    "valid_parentheses": (
+        "def valid_parentheses(s)\n"
+        "  pairs = { ')' => '(', ']' => '[', '}' => '{' }\n"
+        "  stack = []\n"
+        "  s.each_char do |ch|\n"
+        "    if pairs.key?(ch)\n"
+        "      return false unless stack.pop == pairs[ch]\n"
+        "    elsif '([{'.include?(ch)\n"
+        "      stack.push(ch)\n"
+        "    end\n"
+        "  end\n"
+        "  stack.empty?\n"
+        "end\n"
+    ),
+    "longest_common_prefix": (
+        "def longest_common_prefix(strs)\n"
+        "  return '' if strs.empty?\n"
+        "  prefix = strs[0]\n"
+        "  strs[1..].each do |s|\n"
+        "    while !s.start_with?(prefix)\n"
+        "      prefix = prefix[0...-1]\n"
+        "      return '' if prefix.empty?\n"
+        "    end\n"
+        "  end\n"
+        "  prefix\n"
+        "end\n"
+    ),
+    "fibonacci": (
+        "def fibonacci(n)\n"
+        "  return [] if n <= 0\n"
+        "  seq = [0]\n"
+        "  return seq if n == 1\n"
+        "  seq << 1\n"
+        "  seq << seq[-1] + seq[-2] while seq.length < n\n"
+        "  seq\n"
+        "end\n"
+    ),
+}
+
+# --- Perl --------------------------------------------------------------------
+_PERL_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "use strict;\n"
+        "use warnings;\n"
+        "\n"
+        "sub two_sum {\n"
+        "    my ($nums, $target) = @_;\n"
+        "    my %seen;\n"
+        "    for my $i (0 .. $#$nums) {\n"
+        "        my $complement = $target - $nums->[$i];\n"
+        "        if (exists $seen{$complement}) {\n"
+        "            return [$seen{$complement}, $i];\n"
+        "        }\n"
+        "        $seen{ $nums->[$i] } = $i;\n"
+        "    }\n"
+        "    return [];\n"
+        "}\n"
+    ),
+    "fizzbuzz": (
+        "use strict;\n"
+        "use warnings;\n"
+        "\n"
+        "sub fizzbuzz {\n"
+        "    my ($n) = @_;\n"
+        "    my @result;\n"
+        "    return \\@result if $n <= 0;\n"
+        "    for my $i (1 .. $n) {\n"
+        "        if ($i % 15 == 0) { push @result, 'FizzBuzz'; }\n"
+        "        elsif ($i % 3 == 0) { push @result, 'Fizz'; }\n"
+        "        elsif ($i % 5 == 0) { push @result, 'Buzz'; }\n"
+        '        else { push @result, "$i"; }\n'
+        "    }\n"
+        "    return \\@result;\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "use strict;\n"
+        "use warnings;\n"
+        "\n"
+        "sub valid_parentheses {\n"
+        "    my ($s) = @_;\n"
+        "    my %pairs = (')' => '(', ']' => '[', '}' => '{');\n"
+        "    my @stack;\n"
+        "    for my $ch (split //, $s) {\n"
+        "        if (exists $pairs{$ch}) {\n"
+        "            return 0 unless @stack && pop(@stack) eq $pairs{$ch};\n"
+        "        }\n"
+        "        elsif ($ch eq '(' || $ch eq '[' || $ch eq '{') {\n"
+        "            push @stack, $ch;\n"
+        "        }\n"
+        "    }\n"
+        "    return @stack ? 0 : 1;\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "use strict;\n"
+        "use warnings;\n"
+        "\n"
+        "sub longest_common_prefix {\n"
+        "    my ($strs) = @_;\n"
+        "    return '' unless @$strs;\n"
+        "    my $prefix = $strs->[0];\n"
+        "    for my $i (1 .. $#$strs) {\n"
+        "        while (index($strs->[$i], $prefix) != 0) {\n"
+        "            $prefix = substr($prefix, 0, -1);\n"
+        "            return '' if $prefix eq '';\n"
+        "        }\n"
+        "    }\n"
+        "    return $prefix;\n"
+        "}\n"
+    ),
+    "fibonacci": (
+        "use strict;\n"
+        "use warnings;\n"
+        "\n"
+        "sub fibonacci {\n"
+        "    my ($n) = @_;\n"
+        "    return [] if $n <= 0;\n"
+        "    my @seq = (0);\n"
+        "    return \\@seq if $n == 1;\n"
+        "    push @seq, 1;\n"
+        "    push @seq, $seq[-1] + $seq[-2] while @seq < $n;\n"
+        "    return \\@seq;\n"
+        "}\n"
+    ),
+}
+
+# --- Lua ---------------------------------------------------------------------
+_LUA_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "function two_sum(nums, target)\n"
+        "    local seen = {}\n"
+        "    for i, num in ipairs(nums) do\n"
+        "        local complement = target - num\n"
+        "        if seen[complement] ~= nil then\n"
+        "            return { seen[complement], i - 1 }\n"
+        "        end\n"
+        "        seen[num] = i - 1\n"
+        "    end\n"
+        "    return {}\n"
+        "end\n"
+    ),
+    "fizzbuzz": (
+        "function fizzbuzz(n)\n"
+        "    local result = {}\n"
+        "    if n <= 0 then return result end\n"
+        "    for i = 1, n do\n"
+        "        if i % 15 == 0 then result[#result + 1] = 'FizzBuzz'\n"
+        "        elseif i % 3 == 0 then result[#result + 1] = 'Fizz'\n"
+        "        elseif i % 5 == 0 then result[#result + 1] = 'Buzz'\n"
+        "        else result[#result + 1] = tostring(i) end\n"
+        "    end\n"
+        "    return result\n"
+        "end\n"
+    ),
+    "valid_parentheses": (
+        "function valid_parentheses(s)\n"
+        "    local pairs = { [')'] = '(', [']'] = '[', ['}'] = '{' }\n"
+        "    local stack = {}\n"
+        "    for i = 1, #s do\n"
+        "        local ch = s:sub(i, i)\n"
+        "        if pairs[ch] then\n"
+        "            if #stack == 0 or table.remove(stack) ~= pairs[ch] then\n"
+        "                return false\n"
+        "            end\n"
+        "        elseif ch == '(' or ch == '[' or ch == '{' then\n"
+        "            stack[#stack + 1] = ch\n"
+        "        end\n"
+        "    end\n"
+        "    return #stack == 0\n"
+        "end\n"
+    ),
+    "longest_common_prefix": (
+        "function longest_common_prefix(strs)\n"
+        "    if #strs == 0 then return '' end\n"
+        "    local prefix = strs[1]\n"
+        "    for i = 2, #strs do\n"
+        "        while strs[i]:sub(1, #prefix) ~= prefix do\n"
+        "            prefix = prefix:sub(1, -2)\n"
+        "            if prefix == '' then return '' end\n"
+        "        end\n"
+        "    end\n"
+        "    return prefix\n"
+        "end\n"
+    ),
+    "fibonacci": (
+        "function fibonacci(n)\n"
+        "    local seq = {}\n"
+        "    if n <= 0 then return seq end\n"
+        "    seq[1] = 0\n"
+        "    if n == 1 then return seq end\n"
+        "    seq[2] = 1\n"
+        "    while #seq < n do\n"
+        "        seq[#seq + 1] = seq[#seq - 1] + seq[#seq]\n"
+        "    end\n"
+        "    return seq\n"
+        "end\n"
+    ),
+}
+
+# --- Kotlin ------------------------------------------------------------------
+_KOTLIN_SOLUTIONS: dict[str, str] = {
+    "two_sum": (
+        "fun twoSum(nums: IntArray, target: Int): IntArray {\n"
+        "    val seen = mutableMapOf<Int, Int>()\n"
+        "    for (i in nums.indices) {\n"
+        "        val complement = target - nums[i]\n"
+        "        val j = seen[complement]\n"
+        "        if (j != null) return intArrayOf(j, i)\n"
+        "        seen[nums[i]] = i\n"
+        "    }\n"
+        "    return intArrayOf()\n"
+        "}\n"
+    ),
+    "fizzbuzz": (
+        "fun fizzbuzz(n: Int): List<String> {\n"
+        "    if (n <= 0) return emptyList()\n"
+        "    val result = mutableListOf<String>()\n"
+        "    for (i in 1..n) {\n"
+        '        if (i % 15 == 0) result.add("FizzBuzz")\n'
+        '        else if (i % 3 == 0) result.add("Fizz")\n'
+        '        else if (i % 5 == 0) result.add("Buzz")\n'
+        "        else result.add(i.toString())\n"
+        "    }\n"
+        "    return result\n"
+        "}\n"
+    ),
+    "valid_parentheses": (
+        "fun validParentheses(s: String): Boolean {\n"
+        "    val pairs = mapOf(')' to '(', ']' to '[', '}' to '{')\n"
+        "    val stack = mutableListOf<Char>()\n"
+        "    for (ch in s) {\n"
+        "        val open = pairs[ch]\n"
+        "        if (open != null) {\n"
+        "            if (stack.isEmpty() || stack.removeAt(stack.lastIndex) != open) return false\n"
+        "        } else if (ch == '(' || ch == '[' || ch == '{') {\n"
+        "            stack.add(ch)\n"
+        "        }\n"
+        "    }\n"
+        "    return stack.isEmpty()\n"
+        "}\n"
+    ),
+    "longest_common_prefix": (
+        "fun longestCommonPrefix(strs: Array<String>): String {\n"
+        '    if (strs.isEmpty()) return ""\n'
+        "    var prefix = strs[0]\n"
+        "    for (i in 1 until strs.size) {\n"
+        "        while (!strs[i].startsWith(prefix)) {\n"
+        "            prefix = prefix.dropLast(1)\n"
+        '            if (prefix.isEmpty()) return ""\n'
+        "        }\n"
+        "    }\n"
+        "    return prefix\n"
+        "}\n"
+    ),
+    "fibonacci": (
+        "fun fibonacci(n: Int): List<Long> {\n"
+        "    if (n <= 0) return emptyList()\n"
+        "    val seq = mutableListOf(0L)\n"
+        "    if (n == 1) return seq\n"
+        "    seq.add(1L)\n"
+        "    while (seq.size < n) seq.add(seq[seq.lastIndex] + seq[seq.lastIndex - 1])\n"
+        "    return seq\n"
+        "}\n"
+    ),
 }
 
 # keyword → per-language solution lookup.
@@ -709,6 +1474,14 @@ SOLUTIONS_BY_LANGUAGE: dict[str, dict[str, str]] = {
     "typescript": _TS_SOLUTIONS,
     "java": _JAVA_SOLUTIONS,
     "go": _GO_SOLUTIONS,
+    "c": _C_SOLUTIONS,
+    "cpp": _CPP_SOLUTIONS,
+    "rust": _RUST_SOLUTIONS,
+    "php": _PHP_SOLUTIONS,
+    "ruby": _RUBY_SOLUTIONS,
+    "perl": _PERL_SOLUTIONS,
+    "lua": _LUA_SOLUTIONS,
+    "kotlin": _KOTLIN_SOLUTIONS,
 }
 
 DEFAULT_SOLUTIONS: dict[str, str] = {
@@ -746,6 +1519,48 @@ DEFAULT_SOLUTIONS: dict[str, str] = {
         "    return nil\n"
         "}\n"
     ),
+    "c": (
+        "#include <stdlib.h>\n"
+        "\n"
+        "// Default fallback for unrecognized prompts.\n"
+        "int* solution(int* nums, int nums_size, int* return_size) {\n"
+        "    *return_size = 0;\n"
+        "    return NULL;\n"
+        "}\n"
+    ),
+    "cpp": (
+        "#include <vector>\n"
+        "\n"
+        "// Default fallback for unrecognized prompts.\n"
+        "std::vector<int> solution() {\n"
+        "    return {};\n"
+        "}\n"
+    ),
+    "rust": (
+        "pub fn solution() -> i32 {\n    // Default fallback for unrecognized prompts.\n    0\n}\n"
+    ),
+    "php": (
+        "<?php\n"
+        "\n"
+        "// Default fallback for unrecognized prompts.\n"
+        "function solution(): int {\n"
+        "    return 0;\n"
+        "}\n"
+    ),
+    "ruby": ("# Default fallback for unrecognized prompts.\ndef solution\n  nil\nend\n"),
+    "perl": (
+        "use strict;\n"
+        "use warnings;\n"
+        "\n"
+        "# Default fallback for unrecognized prompts.\n"
+        "sub solution {\n"
+        "    return undef;\n"
+        "}\n"
+    ),
+    "lua": (
+        "-- Default fallback for unrecognized prompts.\nfunction solution()\n    return nil\nend\n"
+    ),
+    "kotlin": ("// Default fallback for unrecognized prompts.\nfun solution(): Int = 0\n"),
 }
 
 # Aliases so camelCase keywords in prompts ("twoSum", "isPrime") match the
@@ -762,6 +1577,7 @@ _CAMEL_ALIASES: dict[str, str] = {
     "longestcommonprefix": "longest_common_prefix",
     "fibonacci": "fibonacci",
     "palindrome": "palindrome",
+    "trappingrainwater": "trapping_rain_water",
 }
 
 

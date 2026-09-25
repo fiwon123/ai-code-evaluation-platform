@@ -1,10 +1,18 @@
 import pytest
 
 from app.services.language_runner import (
+    C_RUNNER,
+    CPP_RUNNER,
     GO_RUNNER,
     JAVA_RUNNER,
     JAVASCRIPT_RUNNER,
+    KOTLIN_RUNNER,
+    LUA_RUNNER,
+    PERL_RUNNER,
+    PHP_RUNNER,
     PYTHON_RUNNER,
+    RUBY_RUNNER,
+    RUST_RUNNER,
     TYPESCRIPT_RUNNER,
     get_runner,
     parse_go,
@@ -13,14 +21,17 @@ from app.services.language_runner import (
     parse_junit_detail,
     parse_node,
     parse_node_detail,
+    parse_pass_fail,
+    parse_pass_fail_detail,
     parse_pytest,
     parse_pytest_detail,
 )
+from app.services.languages import EXECUTABLE_LANGUAGES
 
 
 class TestRegistry:
     def test_all_supported_languages_present(self):
-        for language in ("python", "javascript", "typescript", "java", "go"):
+        for language in EXECUTABLE_LANGUAGES:
             assert get_runner(language) is not None
 
     def test_get_runner_returns_singleton_instances(self):
@@ -29,10 +40,18 @@ class TestRegistry:
         assert get_runner("typescript") is TYPESCRIPT_RUNNER
         assert get_runner("java") is JAVA_RUNNER
         assert get_runner("go") is GO_RUNNER
+        assert get_runner("c") is C_RUNNER
+        assert get_runner("cpp") is CPP_RUNNER
+        assert get_runner("rust") is RUST_RUNNER
+        assert get_runner("php") is PHP_RUNNER
+        assert get_runner("ruby") is RUBY_RUNNER
+        assert get_runner("perl") is PERL_RUNNER
+        assert get_runner("kotlin") is KOTLIN_RUNNER
+        assert get_runner("lua") is LUA_RUNNER
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="not supported"):
-            get_runner("ruby")
+            get_runner("csharp")
 
     def test_filenames_per_language(self):
         assert (PYTHON_RUNNER.solution_filename, PYTHON_RUNNER.test_filename) == (
@@ -54,6 +73,38 @@ class TestRegistry:
         assert (GO_RUNNER.solution_filename, GO_RUNNER.test_filename) == (
             "solution.go",
             "solution_test.go",
+        )
+        assert (C_RUNNER.solution_filename, C_RUNNER.test_filename) == (
+            "solution.c",
+            "test_solution.c",
+        )
+        assert (CPP_RUNNER.solution_filename, CPP_RUNNER.test_filename) == (
+            "solution.cpp",
+            "test_solution.cpp",
+        )
+        assert (RUST_RUNNER.solution_filename, RUST_RUNNER.test_filename) == (
+            "solution.rs",
+            "test_solution.rs",
+        )
+        assert (PHP_RUNNER.solution_filename, PHP_RUNNER.test_filename) == (
+            "solution.php",
+            "test_solution.php",
+        )
+        assert (RUBY_RUNNER.solution_filename, RUBY_RUNNER.test_filename) == (
+            "solution.rb",
+            "test_solution.rb",
+        )
+        assert (PERL_RUNNER.solution_filename, PERL_RUNNER.test_filename) == (
+            "solution.pl",
+            "test_solution.pl",
+        )
+        assert (LUA_RUNNER.solution_filename, LUA_RUNNER.test_filename) == (
+            "solution.lua",
+            "test_solution.lua",
+        )
+        assert (KOTLIN_RUNNER.solution_filename, KOTLIN_RUNNER.test_filename) == (
+            "solution.kt",
+            "test_solution.kt",
         )
 
 
@@ -89,6 +140,37 @@ class TestCommands:
         assert GO_RUNNER.env["GOCACHE"].startswith("/tmp/")
         assert GO_RUNNER.env["GOFLAGS"] == "-mod=mod"
 
+    def test_compiled_runners_build_into_mktemp(self):
+        for runner in (C_RUNNER, CPP_RUNNER, RUST_RUNNER, KOTLIN_RUNNER):
+            assert runner.command[:2] == ["sh", "-c"]
+            script = runner.command[2]
+            assert "mktemp -d" in script
+            assert "rm -rf" in script
+            assert "exit $rc" in script
+
+    def test_c_compiles_with_gcc(self):
+        script = C_RUNNER.command[2]
+        assert "gcc -std=c11 -Wall solution.c test_solution.c" in script
+
+    def test_cpp_compiles_with_gpp(self):
+        script = CPP_RUNNER.command[2]
+        assert "g++ -std=c++17 -Wall solution.cpp test_solution.cpp" in script
+
+    def test_rust_compiles_crate_root(self):
+        script = RUST_RUNNER.command[2]
+        assert "rustc --edition 2021 -O test_solution.rs" in script
+
+    def test_kotlin_compiles_then_runs_jar(self):
+        script = KOTLIN_RUNNER.command[2]
+        assert "kotlinc solution.kt test_solution.kt -include-runtime" in script
+        assert 'java -jar "$d/tests.jar"' in script
+
+    def test_interpreted_runners_invoke_the_runtime(self):
+        assert PHP_RUNNER.command == ["php", "test_solution.php"]
+        assert RUBY_RUNNER.command == ["ruby", "test_solution.rb"]
+        assert PERL_RUNNER.command == ["perl", "test_solution.pl"]
+        assert LUA_RUNNER.command == ["lua5.4", "test_solution.lua"]
+
 
 class TestTimeouts:
     def test_python_uses_global_default(self):
@@ -103,6 +185,15 @@ class TestTimeouts:
 
     def test_go_gets_compilation_headroom(self):
         assert GO_RUNNER.timeout > PYTHON_RUNNER.timeout
+
+    def test_new_compiled_runners_get_compilation_headroom(self):
+        for runner in (C_RUNNER, CPP_RUNNER, RUST_RUNNER, KOTLIN_RUNNER):
+            assert runner.timeout > PYTHON_RUNNER.timeout
+            assert runner.timeout == GO_RUNNER.timeout - 30  # shared _COMPILE_BUDGET
+
+    def test_new_interpreted_runners_share_python_default(self):
+        for runner in (PHP_RUNNER, RUBY_RUNNER, PERL_RUNNER, LUA_RUNNER):
+            assert runner.timeout == PYTHON_RUNNER.timeout
 
 
 class TestExtraFiles:
@@ -159,6 +250,20 @@ class TestParsers:
 
     def test_parse_go_empty_output(self):
         assert parse_go("") == (0, 0)
+
+    def test_parse_pass_fail_counts_lines(self):
+        output = "PASS: two_sum basic\nFAIL: valid_parentheses mismatched\nPASS: lcp"
+        assert parse_pass_fail(output) == (2, 3)
+
+    def test_parse_pass_fail_all_pass(self):
+        assert parse_pass_fail("PASS: a\nPASS: b") == (2, 2)
+
+    def test_parse_pass_fail_empty_output(self):
+        assert parse_pass_fail("") == (0, 0)
+
+    def test_parse_pass_fail_ignores_non_protocol_lines(self):
+        output = "compiling...\nPASS: a\ngcc: warning: none\n"
+        assert parse_pass_fail(output) == (1, 1)
 
 
 class TestDetailParsers:
@@ -273,7 +378,24 @@ class TestDetailParsers:
         assert [d["name"] for d in details] == ["TestTwoSum"]
 
     def test_go_detail_falls_back_to_counts(self):
-        assert parse_go_detail("ok  	example 0.001s") == (0, 0, [])
+        assert parse_go_detail("ok  \texample 0.001s") == (0, 0, [])
+
+    def test_pass_fail_detail_mixed_output(self):
+        output = "PASS: two_sum basic\nFAIL: two_sum no solution - expected [] got [0]\n"
+        passed, total, details = parse_pass_fail_detail(output)
+        assert (passed, total) == (1, 2)
+        assert [d["name"] for d in details] == ["two_sum basic", "two_sum no solution"]
+        assert [d["passed"] for d in details] == [True, False]
+        assert details[1]["message"] == "expected [] got [0]"
+
+    def test_pass_fail_detail_all_pass(self):
+        passed, total, details = parse_pass_fail_detail("PASS: a\nPASS: b\n")
+        assert (passed, total) == (2, 2)
+        assert all(d["passed"] for d in details)
+        assert all(d["message"] is None for d in details)
+
+    def test_pass_fail_detail_falls_back_to_counts(self):
+        assert parse_pass_fail_detail("") == (0, 0, [])
 
     def test_every_runner_has_a_detail_parser_wired(self):
         for runner in (
@@ -282,5 +404,13 @@ class TestDetailParsers:
             TYPESCRIPT_RUNNER,
             JAVA_RUNNER,
             GO_RUNNER,
+            C_RUNNER,
+            CPP_RUNNER,
+            RUST_RUNNER,
+            PHP_RUNNER,
+            RUBY_RUNNER,
+            PERL_RUNNER,
+            LUA_RUNNER,
+            KOTLIN_RUNNER,
         ):
             assert runner.parse_detail is not None, runner.language

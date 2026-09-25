@@ -1,30 +1,75 @@
 import { describe, expect, it } from "vitest";
 import {
+  DISPLAY_ONLY_LANGUAGES,
+  EXECUTABLE_LANGUAGES,
   LANGUAGES,
   LANGUAGE_EXAMPLES,
+  LANGUAGE_RUNNERS,
   evaluationEstimate,
   examplesForLanguage,
   languageGuide,
+  languageLabel,
+  languageMeta,
+  runnerForLanguage,
 } from "./language.ts";
 
-describe("examplesForLanguage", () => {
-  it("returns 2-3 curated examples per supported language", () => {
+describe("language catalog", () => {
+  it("covers 20 catalog languages in a stable order", () => {
+    expect(LANGUAGES).toEqual([
+      "python", "javascript", "typescript", "java", "go",
+      "c", "cpp", "rust", "php", "ruby", "perl", "kotlin", "lua",
+      "csharp", "swift", "dart", "scala", "r", "haskell", "objective-c",
+    ]);
+  });
+
+  it("splits 13 executable from 7 display-only languages", () => {
+    expect(EXECUTABLE_LANGUAGES).toHaveLength(13);
+    expect(DISPLAY_ONLY_LANGUAGES).toHaveLength(7);
+    const union = new Set([...EXECUTABLE_LANGUAGES, ...DISPLAY_ONLY_LANGUAGES]);
+    expect(union.size).toBe(20);
+  });
+
+  it("uses display names for awkward language keys", () => {
+    expect(languageLabel("cpp")).toBe("C++");
+    expect(languageLabel("csharp")).toBe("C#");
+    expect(languageLabel("objective-c")).toBe("Objective-C");
+    expect(languageLabel("python")).toBe("Python");
+    expect(languageLabel("php")).toBe("PHP");
+  });
+
+  it("falls back to a derived label for unknown languages", () => {
+    expect(languageLabel("cobol")).toBe("Cobol");
+    expect(languageLabel(null)).toBe("Unknown");
+  });
+
+  it("keeps a symbol and color for every catalog language", () => {
     for (const lang of LANGUAGES) {
-      const examples = examplesForLanguage(lang);
-      expect(examples.length).toBeGreaterThanOrEqual(2);
-      expect(examples.length).toBeLessThanOrEqual(3);
+      const meta = languageMeta(lang);
+      expect(meta.symbol.length).toBeGreaterThan(0);
+      expect(meta.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
+  });
+});
+
+describe("examplesForLanguage", () => {
+  it("returns exactly 3 curated examples per catalog language", () => {
+    for (const lang of LANGUAGES) {
+      expect(examplesForLanguage(lang)).toHaveLength(3);
     }
   });
 
-  it("covers the same three example problems in every language", () => {
-    const problems = ["two sum", "valid parentheses", "longest common prefix"];
+  it("covers the shared spine plus a varied third problem", () => {
+    const THIRDS = [
+      "longest common prefix",
+      "fizzbuzz",
+      "fibonacci",
+      "trapping rain water",
+    ];
     for (const lang of LANGUAGES) {
       const titles = examplesForLanguage(lang).map((e) => e.title.toLowerCase());
-      for (const problem of problems) {
-        expect(
-          titles.some((title) => title.includes(problem)),
-        ).toBe(true);
-      }
+      expect(titles[0]).toContain("two sum");
+      expect(titles[1]).toContain("valid parentheses");
+      expect(THIRDS.some((third) => titles[2].includes(third))).toBe(true);
     }
   });
 
@@ -38,7 +83,14 @@ describe("examplesForLanguage", () => {
   });
 
   it("returns an empty list for unknown languages", () => {
-    expect(examplesForLanguage("ruby")).toEqual([]);
+    expect(examplesForLanguage("cobol")).toEqual([]);
+  });
+
+  it("keeps every executable language's example prompt playable", () => {
+    for (const lang of EXECUTABLE_LANGUAGES) {
+      const example = LANGUAGE_EXAMPLES[lang as keyof typeof LANGUAGE_EXAMPLES][0];
+      expect(example.prompt.length).toBeGreaterThan(20);
+    }
   });
 });
 
@@ -56,28 +108,63 @@ describe("languageGuide", () => {
     expect(guide.testCode).toContain("func TestTwoSum");
   });
 
+  it("knows the extension for every catalog language", () => {
+    const extensions = [
+      "py", "js", "ts", "java", "go",
+      "c", "cpp", "rs", "php", "rb", "pl", "kt", "lua",
+      "cs", "swift", "dart", "scala", "r", "hs", "m",
+    ];
+    LANGUAGES.forEach((lang, index) => {
+      expect(languageGuide(lang).extension).toBe(extensions[index]);
+    });
+  });
+
   it("falls back for unknown languages", () => {
-    const guide = languageGuide("ruby");
+    const guide = languageGuide("cobol");
     expect(guide.prompt).toContain("two_sum");
     expect(guide.extension).toBe("txt");
   });
 });
 
+describe("LANGUAGE_RUNNERS", () => {
+  it("covers exactly the 13 executable languages", () => {
+    expect(Object.keys(LANGUAGE_RUNNERS).sort()).toEqual(
+      [...EXECUTABLE_LANGUAGES].sort(),
+    );
+  });
+
+  it("mirrors the sandbox filenames per language", () => {
+    expect(runnerForLanguage("c")?.solutionFilename).toBe("solution.c");
+    expect(runnerForLanguage("cpp")?.testFilename).toBe("test_solution.cpp");
+    expect(runnerForLanguage("rust")?.runner).toBe("rustc --test");
+    expect(runnerForLanguage("kotlin")?.solutionFilename).toBe("solution.kt");
+    expect(runnerForLanguage("lua")?.testFilename).toBe("test_solution.lua");
+  });
+
+  it("returns null for display-only and unknown languages", () => {
+    for (const lang of DISPLAY_ONLY_LANGUAGES) {
+      expect(runnerForLanguage(lang)).toBeNull();
+    }
+    expect(runnerForLanguage("cobol")).toBeNull();
+    expect(runnerForLanguage(null)).toBeNull();
+  });
+});
+
 describe("evaluationEstimate", () => {
   it("gives the short estimate for quick-to-run languages", () => {
-    for (const lang of ["python", "javascript", "typescript"]) {
+    for (const lang of ["python", "javascript", "typescript", "php", "ruby", "perl", "lua"]) {
       expect(evaluationEstimate(lang)).toBe("about 10–30 seconds");
     }
   });
 
-  it("warns about compilation for java and go", () => {
-    for (const lang of ["java", "go"]) {
+  it("warns about compilation for compiled languages", () => {
+    for (const lang of ["java", "go", "c", "cpp", "rust", "kotlin"]) {
       expect(evaluationEstimate(lang)).toContain("up to ~2 minutes");
     }
   });
 
   it("falls back for unknown or missing language", () => {
-    expect(evaluationEstimate("ruby")).toBe("under a minute");
+    expect(evaluationEstimate("cobol")).toBe("under a minute");
     expect(evaluationEstimate(null)).toBe("under a minute");
   });
 });

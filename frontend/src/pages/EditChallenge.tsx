@@ -14,7 +14,7 @@ import {
   useFieldId,
 } from "../components/Input/Input.tsx";
 import { extractError } from "../utils/errors.ts";
-import { LANGUAGES, languageGuide } from "../utils/language.ts";
+import { LANGUAGES, languageGuide, languageLabel } from "../utils/language.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import type { ChallengeDifficulty } from "../types.ts";
 
@@ -178,7 +178,7 @@ export default function EditChallenge() {
               >
                 {LANGUAGES.map((lang) => (
                   <option key={lang} value={lang}>
-                    {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                    {languageLabel(lang)}
                   </option>
                 ))}
               </SelectInput>

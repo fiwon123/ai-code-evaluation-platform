@@ -32,7 +32,9 @@ class Challenge(UUIDMixin, TimestampMixin, Base):
 
     __table_args__ = (
         CheckConstraint(
-            "language IN ('python', 'javascript', 'typescript', 'java', 'go')",
+            "language IN ('python', 'javascript', 'typescript', 'java', 'go', "
+            "'c', 'cpp', 'rust', 'php', 'ruby', 'perl', 'kotlin', 'lua', "
+            "'csharp', 'swift', 'dart', 'scala', 'r', 'haskell', 'objective-c')",
             name="ck_challenges_language_supported",
         ),
         CheckConstraint(

@@ -3,7 +3,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-LANGUAGES = frozenset({"python", "javascript", "typescript", "java", "go"})
+from app.services.languages import CATALOG_LANGUAGES
+
+LANGUAGES = CATALOG_LANGUAGES
 DIFFICULTIES = frozenset({"easy", "medium", "hard"})
 
 

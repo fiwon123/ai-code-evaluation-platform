@@ -9,20 +9,38 @@
 #   - TypeScript   tsx (tsx --test)
 #   - Java         javac + JUnit Platform console launcher
 #   - Go           go test -v
+#   - C            gcc (PASS/FAIL harness)
+#   - C++          g++ (PASS/FAIL harness)
+#   - Rust         rustc (PASS/FAIL harness)
+#   - PHP          php-cli (PASS/FAIL harness)
+#   - Ruby         ruby (PASS/FAIL harness)
+#   - Perl         perl (PASS/FAIL harness)
+#   - Lua          lua5.4 (PASS/FAIL harness)
+#   - Kotlin       kotlinc + java (PASS/FAIL harness)
 #
 # The container gets no network access at runtime; the Go module cache and
 # GOPATH are redirected to /tmp (tmpfs) and GOPROXY is disabled so `go test`
 # never attempts to download dependencies.
 FROM python:3.14-slim
 
-# Go + OpenJDK 21 (Java) via apt (Debian 13 repos). Java 21 is the LTS on
-# trixie — openjdk-17 was removed from the Debian 13 repos. Node.js is NOT
-# installed from apt: Debian 13 ships node 20/npm 9, whose HTTPS breaks
-# against the system OpenSSL 3.5 (TLS to registry.npmjs.org fails with
-# ETIMEDOUT — python/curl work fine). The official Node tarball below
-# bundles its own OpenSSL, matching the dev image (Node 22.23.2).
+# Composers (C/C++/Rust), scripting runtimes (PHP/Ruby/Perl/Lua), Go + OpenJDK
+# 21 (Java) via apt (Debian 13 repos). Java 21 is the LTS on trixie —
+# openjdk-17 was removed from the Debian 13 repos. Node.js is NOT installed
+# from apt: Debian 13 ships node 20/npm 9, whose HTTPS breaks against the
+# system OpenSSL 3.5 (TLS to registry.npmjs.org fails with ETIMEDOUT —
+# python/curl work fine). The official Node tarball below bundles its own
+# OpenSSL, matching the dev image (Node 22.23.2). rustc needs `cc` to link,
+# which `gcc` provides.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
+        unzip \
+        gcc \
+        g++ \
+        rustc \
+        php-cli \
+        ruby \
+        perl \
+        lua5.4 \
         openjdk-21-jdk-headless \
         golang-go \
     && rm -rf /var/lib/apt/lists/*
@@ -64,6 +82,17 @@ RUN pip install --no-cache-dir pytest \
 # image build is reproducible.
 ADD https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.1/junit-platform-console-standalone-1.10.1.jar \
     /opt/junit/junit-platform-console-standalone.jar
+
+# Kotlin compiler (JetBrains official distribution, JVM-based — architecture
+# independent, so no TARGETARCH handling needed). kotlinc resolves the JDK
+# from `java` on PATH (openjdk-21 above). Pinned for reproducible builds.
+ARG KOTLIN_VERSION=2.1.20
+RUN curl -fsSL "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip" -o /tmp/kotlinc.zip \
+    && mkdir -p /opt/kotlinc \
+    && unzip -q /tmp/kotlinc.zip -d /opt/kotlinc \
+    && ln -sf /opt/kotlinc/kotlinc/bin/* /usr/local/bin/ \
+    && kotlinc -version \
+    && rm -rf /tmp/kotlinc.zip
 
 # Evaluation files (solution.py, test_solution.py, Solution.java, solution.go
 # ...) are injected here at runtime via `docker put_archive`.

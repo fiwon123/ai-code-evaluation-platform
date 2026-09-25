@@ -5,6 +5,7 @@ import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import CodeBlock from "../../components/CodeBlock/CodeBlock.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
+import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
@@ -15,6 +16,7 @@ import { extractError } from "../../utils/errors.ts";
 import { formatElapsed } from "../../utils/formatting.ts";
 import {
   extensionForLanguage,
+  languageLabel,
   runnerForLanguage,
 } from "../../utils/language.ts";
 import styles from "./Demo.module.css";
@@ -262,7 +264,7 @@ function Demo() {
                 >
                   {challenges.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.title} ({c.language})
+                      {c.title} ({languageLabel(c.language)})
                     </option>
                   ))}
                 </SelectInput>
@@ -385,9 +387,7 @@ function Demo() {
                 <div className={styles.preview}>
                   <div className={styles.previewHeader}>
                     <h3 className={styles.previewTitle}>What will run</h3>
-                    <Badge variant="neutral">
-                      {selectedChallenge.language}
-                    </Badge>
+                    <LanguageBadge language={selectedChallenge.language} />
                   </div>
                   {selectedChallenge.description && (
                     <p className={styles.previewDescription}>

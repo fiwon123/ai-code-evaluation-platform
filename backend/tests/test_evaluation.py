@@ -110,7 +110,7 @@ class TestEvaluateCode:
             evaluate_code(
                 code="x = 1",
                 test_code="test",
-                language="ruby",
+                language="csharp",
                 workdir=tmp_path,
             )
 
@@ -288,7 +288,7 @@ class TestEvaluateCodeDockerPath:
             evaluate_code(
                 code="x = 1",
                 test_code="",
-                language="ruby",
+                language="csharp",
                 workdir=tmp_path,
             )
         assert constructed == []

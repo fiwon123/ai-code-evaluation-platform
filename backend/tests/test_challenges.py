@@ -4,6 +4,8 @@ from datetime import UTC
 import pytest
 from httpx import AsyncClient
 
+from app.services.languages import EXECUTABLE_LANGUAGES
+
 CHALLENGES_URL = "/api/challenges"
 
 
@@ -248,22 +250,31 @@ async def test_create_challenge_rejects_unsupported_language(db_client: AsyncCli
     response = await db_client.post(
         CHALLENGES_URL,
         json={
-            "title": "Ruby task",
-            "description": "Unsupported runtime",
-            "prompt": "Write ruby code",
+            "title": "Cobol task",
+            "description": "Outside the catalog",
+            "prompt": "Write cobol code",
             "test_code": "",
-            "language": "ruby",
+            "language": "cobol",
         },
         headers=auth(token),
     )
     assert response.status_code == 422
-    assert "Unsupported language 'ruby'" in response.text
+    assert "Unsupported language 'cobol'" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_challenge_accepts_display_only_languages(db_client: AsyncClient) -> None:
+    """Catalog languages without runtimes are storable (they fail at eval)."""
+    token, _ = await register_user(db_client)
+    for language in ("csharp", "haskell", "objective-c"):
+        challenge = await create_challenge(db_client, token, language=language)
+        assert challenge["language"] == language
 
 
 @pytest.mark.asyncio
 async def test_create_challenge_accepts_all_supported_languages(db_client: AsyncClient) -> None:
     token, _ = await register_user(db_client)
-    for language in ("python", "javascript", "typescript", "java", "go"):
+    for language in EXECUTABLE_LANGUAGES:
         challenge = await create_challenge(db_client, token, language=language)
         assert challenge["language"] == language
 

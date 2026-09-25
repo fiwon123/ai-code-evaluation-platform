@@ -5,6 +5,7 @@ import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import ConfirmDialog from "../components/ConfirmDialog/ConfirmDialog.tsx";
+import LanguageBadge from "../components/LanguageBadge/LanguageBadge.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, modelsApi, submissionsApi } from "../services/api.ts";
@@ -358,7 +359,7 @@ function ChallengeDetail() {
           <h1 className={styles.title}>{challenge.title}</h1>
         </div>
         <div className={styles.headerBadges}>
-          <Badge variant="neutral">{challenge.language}</Badge>
+          <LanguageBadge language={challenge.language} />
           <Badge variant={DIFFICULTY_VARIANT[challenge.difficulty]}>
             {challenge.difficulty}
           </Badge>

@@ -23,9 +23,10 @@ test.describe("Challenges list", () => {
     await expect(page.getByText("Edit Distance")).toBeVisible();
     await expect(page.getByText("Return indices of the two numbers")).toBeVisible();
 
-    // Language + difficulty badges on the cards (exact case: the filter
-    // dropdowns render capitalized options like "Python"/"Easy").
-    await expect(page.getByText("python", { exact: true }).first()).toBeVisible();
+    // Language + difficulty badges on the cards. The language badge is located
+    // via its title tooltip ("Python · pytest") — its label text alone also
+    // matches the (hidden) filter options.
+    await expect(page.getByTitle("Python · pytest")).toBeVisible();
     await expect(page.getByText("easy", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("medium", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("hard", { exact: true }).first()).toBeVisible();
