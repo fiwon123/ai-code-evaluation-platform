@@ -31,7 +31,14 @@
    previous light-mode override turned the animation off as a side effect of
    neutralizing the clip. */
 .hero {
-  background: linear-gradient(
+  /* `background-image`, NOT the `background` shorthand. The shorthand resets
+     every background longhand it does not mention — including `background-clip`
+     — to its initial value, and this rule comes after `.title` at equal
+     specificity, so a shorthand here silently un-clips the gradient: it then
+     paints as a rectangle across the whole text box while `color: transparent`
+     leaves the letters invisible. Longhand + re-asserted clip cannot be undone
+     that way; `hero-sweep.test.ts` fails if a shorthand comes back. */
+  background-image: linear-gradient(
     100deg,
     var(--color-text) 0%,
     var(--color-primary) 25%,
@@ -39,6 +46,8 @@
     var(--color-primary) 75%,
     var(--color-text) 100%
   );
+  -webkit-background-clip: text;
+  background-clip: text;
   /* The gradient is wider than the text so the sweep has somewhere to travel,
      but it must stay wide enough that the whole text box is still painted for
      the entire animation — see the coverage note below. */
