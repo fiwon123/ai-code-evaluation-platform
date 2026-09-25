@@ -103,7 +103,10 @@ test.describe("Text contrast", () => {
       .locator("main")
       .first()
       .evaluate((el) => {
-        let node: HTMLElement | null = el;
+        // `evaluate` types its element as `SVGElement | HTMLElement`. Walking up
+        // only needs `getComputedStyle` and `parentElement`, which are on
+        // `Element` — so type it that way instead of asserting an HTMLElement.
+        let node: Element | null = el;
         while (node) {
           const bg = getComputedStyle(node).backgroundColor;
           if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent")

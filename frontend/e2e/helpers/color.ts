@@ -60,14 +60,18 @@ export async function paint(page: Page, target: Locator): Promise<Paint> {
   const handle = await target.elementHandle();
   if (!handle) throw new Error("element not found");
   return page.evaluate((el) => {
-    const gradientThrow = (node: HTMLElement): never => {
+    // `Element`, not `HTMLElement`: the walk only needs `getComputedStyle`,
+    // `style.backgroundColor` and `parentElement`, all of which exist on any
+    // element. The previous `el as HTMLElement` asserted more than was true and
+    // hid the same error the compiler flagged in contrast.spec.ts.
+    const gradientThrow = (node: Element): never => {
       throw new Error(
         `refusing to guess a gradient background for "${(el.textContent ?? "")
           .trim()
           .slice(0, 24)}" (on <${node.tagName.toLowerCase()}>)`,
       );
     };
-    let node: HTMLElement | null = el as HTMLElement;
+    let node: Element | null = el;
     let background = "";
     while (node) {
       const style = getComputedStyle(node);

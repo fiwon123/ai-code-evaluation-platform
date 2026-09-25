@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    // The specs run in Node but their `page.evaluate` bodies run in the
+    // browser, so DOM globals are in scope here by design — without this,
+    // `window`, `document`, `HTMLElement` and `URL` are all unknown names.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true,
+    // @playwright/test's own types reference Node globals, so these are needed
+    // even though the specs never touch them directly.
+    "types": ["node"],
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsBuildInfoFile"
+  },
+  "include": ["e2e/**/*.ts"]
+}
