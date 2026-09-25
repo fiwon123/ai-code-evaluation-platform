@@ -16,10 +16,13 @@ const STACK = [
 function About() {
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>About this project</h1>
-      <p className={styles.tagline}>
-        An open-source platform for automatically verifying AI-generated code.
-      </p>
+      <header className={styles.header}>
+        <span className="eyebrow">About</span>
+        <h1 className={styles.pageTitle}>About this project</h1>
+        <p className={styles.tagline}>
+          An open-source platform for automatically verifying AI-generated code.
+        </p>
+      </header>
 
       <div className={styles.grid}>
         <Card>

@@ -58,9 +58,10 @@ describe("landing pages", () => {
     expect(
       screen.getByRole("heading", { name: /Simple, transparent pricing/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Free")).toBeInTheDocument();
-    expect(screen.getByText("Pro")).toBeInTheDocument();
-    expect(screen.getByText("Enterprise")).toBeInTheDocument();
+    // Each tier name appears on its pricing card and in the comparison table.
+    expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pro").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Enterprise").length).toBeGreaterThan(0);
     expect(screen.getByText(/Most popular/i)).toBeInTheDocument();
   });
 
