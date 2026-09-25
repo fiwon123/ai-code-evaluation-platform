@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { defaultExclude } from "vitest/config";
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
@@ -37,5 +38,8 @@ export default defineConfig(({ mode }) => ({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: true,
+    // e2e specs are Playwright's domain (see playwright.config.ts) — keep
+    // vitest from picking up `**/*.spec.ts` under e2e/.
+    exclude: [...defaultExclude, "e2e/**"],
   },
 }));

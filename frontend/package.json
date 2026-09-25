@@ -10,6 +10,7 @@
     "lint:fix": "oxlint src/ --fix",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "preview": "vite preview",
     "clean": "rm -rf dist node_modules"
   },
@@ -19,6 +20,7 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.0.0",

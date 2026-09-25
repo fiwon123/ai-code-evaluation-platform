@@ -201,6 +201,11 @@ dist/
 dist-ssr/
 *.tsbuildinfo
 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
 # Docker
 docker-compose.override.yml
 
