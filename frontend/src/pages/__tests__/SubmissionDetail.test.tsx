@@ -2,9 +2,69 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubmissionDetail from "../SubmissionDetail.tsx";
-import { clearToken } from "../../services/api.ts";
+import { clearToken, setToken } from "../../services/api.ts";
 
 const fetchMock = vi.fn();
+
+/** Minimal WebSocket double: the page only needs open/message/close. */
+class FakeWebSocket {
+  static instances: FakeWebSocket[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor() {
+    FakeWebSocket.instances.push(this);
+  }
+  open() {
+    this.onopen?.();
+  }
+  message(data: unknown) {
+    this.onmessage?.({ data: JSON.stringify(data) });
+  }
+  close() {
+    this.onclose?.();
+  }
+  static latest(): FakeWebSocket {
+    return FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+  }
+  static reset() {
+    FakeWebSocket.instances = [];
+  }
+}
+
+const processingSubmission = {
+  id: "s1",
+  challenge_id: "c1",
+  status: "processing",
+  provider: "demo",
+  phase: "testing",
+  code: null,
+  score: null,
+  evaluation_result: null,
+  created_at: "2026-01-01T00:00:00Z",
+};
+
+const finishedSubmission = {
+  id: "s1",
+  challenge_id: "c1",
+  status: "completed",
+  provider: "demo",
+  phase: null,
+  code: "def two_sum(nums, target):\n    return [0, 1]\n",
+  score: 100,
+  evaluation_result: {
+    id: "r1",
+    passed_tests: 2,
+    total_tests: 2,
+    score: 100,
+    logs: "2 passed in 0.01s",
+    metrics: { language: "python", duration_ms: 12 },
+    created_at: "2026-01-01T00:00:00Z",
+  },
+  created_at: "2026-01-01T00:00:00Z",
+};
 
 function renderPage(pollIntervalMs = 1) {
   return render(
@@ -23,6 +83,7 @@ describe("SubmissionDetail", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", fetchMock);
     clearToken();
+    FakeWebSocket.reset();
   });
 
   afterEach(() => {
@@ -560,5 +621,85 @@ describe("SubmissionDetail", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Sharing is unavailable",
     );
+  });
+  it("renders output delivered by the socket without a second fetch (#190)", async () => {
+    // The socket carries the finished record, so the report appears on the same
+    // round-trip that ended the run — no "fetch the final record once" follow-up.
+    setToken("jwt-token");
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    // A fresh Response per call: a Response body can only be read once, and the
+    // fallback poll may fire more than once before the socket reports open.
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify(processingSubmission), { status: 200 })),
+    );
+
+    renderPage();
+
+    const socket = await waitFor(() => {
+      expect(FakeWebSocket.instances.length).toBeGreaterThan(0);
+      return FakeWebSocket.latest();
+    });
+    socket.open();
+    expect(await screen.findByText(/Running tests/i)).toBeInTheDocument();
+
+    // Baseline after the socket is open and polling has stopped.
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.length;
+      return new Promise((resolve) =>
+        setTimeout(() => resolve(calls === fetchMock.mock.calls.length), 30),
+      ).then((stable) => expect(stable).toBe(true));
+    });
+    const beforeRecord = fetchMock.mock.calls.length;
+
+    socket.message({
+      type: "update",
+      status: "completed",
+      phase: null,
+      submission: finishedSubmission,
+    });
+
+    // Output that used to require a re-fetch is on screen.
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+
+    // The socket supplied the record, so no further request was made.
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.length).toBe(beforeRecord),
+    );
+  });
+
+  it("still re-fetches when a terminal update arrives without the record", async () => {
+    // The fallback path: an older server, a reconnect that missed the terminal
+    // event, or a partial sequence. The page must not be left showing a
+    // terminal status with no output.
+    setToken("jwt-token");
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    // Polls (which stop once the socket is open) keep returning "processing";
+    // the flag flips only when the terminal update lands, so the request the
+    // fallback makes is the one that returns the record.
+    let deliverFinished = false;
+    fetchMock.mockImplementation(() => {
+      const body = deliverFinished ? finishedSubmission : processingSubmission;
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+    });
+
+    renderPage();
+
+    const socket = await waitFor(() => {
+      expect(FakeWebSocket.instances.length).toBeGreaterThan(0);
+      return FakeWebSocket.latest();
+    });
+    socket.open();
+    expect(await screen.findByText(/Running tests/i)).toBeInTheDocument();
+    const beforeRecord = fetchMock.mock.calls.length;
+
+    // Terminal status, but no record attached.
+    deliverFinished = true;
+    socket.message({ type: "update", status: "completed", phase: null });
+
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeRecord);
   });
 });

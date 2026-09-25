@@ -5,9 +5,15 @@ JWT passed as a ``token`` query parameter (``?token=<jwt>``). On connect the
 handler validates the token, verifies the caller owns the submission, pushes a
 ``snapshot`` of the current state, then subscribes to Redis pub/sub and
 forwards ``update`` messages as submissions transition through the evaluation
-pipeline. Each pub/sub payload already carries the new status, so updates are
-forwarded without an extra database read. While idle it sends ``ping``
-heartbeats to keep the socket alive.
+pipeline. While idle it sends ``ping`` heartbeats to keep the socket alive.
+
+Mid-pipeline events carry only ``{status, phase}`` — there is no output to
+deliver until the run finishes. A **terminal** event additionally carries the
+whole persisted ``submission`` record, so the client renders code, logs and the
+evaluation result from the socket instead of waiting for a second round-trip.
+The record is re-read from the database rather than taken from the event: the
+worker publishes only after committing, and re-serializing keeps this endpoint
+the single place that produces a client-safe ``SubmissionRead``.
 
 The snapshot read uses a *fresh* short-lived database session rather than a
 session spanning the whole socket lifetime: long-lived transactions can pin
@@ -137,15 +143,29 @@ async def submission_updates(
                 # client state (the PATCH endpoint can publish arbitrary
                 # strings, e.g. "code_generated" or junk).
                 continue
-            await websocket.send_text(
-                json.dumps(
-                    {
-                        "type": "update",
-                        "submission_id": str(submission_id),
-                        **mapped,
-                    }
-                )
-            )
+            outgoing: dict = {
+                "type": "update",
+                "submission_id": str(submission_id),
+                **mapped,
+            }
+            # A terminal event carries the persisted record, not just the
+            # status. The worker publishes only after committing (see
+            # ``tasks/evaluate.py``), so this read sees the stored code, logs
+            # and result.
+            #
+            # Re-serializing here rather than having the worker stuff the
+            # payload into the event keeps ONE place that produces a
+            # client-safe ``SubmissionRead`` (the snapshot already uses it), so
+            # the two cannot drift, and the worker stays ignorant of the wire
+            # format. It also makes the message idempotent: it is a complete
+            # record rather than a patch, so a duplicate after a reconnect — or
+            # an update that races the snapshot — cannot leave a client with
+            # half-merged output.
+            if mapped["status"] in TERMINAL_STATUSES:
+                record = await _load_submission_snapshot(submission_id, user_id)
+                if record is not None:
+                    outgoing["submission"] = record
+            await websocket.send_text(json.dumps(outgoing))
     except WebSocketDisconnect:
         logger.info("Client disconnected from submission %s", submission_id)
     except Exception:  # noqa: BLE001 - a socket failure must not crash the app
