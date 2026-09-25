@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Card from "../../components/Card/Card.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { adminApi } from "../../services/api.ts";
@@ -77,7 +78,7 @@ function AdminDashboard() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>Admin dashboard</h1>
+        <PageTitle size="sm" className={styles.title}>Admin dashboard</PageTitle>
         <p className={styles.subtitle}>Platform-wide statistics and moderation.</p>
       </div>
 

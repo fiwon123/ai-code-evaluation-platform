@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import Card from "../components/Card/Card.tsx";
+import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import Spinner from "../components/Spinner/Spinner.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { extractError } from "../utils/errors.ts";
@@ -56,7 +57,7 @@ function OAuthCallback() {
         <div className={styles.body}>
           {error ? (
             <>
-              <h1 className={styles.title}>Couldn’t log you in</h1>
+              <PageTitle size="sm">Couldn’t log you in</PageTitle>
               <p role="alert" className={styles.error}>
                 {error}
               </p>

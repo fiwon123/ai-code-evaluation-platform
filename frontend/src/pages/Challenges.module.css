@@ -13,8 +13,8 @@
   margin-bottom: var(--space-8);
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
-  font-size: var(--font-size-3xl);
   margin-bottom: var(--space-1);
 }
 

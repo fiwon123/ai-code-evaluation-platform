@@ -4,6 +4,7 @@ import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
 import { TextInput } from "../../components/Input/Input.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
@@ -165,7 +166,7 @@ function AdminUsers() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>Users</h1>
+        <PageTitle size="sm" className={styles.title}>Users</PageTitle>
         <p className={styles.subtitle}>
           Manage accounts: promote admins, deactivate or restore, and delete
           users.

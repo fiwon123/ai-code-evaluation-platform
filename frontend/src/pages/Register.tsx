@@ -7,6 +7,7 @@ import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
 import Logo from "../components/Logo/Logo.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { extractError, extractFieldErrors } from "../utils/errors.ts";
+import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import styles from "./Register.module.css";
 
@@ -55,7 +56,7 @@ function Register() {
       <Card className={styles.card}>
         <div className={styles.header}>
           <Logo size="lg" />
-          <h1 className={styles.title}>Create your account</h1>
+          <PageTitle size="sm" className={styles.title}>Create your account</PageTitle>
           <p className={styles.subtitle}>
             Start generating and evaluating AI code in minutes.
           </p>

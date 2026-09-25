@@ -19,8 +19,8 @@
   flex-wrap: wrap;
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
-  font-size: var(--font-size-2xl);
   margin-bottom: var(--space-1);
 }
 

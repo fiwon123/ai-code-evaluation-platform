@@ -8,18 +8,8 @@
   margin-bottom: var(--space-12);
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .pageTitle {
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  background: linear-gradient(
-    90deg,
-    var(--color-primary),
-    var(--color-primary-hover)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   margin-bottom: var(--space-4);
 }
 

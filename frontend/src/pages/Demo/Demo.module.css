@@ -9,19 +9,14 @@
   margin-bottom: var(--space-12);
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle.
+   No light-mode override on purpose: `--gradient-title` is built from the
+   per-theme primary tokens, so the gradient is legible on the light background
+   too (#1d4ed8 -> #1e40af on #eef2f7, 5.9:1 and 7.8:1). The old override
+   traded the gradient for solid text and made this page disagree with its
+   landing-page siblings. */
 .pageTitle {
   text-align: center;
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  background: linear-gradient(
-    90deg,
-    var(--color-primary),
-    var(--color-primary-hover)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   margin-bottom: var(--space-4);
 }
 
@@ -31,16 +26,6 @@
   font-size: var(--font-size-lg);
   max-width: 600px;
   margin: 0 auto;
-}
-
-/* Light mode: solid title — the blue gradient title mixed with the white
-   page background and clashed with the gray subtitle below; a single dark
-   heading reads clearly. Dark mode keeps the gradient. */
-:global([data-theme="light"]) .pageTitle {
-  background: none;
-  -webkit-background-clip: initial;
-  background-clip: initial;
-  color: var(--color-text);
 }
 
 /* Walkthrough */

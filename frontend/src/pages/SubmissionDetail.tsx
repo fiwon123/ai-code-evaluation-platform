@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
+import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import ResultReport from "../components/ResultReport/ResultReport.tsx";
 import ShareResult from "../components/ShareResult/ShareResult.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
@@ -153,7 +154,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
       </p>
 
       <div className={styles.header}>
-        <h1 className={styles.title}>Evaluation report</h1>
+        <PageTitle className={styles.title}>Evaluation report</PageTitle>
         <Badge variant={statusVariant(submission.status)}>{submission.status}</Badge>
       </div>
 

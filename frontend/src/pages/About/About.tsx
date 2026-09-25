@@ -1,4 +1,5 @@
 import Card from "../../components/Card/Card.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import styles from "./About.module.css";
 
 const STACK = [
@@ -18,7 +19,7 @@ function About() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">About</span>
-        <h1 className={styles.pageTitle}>About this project</h1>
+        <PageTitle size="lg" className={styles.pageTitle}>About this project</PageTitle>
         <p className={styles.tagline}>
           An open-source platform for automatically verifying AI-generated code.
         </p>

@@ -38,8 +38,8 @@
   min-width: 200px;
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .name {
-  font-size: var(--font-size-2xl);
   margin-bottom: var(--space-1);
 }
 

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Reveal from "../../components/Reveal/Reveal.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
@@ -142,9 +143,9 @@ function Home() {
         </Reveal>
 
         <Reveal delayMs={80}>
-          <h1 className={styles.heroTitle}>
+          <PageTitle variant="hero" size="lg" className={styles.heroTitle}>
             Generate, execute, and evaluate AI-written code — automatically
-          </h1>
+          </PageTitle>
         </Reveal>
 
         <Reveal delayMs={160}>

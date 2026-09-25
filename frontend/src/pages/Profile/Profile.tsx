@@ -5,6 +5,7 @@ import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import { Field, TextInput, useFieldId } from "../../components/Input/Input.tsx";
 import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
@@ -287,7 +288,7 @@ function Profile() {
       <Card className={styles.profileCard}>
         <div className={styles.avatar}>{user.username.charAt(0).toUpperCase()}</div>
         <div className={styles.identity}>
-          <h1 className={styles.name}>{user.username}</h1>
+          <PageTitle size="sm" className={styles.name}>{user.username}</PageTitle>
           <p className={styles.email}>{user.email}</p>
           <p className={styles.memberSince}>
             Member since{" "}

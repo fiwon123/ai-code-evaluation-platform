@@ -5,6 +5,7 @@ import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import LanguageBadge from "../components/LanguageBadge/LanguageBadge.tsx";
 import { SelectInput, TextInput } from "../components/Input/Input.tsx";
+import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
@@ -142,7 +143,7 @@ function Challenges() {
     <div className={styles.page}>
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.title}>Challenges</h1>
+          <PageTitle className={styles.title}>Challenges</PageTitle>
           <p className={styles.subtitle}>
             Submit a challenge and let an LLM generate and evaluate a solution.
           </p>
