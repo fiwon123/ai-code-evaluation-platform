@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
  * Rendered-color measurement for e2e assertions.
@@ -13,9 +13,8 @@ import type { Locator, Page } from "@playwright/test";
  * 2. **Refuse to guess at gradients.** A gradient background has no single
  *    answer, so throw rather than silently measuring one of its stops.
  *
- * NOTE: #203 (`e2e/contrast.spec.ts`) carries a near-identical helper for its
- * both-theme contrast audit. Once that PR lands these should be consolidated
- * into this file — this branch predates it and does not depend on it.
+ * Shared by `contrast.spec.ts` (#203) and `admin.spec.ts` (#197), which both
+ * need "what is actually painted behind this text, and is that readable".
  */
 
 export interface Paint {
@@ -104,9 +103,42 @@ export function aaThreshold(paint_: Paint): number {
     : 4.5;
 }
 
-/** Human-readable failure text, so a red suite says which pair failed. */
-export function describeRatio(label: string, paint_: Paint): string {
-  return `${label} is ${contrastRatio(paint_.color, paint_.background).toFixed(
-    2,
-  )}:1 and needs ${aaThreshold(paint_)}:1 — "${paint_.text}" in ${paint_.color} on ${paint_.background}`;
+/**
+ * Human-readable failure text, so a red suite says which pair failed without a
+ * rerun: the element, its size/weight, both colours, the ratio and the
+ * threshold. `detail` is the optional size/weight suffix.
+ */
+export function describeRatio(
+  label: string,
+  paint_: Paint,
+  detail = "",
+): string {
+  return (
+    `${label}${detail ? ` (${detail})` : ""} is ` +
+    `${contrastRatio(paint_.color, paint_.background).toFixed(2)}:1 and needs ` +
+    `${aaThreshold(paint_)}:1 — "${paint_.text}" in ${paint_.color} on ${paint_.background}`
+  );
+}
+
+/**
+ * Paint `target` and assert the text on it meets its AA threshold, with a
+ * message that names the element, its size/weight, both colours, the ratio and
+ * the threshold — a red e2e suite should say which pair failed without needing
+ * a rerun.
+ */
+export async function expectReadable(
+  page: Page,
+  target: Locator,
+  label: string,
+): Promise<Paint> {
+  const measured = await paint(page, target);
+  expect(
+    contrastRatio(measured.color, measured.background),
+    describeRatio(
+      label,
+      measured,
+      `${measured.fontSize}px/${measured.fontWeight}`,
+    ),
+  ).toBeGreaterThanOrEqual(aaThreshold(measured));
+  return measured;
 }
