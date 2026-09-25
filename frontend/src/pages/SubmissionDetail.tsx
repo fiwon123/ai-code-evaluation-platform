@@ -75,10 +75,15 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
     };
   }, [id, pollIntervalMs, socketState]);
 
-  // Merge live socket data into the displayed submission. A snapshot carries
-  // the full record; a status update patches the status in place. When the
-  // status flips to terminal via the socket, fetch the final record once so
-  // the report (code, evaluation result) is complete.
+  // Merge live socket data into the displayed submission. A snapshot — and now
+  // a terminal update, which carries the whole persisted record — replaces the
+  // live state; a mid-pipeline status/phase update patches it in place.
+  //
+  // The REST fetch below is the safety net, not the happy path: it only fires
+  // when the socket went terminal WITHOUT the record, i.e. a dropped or
+  // partial message sequence, an older server, or a reconnect that missed the
+  // terminal event. When the socket did deliver the record there is nothing to
+  // fetch, and the user sees output without the extra round-trip.
   useEffect(() => {
     if (!liveSubmission) {
       return;

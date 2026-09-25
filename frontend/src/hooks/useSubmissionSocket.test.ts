@@ -169,6 +169,149 @@ it("merges status updates into the live submission", () => {
     expect(result.current.liveSubmission?.phase).toBe("generating");
   });
 
+  it("delivers the finished record when a terminal update carries one", () => {
+    // #190: output (code, logs, result) arrives on the socket, so the page does
+    // not have to re-fetch the whole submission after the status flips.
+    const finished = submissionFixture({
+      status: "completed",
+      // The worker's terminal commit sets phase=None, so a real
+      // SubmissionRead carries an explicit null rather than omitting it.
+      phase: null,
+      code: "def two_sum(nums, target):\n    return [0, 1]\n",
+      score: 100,
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 2,
+        total_tests: 2,
+        score: 100,
+        logs: "2 passed in 0.01s",
+        metrics: { language: "python", duration_ms: 12 },
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    });
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "snapshot",
+        submission: submissionFixture({ status: "processing", phase: "testing" }),
+      }),
+    );
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "update",
+        status: "completed",
+        phase: null,
+        submission: finished,
+      }),
+    );
+
+    const live = result.current.liveSubmission;
+    expect(live?.status).toBe("completed");
+    expect(live?.phase).toBeNull();
+    expect(live?.code).toContain("def two_sum");
+    expect(live?.evaluation_result?.logs).toBe("2 passed in 0.01s");
+    expect(live?.evaluation_result?.metrics).toEqual({
+      language: "python",
+      duration_ms: 12,
+    });
+  });
+
+  it("replaces rather than merges, so a replayed record cannot double-apply", () => {
+    // The record is self-contained, which is what makes a duplicate safe: it
+    // lands on identical state instead of re-patching output over itself.
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "snapshot",
+        submission: submissionFixture({ status: "processing", phase: "testing" }),
+      }),
+    );
+    const finished = submissionFixture({
+      status: "completed",
+      code: "def two_sum():\n    return [0, 1]\n",
+      evaluation_result: {
+        id: "r1",
+        passed_tests: 2,
+        total_tests: 2,
+        score: 100,
+        logs: "2 passed",
+        metrics: {},
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    });
+    // Same message twice, as a reconnect replay would deliver.
+    act(() =>
+      FakeWebSocket.latest().message({ type: "update", status: "completed", submission: finished }),
+    );
+    act(() =>
+      FakeWebSocket.latest().message({ type: "update", status: "completed", submission: finished }),
+    );
+
+    expect(result.current.liveSubmission).toEqual(finished);
+  });
+
+  it("lets a later record win over an earlier status patch (no stale reorder)", () => {
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "snapshot",
+        submission: submissionFixture({ status: "pending" }),
+      }),
+    );
+    // A patch arrives late, after the finished record was already applied.
+    act(() =>
+      FakeWebSocket.latest().message({ type: "update", status: "processing", phase: "testing" }),
+    );
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "update",
+        status: "completed",
+        submission: submissionFixture({
+          status: "completed",
+          code: "final code",
+          evaluation_result: {
+            id: "r1",
+            passed_tests: 1,
+            total_tests: 1,
+            score: 100,
+            logs: "ok",
+            metrics: {},
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        }),
+      }),
+    );
+
+    // The complete record is authoritative: the stale phase cannot linger on it.
+    expect(result.current.liveSubmission?.status).toBe("completed");
+    expect(result.current.liveSubmission?.phase).toBeUndefined();
+    expect(result.current.liveSubmission?.code).toBe("final code");
+  });
+
+  it("still patches status/phase from a record-less update (older server)", () => {
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "snapshot",
+        submission: submissionFixture({ status: "pending" }),
+      }),
+    );
+    act(() =>
+      FakeWebSocket.latest().message({ type: "update", status: "processing", phase: "generating" }),
+    );
+
+    expect(result.current.liveSubmission?.status).toBe("processing");
+    expect(result.current.liveSubmission?.phase).toBe("generating");
+  });
+
   it("reconnects with capped exponential backoff after an unexpected close", () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useSubmissionSocket("s1"));

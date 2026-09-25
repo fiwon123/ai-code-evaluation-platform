@@ -33,6 +33,11 @@ interface SocketMessage {
  * the initial `snapshot` and merges `update` statuses into the live
  * submission, and reconnects with capped exponential backoff on unexpected
  * drops. Returns `null`/`closed` when no token is available.
+ *
+ * Output (code, logs, evaluation result) arrives on the socket: a terminal
+ * `update` carries the complete persisted record, so the UI no longer waits for
+ * a second REST round-trip after the status flips. The REST path in the pages
+ * stays as the fallback for mount, reconnects and the shared-result view.
  */
 export function useSubmissionSocket(submissionId: string | undefined): {
   liveSubmission: Submission | null;
@@ -95,9 +100,21 @@ export function useSubmissionSocket(submissionId: string | undefined): {
         if (message.type === "snapshot" && message.submission) {
           setLiveSubmission(message.submission);
         } else if (message.type === "update") {
-          // Merge a status/phase pair. Ignore anything that is not a valid
-          // SubmissionStatus so a stray event can never corrupt client state
-          // (the server now maps events, but belt-and-braces).
+          // A terminal update carries the whole persisted record — code, logs
+          // and the evaluation result — so REPLACE rather than merge. The
+          // record is self-contained, which is what makes a replay safe: a
+          // duplicate after a reconnect, or an update that races the snapshot,
+          // lands on identical state instead of re-applying a patch over
+          // output that is already there.
+          if (message.submission) {
+            setLiveSubmission(message.submission);
+            return;
+          }
+          // Older servers (and mid-pipeline events, which have no output yet)
+          // send only a status/phase pair — patch those in place. Ignore
+          // anything that is not a valid SubmissionStatus so a stray event can
+          // never corrupt client state (the server now maps events, but
+          // belt-and-braces).
           if (message.status && !VALID_STATUSES.has(message.status)) {
             return;
           }

@@ -125,7 +125,11 @@ function Demo() {
     }
   }
 
-  // Fast path: the WebSocket streams status changes as they happen.
+  // Fast path: the WebSocket streams status changes as they happen, and a
+  // terminal update now carries the finished record, so the result is rendered
+  // straight off the socket. The REST call is the fallback for the cases the
+  // socket cannot cover: a reconnect that missed the terminal event, an older
+  // server that only sends status, or a run started before the socket opened.
   useEffect(() => {
     if (!submissionId || !running) {
       return;
@@ -134,18 +138,20 @@ function Demo() {
       liveSubmission &&
       (liveSubmission.status === "completed" || liveSubmission.status === "failed")
     ) {
-      submissionsApi
-        .get(liveSubmission.id)
-        .then((full) => {
-          setResult(full);
-          setRunning(false);
-          setSubmissionId(null);
-        })
-        .catch((err) => {
-          setError(extractError(err));
-          setRunning(false);
-          setSubmissionId(null);
-        });
+      const done = (full: Submission) => {
+        setResult(full);
+        setRunning(false);
+        setSubmissionId(null);
+      };
+      if (liveSubmission.evaluation_result) {
+        done(liveSubmission);
+        return;
+      }
+      submissionsApi.get(liveSubmission.id).then(done).catch((err) => {
+        setError(extractError(err));
+        setRunning(false);
+        setSubmissionId(null);
+      });
     }
   }, [liveSubmission, running, submissionId]);
 

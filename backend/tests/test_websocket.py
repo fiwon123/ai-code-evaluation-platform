@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import Generator
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,7 @@ from app.core.redis import get_redis
 from app.core.security import create_access_token
 from app.main import create_app
 from app.models.challenge import Challenge
+from app.models.evaluation_result import EvaluationResult
 from app.models.submission import Submission
 from app.models.user import User
 
@@ -118,6 +120,9 @@ def ws_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> Generator[dict]:
         "owner_id": ids["owner_id"],
         "other_id": ids["other_id"],
         "pubsub": pubsub,
+        # Exposed so a test can commit the row the terminal event will read —
+        # the handler only ever sees committed state.
+        "session_factory": app_session_factory,
     }
 
     asyncio.run(app_engine.dispose())
@@ -249,3 +254,146 @@ def test_websocket_cleans_up_pubsub_on_disconnect(ws_env: dict) -> None:
 
     assert pubsub.unsubscribe.await_count >= 1
     assert pubsub.aclose.await_count >= 1
+
+
+def _finish_submission(ws_env: dict, **overrides: object) -> None:
+    """Commit the terminal row the worker would have written before publishing.
+
+    The handler re-reads the record on a terminal event, so a test has to
+    persist the same state the worker persists — publish-after-commit is the
+    property that makes the whole approach correct.
+    """
+
+    async def run() -> None:
+        async with ws_env["session_factory"]() as session:
+            # The fixture yields ids as strings; the Uuid column needs the type.
+            submission = await session.get(Submission, UUID(ws_env["submission_id"]))
+            fields: dict = {
+                "status": "completed",
+                "code": "def two_sum(nums, target):\n    return [0, 1]\n",
+                "score": 100.0,
+                "phase": None,
+            }
+            fields.update(overrides)
+            for key, value in fields.items():
+                setattr(submission, key, value)
+            if fields["status"] == "completed":
+                session.add(
+                    EvaluationResult(
+                        submission_id=submission.id,
+                        passed_tests=2,
+                        total_tests=2,
+                        score=100.0,
+                        logs="2 passed in 0.01s",
+                        metrics={"language": "python", "duration_ms": 12},
+                        test_results=[{"name": "test_two_sum", "passed": True, "message": ""}],
+                    )
+                )
+            await session.commit()
+
+    asyncio.run(run())
+
+
+def _event(ws_env: dict, event_type: str, **fields: object) -> dict:
+    return {
+        "type": "message",
+        "data": json.dumps(
+            {"type": event_type, "submission_id": ws_env["submission_id"], **fields},
+        ),
+    }
+
+
+def test_terminal_update_carries_the_persisted_record(ws_env: dict) -> None:
+    """The whole point of #190: output arrives on the socket, not on a re-fetch."""
+    _finish_submission(ws_env)
+    pubsub = ws_env["pubsub"]
+    pubsub.get_message = AsyncMock(
+        side_effect=[_event(ws_env, "completed", score=100.0), WebSocketDisconnect()]
+    )
+
+    with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()  # snapshot (pending)
+        update = ws.receive_json()
+
+    assert update["type"] == "update"
+    assert update["status"] == "completed"
+    assert update["phase"] is None
+    record = update["submission"]
+    assert record["id"] == ws_env["submission_id"]
+    assert record["code"] == "def two_sum(nums, target):\n    return [0, 1]\n"
+    assert record["score"] == 100.0
+    result = record["evaluation_result"]
+    assert result is not None
+    assert result["logs"] == "2 passed in 0.01s"
+    assert result["passed_tests"] == 2
+    assert result["total_tests"] == 2
+    assert result["metrics"] == {"language": "python", "duration_ms": 12}
+    assert result["test_results"] == [
+        {"name": "test_two_sum", "passed": True, "message": ""},
+    ]
+
+
+def test_terminal_update_uses_the_database_not_the_event_payload(ws_env: dict) -> None:
+    """The record is re-read, so a lying or stale event cannot corrupt the client.
+
+    The worker publishes ``score=`` alongside the event. If that were trusted,
+    a client would render a score the database never accepted. Re-reading also
+    means fields the event happens to carry (here ``error``) cannot leak into
+    the submission record.
+    """
+    _finish_submission(ws_env, status="failed", score=0.0, code="")
+    pubsub = ws_env["pubsub"]
+    pubsub.get_message = AsyncMock(
+        side_effect=[
+            _event(ws_env, "failed", score=100.0, error="hallucinated"),
+            WebSocketDisconnect(),
+        ]
+    )
+
+    with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()
+        update = ws.receive_json()
+
+    record = update["submission"]
+    assert record["status"] == "failed"
+    assert record["score"] == 0.0
+    assert "error" not in record
+
+
+def test_mid_pipeline_update_omits_the_record(ws_env: dict) -> None:
+    """Nothing to deliver yet — keep the wire small until the run finishes."""
+    pubsub = ws_env["pubsub"]
+    pubsub.get_message = AsyncMock(
+        side_effect=[_event(ws_env, "processing"), WebSocketDisconnect()]
+    )
+
+    with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()
+        update = ws.receive_json()
+
+    assert update["status"] == "processing"
+    assert update["phase"] == "generating"
+    assert "submission" not in update
+
+
+def test_terminal_event_before_the_result_is_committed_still_sends_the_row(ws_env: dict) -> None:
+    """The one race the socket cannot win: publish-before-commit.
+
+    The worker commits first, so this ordering does not occur in production —
+    but if a future change inverted it, the client would receive a terminal
+    record with no output. The frontend's REST fallback is what covers that, so
+    the test pins the *shape* of the failure rather than pretending it cannot
+    happen.
+    """
+    pubsub = ws_env["pubsub"]
+    pubsub.get_message = AsyncMock(
+        side_effect=[_event(ws_env, "completed"), WebSocketDisconnect()]
+    )
+
+    with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()
+        update = ws.receive_json()
+
+    record = update["submission"]
+    assert update["status"] == "completed"
+    assert record["evaluation_result"] is None  # → the page refetches over REST
