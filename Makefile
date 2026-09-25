@@ -12,6 +12,28 @@ COMPOSE ?= docker compose
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 
+# --- Host identity for the dev sandbox ---------------------------------------
+# The workspace is bind-mounted into the dev/celery/beat containers, so those
+# services run as the HOST user: without this every file they write (build
+# output, __pycache__, agent edits) lands on the host owned by root:root and
+# shows up "locked" in the host editor.
+#
+# NOTE: deliberately NOT named UID — bash defines UID as a read-only shell
+# variable that is *not* exported, so compose interpolation of ${UID} would
+# silently fall back to its default for every user whose UID isn't 1000.
+HOST_UID ?= $(shell id -u)
+HOST_GID ?= $(shell id -g)
+# Host Docker socket group (root:docker, 660 on Fedora/Ubuntu). Passed to
+# compose as group_add so the non-root user can still drive Docker — required
+# by the evaluation worker (isolated eval-sandbox containers) and by the
+# sandboxed agent. `stat -c` is GNU coreutils, `stat -f` is BSD/macOS: try both
+# before giving up, otherwise a macOS host silently ends up with group 0, the
+# worker loses socket access and evaluations silently fall back to UNSANDBOXED
+# subprocess execution. Last resort is 0 (root-owned socket / absent socket);
+# override explicitly (DOCKER_GID=1234) for rootless or remote daemons.
+DOCKER_GID ?= $(shell stat -c %g /var/run/docker.sock 2>/dev/null || stat -f %g /var/run/docker.sock 2>/dev/null || echo 0)
+export HOST_UID HOST_GID DOCKER_GID
+
 # --- Host-native path (fastest, no containers) -------------------------------
 install: setup ## Alias for setup (kept for backwards compatibility)
 setup: ## Install host-native deps (uv sync + npm install)
@@ -65,7 +87,7 @@ infra-down: ## Stop infra only (also stops dev/celery if running)
 # `make dev-up` starts the dev container (uvicorn + vite, hot reload) plus
 # celery, postgres, redis and builds the eval-sandbox image. Rebuilds after
 # Dockerfile/pyproject/uv.lock changes go through `make dev-build` (plain
-# `dev-up` reuses an existing image — compose auto-builds only when missing).
+# `dev-up` reuses existing images — compose auto-builds only when missing).
 #
 # Sandboxed AI coding agent (trusted-agent model): the dev container mounts
 # the host opencode binary + config, git identity, and gh auth read-only,
@@ -92,8 +114,12 @@ preflight: ## (internal) Require host opencode + pre-create mounted config paths
 dev-up: preflight ## Start the isolated dev sandbox (uvicorn + vite + worker + infra)
 	$(COMPOSE) up dev
 
-dev-build: ## Rebuild the dev image after Dockerfile/pyproject/uv.lock changes
-	$(COMPOSE) build dev
+# dev-build rebuilds EVERY workspace service, not just `dev`: celery and beat
+# build from the same Dockerfile into their own images, so building only `dev`
+# left them on the previous (pre-fix) image — a root-owned venv and no
+# devuser — which is exactly the state issue #183 removes.
+dev-build: ## Rebuild the dev, celery and beat images (Dockerfile/pyproject/uv.lock changes)
+	$(COMPOSE) build dev celery beat
 
 dev-down: ## Stop the dev sandbox (keeps data volumes)
 	$(COMPOSE) down
