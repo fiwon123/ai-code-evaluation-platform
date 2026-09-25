@@ -39,24 +39,39 @@
     var(--color-primary) 75%,
     var(--color-text) 100%
   );
-  background-size: 220% 100%;
+  /* The gradient is wider than the text so the sweep has somewhere to travel,
+     but it must stay wide enough that the whole text box is still painted for
+     the entire animation — see the coverage note below. */
+  background-size: 200% 100%;
   animation: titleShift 9s ease-in-out infinite;
 }
 
+/* Coverage math for `background-position: p%` on a background `s` (as a
+   fraction of the box): the rendered offset is `(1 - s) * p`, so the gradient
+   covers the text box only while `-s + ... ` i.e. while
+   `offset <= 0` and `offset + s >= 1`  ->  `0 <= p <= 1 / (s - 1)`.
+   With s = 2.0 that allows p up to 100%. The previous s = 2.2 animated to
+   200%, which put the gradient at [-240%, -20%] — completely off-canvas, so
+   the transparent heading text rendered as nothing. Keep the end position at or
+   below `1 / (s - 1)`; `hero-sweep.test.ts` enforces it. */
 @keyframes titleShift {
   0% {
     background-position: 0% 50%;
   }
 
   100% {
-    background-position: 200% 50%;
+    background-position: 100% 50%;
   }
 }
 
 /* Respect the OS "reduce motion" setting: the sweep is decorative, and an
-   endlessly animating heading is a common vestibular trigger. */
+   endlessly animating heading is a common vestibular trigger. The 200% window
+   has to collapse to 100% as well, otherwise freezing the animation would
+   leave the heading showing only the left half of the gradient. */
 @media (prefers-reduced-motion: reduce) {
   .hero {
     animation: none;
+    background-size: 100% 100%;
+    background-position: 0% 50%;
   }
 }
