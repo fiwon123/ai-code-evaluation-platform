@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 interface ScoreRingProps {
   /** 0–100 score to visualize. */
   value: number;
@@ -25,6 +27,7 @@ function ScoreRing({ value, size = 92, label }: ScoreRingProps) {
       viewBox={`0 0 ${size} ${size}`}
       role="img"
       aria-label={ringLabel}
+      style={{ "--ring-size": `${size}px` } as CSSProperties}
     >
       <circle
         cx={size / 2}
