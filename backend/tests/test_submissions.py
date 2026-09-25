@@ -132,6 +132,70 @@ async def test_create_submission_requires_api_key_for_anthropic(
 
 
 @pytest.mark.asyncio
+async def test_create_submission_requires_api_key_for_gemini(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={"challenge_id": challenge["id"], "provider": "gemini"},
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "API key is required" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_submission_accepts_gemini_with_api_key(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api import submissions as submissions_module
+
+    monkeypatch.setattr(
+        submissions_module,
+        "dispatch_evaluation",
+        lambda submission_id, api_key=None: True,
+    )
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={
+            "challenge_id": challenge["id"],
+            "provider": "gemini",
+            "api_key": "sk-gem-123",
+        },
+        headers=auth(token),
+    )
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_create_submission_accepts_ollama_without_api_key(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api import submissions as submissions_module
+
+    monkeypatch.setattr(
+        submissions_module,
+        "dispatch_evaluation",
+        lambda submission_id, api_key=None: True,
+    )
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={"challenge_id": challenge["id"], "provider": "ollama"},
+        headers=auth(token),
+    )
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
 async def test_create_submission_forwards_api_key_to_dispatcher(
     db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
