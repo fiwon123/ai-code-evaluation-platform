@@ -17,6 +17,9 @@ spec:
         {{- include "ai-eval-platform.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
     spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name | default (include "ai-eval-platform.fullname" .) }}
+      {{- end }}
       containers:
         - name: frontend
           image: "{{ .Values.image.repository }}:{{ .Values.image.frontendTag }}"
