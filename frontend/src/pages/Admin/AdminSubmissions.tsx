@@ -6,7 +6,7 @@ import { SelectInput } from "../../components/Input/Input.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { adminApi } from "../../services/api.ts";
-import type { Submission, SubmissionStatus } from "../../types.ts";
+import type { AdminSubmission, SubmissionStatus } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
 import { formatRelativeTime, statusVariant } from "../../utils/formatting.ts";
 import styles from "./Admin.module.css";
@@ -14,7 +14,7 @@ import styles from "./Admin.module.css";
 const PAGE_SIZE = 20;
 
 function AdminSubmissions() {
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [submissions, setSubmissions] = useState<AdminSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<SubmissionStatus | "all">("all");
@@ -101,6 +101,8 @@ function AdminSubmissions() {
             <thead>
               <tr>
                 <th>Submission</th>
+                <th>User</th>
+                <th>Challenge</th>
                 <th>Status</th>
                 <th>Provider</th>
                 <th>Score</th>
@@ -116,6 +118,19 @@ function AdminSubmissions() {
                       className={styles.cellLink}
                     >
                       {submission.id}
+                    </Link>
+                  </td>
+                  <td>
+                    <span className={styles.cellStrong}>
+                      {submission.username}
+                    </span>
+                  </td>
+                  <td>
+                    <Link
+                      to={`/challenges/${submission.challenge_id}`}
+                      className={styles.cellStrong}
+                    >
+                      {submission.challenge_title}
                     </Link>
                     <span className={styles.cellMuted}>
                       {submission.challenge_id}

@@ -1,5 +1,6 @@
 import type {
   AdminListParams,
+  AdminSubmission,
   AdminUserUpdate,
   AuthResponse,
   Challenge,
@@ -270,6 +271,9 @@ export const adminApi = {
     api.patch<User>(`/api/admin/users/${id}`, payload),
   deactivateUser: (id: string) =>
     api.post<User>(`/api/admin/users/${id}/deactivate`),
+  reactivateUser: (id: string) =>
+    api.post<User>(`/api/admin/users/${id}/reactivate`),
+  deleteUser: (id: string) => api.del(`/api/admin/users/${id}`),
   listChallenges: (params?: AdminListParams, options?: RequestInit) =>
     api.get<PaginatedResponse<Challenge>>(
       `/api/admin/challenges${buildQueryString(params)}`,
@@ -277,7 +281,7 @@ export const adminApi = {
     ),
   removeChallenge: (id: string) => api.del(`/api/admin/challenges/${id}`),
   listSubmissions: (params?: AdminListParams, options?: RequestInit) =>
-    api.get<PaginatedResponse<Submission>>(
+    api.get<PaginatedResponse<AdminSubmission>>(
       `/api/admin/submissions${buildQueryString(params)}`,
       options,
     ),

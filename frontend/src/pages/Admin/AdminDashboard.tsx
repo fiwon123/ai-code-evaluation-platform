@@ -152,6 +152,65 @@ function AdminDashboard() {
       </div>
 
       <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>Submissions by provider</h2>
+        <ul className={styles.statusList} aria-label="Submissions by provider">
+          {stats.submissions_by_provider.map((group) => {
+            const max = Math.max(
+              1,
+              ...stats.submissions_by_provider.map((g) => g.count),
+            );
+            return (
+              <li key={group.provider} className={styles.statusRow}>
+                <span className={styles.statusLabel}>{group.provider}</span>
+                <span className={styles.statusBarTrack}>
+                  <span
+                    className={styles.statusBar}
+                    style={{
+                      width: `${Math.max(3, (group.count / max) * 100)}%`,
+                    }}
+                  />
+                </span>
+                <span className={styles.statusCount}>
+                  {group.count} · avg{" "}
+                  {group.avg_score !== null && group.avg_score !== undefined
+                    ? `${Math.round(group.avg_score)}%`
+                    : "—"}{" "}
+                  · pass{" "}
+                  {Math.round(group.pass_rate * 100)}%
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>Failed submissions by error type</h2>
+        <ul className={styles.statusList} aria-label="Failed submissions by error type">
+          {stats.submissions_by_error_type.map((group) => {
+            const max = Math.max(
+              1,
+              ...stats.submissions_by_error_type.map((g) => g.count),
+            );
+            return (
+              <li key={group.error_type} className={styles.statusRow}>
+                <span className={styles.statusLabel}>{group.error_type}</span>
+                <span className={styles.statusBarTrack}>
+                  <span
+                    className={styles.statusBarDanger}
+                    style={{
+                      width: `${Math.max(3, (group.count / max) * 100)}%`,
+                    }}
+                  />
+                </span>
+                <span className={styles.statusCount}>{group.count}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Top challenges</h2>
         <ol className={styles.topList} aria-label="Top challenges by run count">
           {stats.top_challenges.map((challenge) => (
