@@ -1,0 +1,45 @@
+/* ScoreRing — global styles.
+ *
+ * The standalone ScoreRing component (Home hero, Demo, AdminDashboard) uses
+ * literal class names because its tests assert on them (see
+ * ScoreRing.test.tsx and the shared ResultReport usage rules). These rules
+ * MUST stay global (unhashed) — CSS modules would rename the classes and
+ * break both the tests and the "single %-source" convention.
+ */
+.ringTrack {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 12;
+}
+
+.ringProgress {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--duration-base) ease;
+}
+
+.ringValue {
+  fill: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: calc(var(--ring-size, 92px) * 0.24);
+  font-weight: 700;
+}
+
+.ringLabel {
+  fill: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: calc(var(--ring-size, 92px) * 0.12);
+}
+
+.ringSuccess {
+  stroke: var(--color-success);
+}
+
+.ringWarning {
+  stroke: var(--color-warning);
+}
+
+.ringDanger {
+  stroke: var(--color-danger);
+}

@@ -40,4 +40,15 @@ describe("ScoreRing", () => {
     const ring = screen.getByRole("img", { name: "Great 88 / 100" });
     expect(ring.querySelector(".ringSuccess")).toBeInTheDocument();
   });
+
+  it("sets the ring-size CSS var and draws the track + progress circles", () => {
+    render(<ScoreRing value={45} label="Half" size={120} />);
+    const ring = screen.getByRole("img", { name: "Half 45 / 100" });
+    expect(ring.style.getPropertyValue("--ring-size")).toBe("120px");
+    expect(ring.querySelector(".ringTrack")).toBeInTheDocument();
+    const progress = ring.querySelector(".ringProgress");
+    expect(progress).toBeInTheDocument();
+    expect(progress?.getAttribute("stroke-dasharray")).not.toBe("");
+    expect(progress?.getAttribute("stroke-linecap")).toBe("round");
+  });
 });
