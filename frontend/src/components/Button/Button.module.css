@@ -32,7 +32,7 @@
 /* Primary */
 .primary {
   background: var(--color-primary);
-  color: var(--color-on-accent);
+  color: var(--color-on-solid);
 }
 
 .primary:hover:not(:disabled) {
@@ -65,7 +65,7 @@
 /* Danger */
 .danger {
   background: var(--color-danger);
-  color: var(--color-on-accent);
+  color: var(--color-on-solid);
 }
 
 .danger:hover:not(:disabled) {
