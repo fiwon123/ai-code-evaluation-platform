@@ -7,10 +7,15 @@ import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import ConfirmDialog from "../components/ConfirmDialog/ConfirmDialog.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
-import { challengesApi, submissionsApi } from "../services/api.ts";
+import { challengesApi, modelsApi, submissionsApi } from "../services/api.ts";
 import { COMPARE_POLL_MS } from "../constants/polling.ts";
 import { useNow } from "../hooks/useNow.ts";
-import type { Challenge, ChallengeDifficulty, ProviderComparisonEntry } from "../types.ts";
+import type {
+  Challenge,
+  ChallengeDifficulty,
+  ModelInfo,
+  ProviderComparisonEntry,
+} from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
 import {
@@ -81,6 +86,11 @@ function ChallengeDetail() {
   const [provider, setProvider] = useState("demo");
   const [apiKey, setApiKey] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // LLM model catalog (GET /api/models) plus the user's pick. An empty
+  // selection means "provider default".
+  const [models, setModels] = useState<ModelInfo[] | null>(null);
+  const [modelsFailed, setModelsFailed] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("");
 
   // Provider comparison (leaderboard of the user's runs for this challenge).
   const [comparison, setComparison] = useState<ProviderComparisonEntry[] | null>(null);
@@ -101,6 +111,12 @@ function ChallengeDetail() {
   const selectedProvider = PROVIDERS.find((p) => p.value === provider);
   const requiresKey = selectedProvider?.requiresKey ?? false;
   const runningCount = Object.keys(runningMap).length;
+  // Catalog entries for the currently selected provider, default first — plus
+  // the provider's default id for the "Provider default" placeholder.
+  const providerModels =
+    models?.filter((m) => m.provider === provider) ?? null;
+  const providerDefaultModel =
+    providerModels?.find((m) => m.is_default)?.id ?? null;
 
   // Load + poll the comparison while any provider run is in flight.
   useEffect(() => {
@@ -197,6 +213,28 @@ function ChallengeDetail() {
 
   const isOwner = challenge != null && user?.id === challenge.owner_id;
 
+  // Load the model catalog once (public endpoint). Failures degrade
+  // gracefully — the selector is simply hidden and the provider default is
+  // used.
+  useEffect(() => {
+    let cancelled = false;
+    modelsApi
+      .list()
+      .then((data) => {
+        if (!cancelled) {
+          setModels(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setModelsFailed(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleDelete() {
     if (!challenge) {
       return;
@@ -231,6 +269,7 @@ function ChallengeDetail() {
       const submission = await submissionsApi.create({
         challenge_id: challenge.id,
         provider,
+        ...(selectedModel ? { model: selectedModel } : {}),
         ...(requiresKey ? { api_key: apiKey.trim() } : {}),
       });
       navigate(`/submissions/${submission.id}`);
@@ -382,6 +421,9 @@ function ChallengeDetail() {
                         checked={provider === p.value}
                         onChange={() => {
                           setProvider(p.value);
+                          // Model ids are provider-scoped — reset any pick to
+                          // the new provider's default.
+                          setSelectedModel("");
                           if (!p.requiresKey) {
                             setApiKey("");
                           }
@@ -398,6 +440,39 @@ function ChallengeDetail() {
                     </label>
                   ))}
                 </fieldset>
+
+                {providerModels && providerModels.length > 0 && (
+                  <div className={styles.apiKeyGroup}>
+                    <label htmlFor="model" className={styles.apiKeyLabel}>
+                      Model
+                    </label>
+                    <select
+                      id="model"
+                      value={selectedModel}
+                      onChange={(event) => setSelectedModel(event.target.value)}
+                      className={styles.apiKeyInput}
+                    >
+                      <option value="">
+                        Provider default
+                        {providerDefaultModel ? ` — ${providerDefaultModel}` : ""}
+                      </option>
+                      {providerModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label} — {m.id}
+                          {m.is_default ? " (default)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className={styles.apiKeyHint}>
+                      Leave on default to use the provider's standard model.
+                    </p>
+                  </div>
+                )}
+                {modelsFailed && (
+                  <p className={styles.apiKeyHint}>
+                    Model list unavailable — using the provider default.
+                  </p>
+                )}
 
                 {requiresKey && (
                   <div className={styles.apiKeyGroup}>

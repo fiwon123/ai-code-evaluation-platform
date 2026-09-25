@@ -32,7 +32,11 @@ KEYED_PROVIDERS = {
 }
 
 
-def get_llm_provider(name: str | None = None, api_key: str | None = None) -> LLMProvider:
+def get_llm_provider(
+    name: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> LLMProvider:
     """Return an LLM provider by name (falling back to configured default).
 
     ``demo`` is the free, network-independent provider; ``ollama`` targets a
@@ -41,6 +45,11 @@ def get_llm_provider(name: str | None = None, api_key: str | None = None) -> LLM
     ``api_key`` or via the matching environment variable — and raise
     ``ValueError`` when the key is missing so callers can surface a clear
     failure.
+
+    ``model`` is an optional catalog model id (see ``app/services/
+    llm_models.py``). When omitted the provider's own constructor default
+    applies. Unsupported ids are left to the provider to reject at request
+    time.
     """
     provider_name = (name or settings.llm_provider or "demo").lower()
     provider_cls = _PROVIDERS.get(provider_name)
@@ -56,6 +65,14 @@ def get_llm_provider(name: str | None = None, api_key: str | None = None) -> LLM
             raise ValueError(
                 f"API key missing for '{provider_name}' — provide an api_key or set {env_var}"
             )
+        if model:
+            return provider_cls(api_key=key, model=model)
         return provider_cls(api_key=key)
 
+    if provider_cls is MockProvider:
+        # The demo provider is fixed — it has no model knob.
+        return provider_cls()
+
+    if model:
+        return provider_cls(model=model)
     return provider_cls()

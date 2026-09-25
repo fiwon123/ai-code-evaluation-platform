@@ -111,7 +111,9 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type("P", (), {"generate_code": fake_generate})(),
+            lambda name, api_key=None, model=None: type(
+                "P", (), {"generate_code": fake_generate}
+            )(),
         )
         monkeypatch.setattr("app.tasks.evaluate.evaluate_code", fake_evaluate)
 
@@ -131,7 +133,7 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type(
+            lambda name, api_key=None, model=None: type(
                 "P",
                 (),
                 {"generate_code": lambda self, prompt, language="python": "x = 1"},
@@ -163,7 +165,7 @@ class TestSubmissionEvaluation:
 
         calls = []
 
-        def fake_get(name, api_key=None):
+        def fake_get(name, api_key=None, model=None):
             calls.append(name)
             return type(
                 "P",
@@ -200,7 +202,9 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type("P", (), {"generate_code": fake_generate})(),
+            lambda name, api_key=None, model=None: type(
+                "P", (), {"generate_code": fake_generate}
+            )(),
         )
         monkeypatch.setattr(
             "app.tasks.evaluate.evaluate_code",
@@ -247,7 +251,9 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type("P", (), {"generate_code": fake_generate})(),
+            lambda name, api_key=None, model=None: type(
+                "P", (), {"generate_code": fake_generate}
+            )(),
         )
         monkeypatch.setattr(
             "app.tasks.evaluate.evaluate_code",
@@ -287,7 +293,7 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type("P", (), {"generate_code": boom})(),
+            lambda name, api_key=None, model=None: type("P", (), {"generate_code": boom})(),
         )
 
         result = _run_submission_evaluation(session, submission_id)
@@ -309,7 +315,7 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type("P", (), {"generate_code": boom})(),
+            lambda name, api_key=None, model=None: type("P", (), {"generate_code": boom})(),
         )
         result = _run_submission_evaluation(session, submission_id)
 
@@ -337,7 +343,7 @@ class TestSubmissionEvaluation:
             "    return []\n"
         )
 
-        def fake_get(name, api_key=None):
+        def fake_get(name, api_key=None, model=None):
             captured["api_key"] = api_key
             return type(
                 "P",
@@ -360,7 +366,7 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr(
             "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None: type("P", (), {"generate_code": boom})(),
+            lambda name, api_key=None, model=None: type("P", (), {"generate_code": boom})(),
         )
         result = _run_submission_evaluation(session, submission_id, api_key="sk-secret-key")
 

@@ -4,6 +4,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.config import settings
+from app.services.llm_models import model_belongs_to_provider
+
 # Providers that require an API key to generate code. Mirrors the UI provider
 # list in frontend/src/pages/ChallengeDetail.tsx (requiresKey) and the env-var
 # mapping in app/services/llm.py (KEYED_PROVIDERS) — keep all three in sync.
@@ -23,11 +26,29 @@ class SubmissionCreate(BaseModel):
             "generation and never stored, returned, or logged."
         ),
     )
+    model: str | None = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Catalog model id (see GET /api/models). Omitted → the provider's "
+            "default model is used."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_api_key_for_keyed_providers(self):
         if self.provider in KEY_REQUIRED_PROVIDERS and not self.api_key:
             raise ValueError(f"An API key is required for provider '{self.provider}'")
+        return self
+
+    @model_validator(mode="after")
+    def validate_model_for_provider(self):
+        if self.model:
+            provider = self.provider or settings.llm_provider or "demo"
+            if not model_belongs_to_provider(self.model, provider):
+                raise ValueError(
+                    f"Model '{self.model}' is not available for provider '{provider}'"
+                )
         return self
 
 
@@ -140,6 +161,7 @@ class SubmissionRead(BaseModel):
     #: When evaluation began (status → processing); None while queued.
     started_at: datetime | None = None
     provider: str | None
+    model: str | None = None
     language: str | None
     code: str | None
     score: float | None

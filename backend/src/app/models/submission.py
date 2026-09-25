@@ -32,6 +32,9 @@ class Submission(UUIDMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(20), default="pending")
     provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    #: Catalog model id used for generation (see app/services/llm_models.py).
+    #: NULL/absent on rows created before the column existed.
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     code: Mapped[str | None] = mapped_column(Text, nullable=True)
     score: Mapped[float | None] = mapped_column(nullable=True)

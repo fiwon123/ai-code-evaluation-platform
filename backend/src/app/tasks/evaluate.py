@@ -99,7 +99,11 @@ def _run_submission_evaluation(
     workdir = Path(settings.evaluation_dir) / str(submission.id)
 
     try:
-        provider = get_llm_provider(provider_name, api_key=api_key)
+        provider = get_llm_provider(
+            provider_name,
+            api_key=api_key,
+            model=submission.model,
+        )
         code = provider.generate_code(challenge.prompt, challenge.language)
         submission.code = code
         submission.phase = "testing"
