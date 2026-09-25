@@ -21,12 +21,31 @@ export const TEST_USER = {
 
 export const TEST_TOKEN = "e2e-test-jwt-token";
 
+export const ADMIN_USER: typeof TEST_USER = {
+  ...TEST_USER,
+  id: "u-e2e-admin",
+  email: "admin@example.com",
+  username: "root",
+  is_admin: true,
+};
+
+/** Admin user list. The muted email cell is the contrast-critical one. */
+export const ADMIN_USERS: Array<typeof TEST_USER> = [
+  { ...TEST_USER, id: "u-1", email: "ada@example.com", username: "ada" },
+  { ...TEST_USER, id: "u-2", email: "grace@example.com", username: "grace" },
+  {
+    ...TEST_USER,
+    id: "u-3",
+    email: "alan@example.com",
+    username: "alan",
+    is_active: false,
+  },
+];
+
 /** Password that makes the login mock return 401 (see `mockApi`). */
 export const WRONG_PASSWORD = "wrong-password";
 
-export function authResponse(
-  user: typeof TEST_USER = TEST_USER,
-): {
+export function authResponse(user: typeof TEST_USER = TEST_USER): {
   access_token: string;
   token_type: string;
   user: typeof TEST_USER;
@@ -61,7 +80,8 @@ export const CHALLENGES: Array<{
   {
     id: "c-med-1",
     title: "LRU Cache",
-    description: "Design a data structure that follows the LRU eviction policy.",
+    description:
+      "Design a data structure that follows the LRU eviction policy.",
     prompt: "Implement an LRU cache with get and put.",
     test_code: "def test_lru(): ...",
     language: "typescript",
@@ -92,11 +112,20 @@ export const CHALLENGES: Array<{
  * - POST /api/auth/register → 201 AuthResponse
  * - GET  /api/auth/me      → 401 (no token is seeded by these tests)
  * - GET  /api/challenges   → paginated list, honoring `difficulty`/`search`
+ * - GET  /api/admin/users  → paginated list (only with `{ admin: true }`)
  */
 export async function mockApi(
   page: Page,
   challenges: typeof CHALLENGES = CHALLENGES,
+  options: { admin?: boolean } = {},
 ): Promise<void> {
+  if (options.admin) {
+    // `AdminRoute` needs an authenticated admin before it renders anything, and
+    // the API client reads the token straight out of localStorage.
+    await page.addInitScript((token) => {
+      window.localStorage.setItem("access_token", token);
+    }, TEST_TOKEN);
+  }
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const method = route.request().method();
@@ -126,6 +155,37 @@ export async function mockApi(
         status: 201,
         contentType: "application/json",
         body: JSON.stringify(authResponse()),
+      });
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/api/auth/me" && options.admin) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(options.admin ? ADMIN_USER : TEST_USER),
+      });
+      return;
+    }
+
+    if (
+      method === "GET" &&
+      url.pathname === "/api/admin/users" &&
+      options.admin
+    ) {
+      const pageNumber = Number(url.searchParams.get("page") ?? "1");
+      const pageSize = Number(url.searchParams.get("page_size") ?? "20");
+      const start = (pageNumber - 1) * pageSize;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: ADMIN_USERS.slice(start, start + pageSize),
+          total: ADMIN_USERS.length,
+          page: pageNumber,
+          page_size: pageSize,
+          pages: 1,
+        }),
       });
       return;
     }

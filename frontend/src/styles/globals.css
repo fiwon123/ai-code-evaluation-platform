@@ -25,6 +25,11 @@
   --color-surface: #ffffff;
   --color-surface-secondary: #f4f7fb;
   --color-surface-raised: #ffffff;
+  /* Resting state for a hoverable surface (table row, list item): a step down
+     from #ffffff, far enough to read as a state change (1.21:1 against the
+     surface) while staying calm, and distinct from --color-surface-secondary
+     so "hovered" and "secondary" never read as the same surface. */
+  --color-surface-hover: #e3eaf7;
   --color-divider: #d8e1ec;
   --color-border: #c9d4e0;
   --color-border-hover: #94a3b8;
@@ -74,6 +79,16 @@
   --color-surface: #131d33;
   --color-surface-secondary: #0d1526;
   --color-surface-raised: #1a2540;
+  /* Darkens, it does not lighten — deliberately, and against the usual dark-UI
+     instinct. --color-text-muted (#7c8ca6) is only 4.92:1 on this surface, so
+     0.48 of headroom above AA for 12px text; any hover that lifts the surface
+     spends it. Lifting to #1c2846 (the obvious choice) drops the muted cell —
+     the email under each username in the admin tables — to 4.27:1, a real
+     regression, not a hypothetical one. Stepping down instead keeps the
+     interaction model identical to the light palette and IMPROVES muted
+     contrast to 5.43:1 while hovered. Also 1.22:1 away from
+     --color-surface-raised, so "hovered row" never looks like a raised card. */
+  --color-surface-hover: #0d1322;
   --color-divider: #24334f;
   --color-border: #2c3d5c;
   --color-border-hover: #46618c;
