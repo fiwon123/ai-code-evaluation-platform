@@ -596,3 +596,59 @@ describe("adminApi", () => {
     );
   });
 });
+
+/**
+ * VITE_API_URL handling (issue #185). The module reads the build-time base once,
+ * so each variant re-imports it with the env stubbed in place.
+ */
+describe("VITE_API_URL resolution", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  async function requestUrlWith(base: string | undefined): Promise<string> {
+    if (base === undefined) {
+      vi.stubEnv("VITE_API_URL", undefined as unknown as string);
+    } else {
+      vi.stubEnv("VITE_API_URL", base);
+    }
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }));
+    const fresh = await import("./api.ts");
+    await fresh.challengesApi.list();
+    return fetchMock.mock.calls[0]?.[0] as string;
+  }
+
+  it("falls back to the dev origin when VITE_API_URL is unset", async () => {
+    expect(await requestUrlWith(undefined)).toBe(
+      "http://localhost:8000/api/challenges",
+    );
+  });
+
+  it("issues same-origin relative requests for an empty base", async () => {
+    expect(await requestUrlWith("")).toBe("/api/challenges");
+  });
+
+  it("does not duplicate the /api prefix for a path-prefix base", async () => {
+    // The production image bakes VITE_API_URL=/api; this used to produce
+    // /api/api/challenges, which FastAPI 404s.
+    expect(await requestUrlWith("/api")).toBe("/api/challenges");
+  });
+
+  it("requests an absolute origin directly", async () => {
+    expect(await requestUrlWith("https://api.example.com")).toBe(
+      "https://api.example.com/api/challenges",
+    );
+  });
+
+  it("does not duplicate the prefix for an absolute base that carries it", async () => {
+    expect(await requestUrlWith("https://api.example.com/api")).toBe(
+      "https://api.example.com/api/challenges",
+    );
+  });
+});

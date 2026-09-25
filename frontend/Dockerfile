@@ -20,6 +20,14 @@ RUN npm ci
 
 # Copy the rest of the source and build.
 COPY . .
+# VITE_API_URL contract (implemented in frontend/src/services/apiUrl.ts):
+#   "" (empty)        -> same-origin; the browser resolves "/api/..." itself.
+#   "/api"            -> same-origin path prefix; requests stay "/api/..." and
+#                        the prefix is never duplicated into "/api/api/...".
+#   absolute origin   -> requests go straight to that origin (the `vite dev`
+#                        default is http://localhost:8000).
+# VITE_WS_URL overrides the live-updates socket base; when unset it is derived
+# from VITE_API_URL and the page origin (http -> ws, https -> wss).
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build

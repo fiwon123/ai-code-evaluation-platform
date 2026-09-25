@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getToken } from "../services/api.ts";
+import { joinApiUrl, webSocketBase } from "../services/apiUrl.ts";
 import type { Submission, SubmissionPhase, SubmissionStatus } from "../types.ts";
 
-const API_BASE: string = import.meta.env.VITE_API_URL || "http://localhost:8000";
-const WS_BASE: string =
-  import.meta.env.VITE_WS_URL || API_BASE.replace(/^http/, "ws");
 
 const INITIAL_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 15000;
@@ -64,9 +62,13 @@ export function useSubmissionSocket(submissionId: string | undefined): {
       if (cancelled) {
         return;
       }
+      // Built at connect time (not module scope) so the socket always reflects
+      // the current page origin, and the join never repeats the `/api` prefix.
       const socket = new WebSocket(
-        `${WS_BASE}/api/ws/submissions/${encodeURIComponent(targetId)}` +
-          `?token=${encodeURIComponent(authToken)}`,
+        joinApiUrl(
+          webSocketBase(window.location.origin),
+          `/api/ws/submissions/${encodeURIComponent(targetId)}`,
+        ) + `?token=${encodeURIComponent(authToken)}`,
       );
       socketRef.current = socket;
       setState("connecting");

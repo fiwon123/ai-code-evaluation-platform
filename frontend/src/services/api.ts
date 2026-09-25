@@ -24,8 +24,8 @@ import type {
   SubmissionStats,
   User,
 } from "../types.ts";
+import { apiUrl } from "./apiUrl.ts";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const TOKEN_KEY = "access_token";
 
 function buildQueryString(params?: object): string {
@@ -140,7 +140,7 @@ async function fetchJson(path: string, options?: RequestInit): Promise<Response>
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: {
       ...headers,
