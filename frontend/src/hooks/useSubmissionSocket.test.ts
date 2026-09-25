@@ -202,3 +202,59 @@ it("merges status updates into the live submission", () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 });
+
+/**
+ * Socket base resolution (issue #185). `webSocketBase()` reads the build-time
+ * env, so each variant re-imports the hook with the env stubbed in place.
+ */
+describe("useSubmissionSocket base URL", () => {
+  beforeEach(() => {
+    FakeWebSocket.reset();
+    localStorage.setItem(TOKEN_KEY, "jwt-token");
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  async function socketUrlWith(
+    env: Record<string, string | undefined>,
+  ): Promise<string> {
+    for (const [key, value] of Object.entries(env)) {
+      vi.stubEnv(key, value as string);
+    }
+    const fresh = await import("./useSubmissionSocket.ts");
+    renderHook(() => fresh.useSubmissionSocket("s1"));
+    return FakeWebSocket.latest().url;
+  }
+
+  it("connects to the absolute dev origin when VITE_API_URL is unset", async () => {
+    const url = await socketUrlWith({ VITE_API_URL: undefined });
+    expect(url).toBe("ws://localhost:8000/api/ws/submissions/s1?token=jwt-token");
+  });
+
+  it("resolves a /api base against the page origin without duplicating the prefix", async () => {
+    // The production image bakes VITE_API_URL=/api; the old scheme swap was a
+    // no-op there, so the socket got a relative URL and never upgraded.
+    const url = await socketUrlWith({ VITE_API_URL: "/api" });
+    expect(url).toBe(`${window.location.origin.replace(/^http/, "ws")}/api/ws/submissions/s1?token=jwt-token`);
+    expect(url).not.toContain("/api/api/");
+  });
+
+  it("rewrites an https base to wss", async () => {
+    const url = await socketUrlWith({ VITE_API_URL: "https://api.example.com" });
+    expect(url).toBe("wss://api.example.com/api/ws/submissions/s1?token=jwt-token");
+  });
+
+  it("honours an explicit VITE_WS_URL override", async () => {
+    const url = await socketUrlWith({
+      VITE_API_URL: "/api",
+      VITE_WS_URL: "wss://sockets.example.com",
+    });
+    expect(url).toBe("wss://sockets.example.com/api/ws/submissions/s1?token=jwt-token");
+  });
+});
