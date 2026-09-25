@@ -5,8 +5,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Providers that require an API key to generate code. Mirrors the UI provider
-# list in frontend/src/pages/ChallengeDetail.tsx (requiresKey) — keep in sync.
-KEY_REQUIRED_PROVIDERS = frozenset({"openai", "anthropic"})
+# list in frontend/src/pages/ChallengeDetail.tsx (requiresKey) and the env-var
+# mapping in app/services/llm.py (KEYED_PROVIDERS) — keep all three in sync.
+KEY_REQUIRED_PROVIDERS = frozenset({"openai", "anthropic", "gemini"})
 
 
 class SubmissionCreate(BaseModel):

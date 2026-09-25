@@ -6,7 +6,9 @@ import pytest
 from app.services.llm import get_llm_provider
 from app.services.llm_providers import (
     AnthropicProvider,
+    GeminiProvider,
     MockProvider,
+    OllamaProvider,
     OpenAIProvider,
     strip_code_fences,
 )
@@ -227,6 +229,104 @@ class TestAnthropicProvider:
         provider.close()
 
 
+# Gemini/Ollama helpers
+def _gemini_handler(request: httpx.Request) -> httpx.Response:
+    assert request.url.params["key"] == "test-gemini-key"
+    assert "gemini-2.0-flash:generateContent" in str(request.url)
+    body = json.loads(request.content)
+    assert "system_instruction" in body
+    content = "```python\ndef two_sum(nums, target):\n    return []\n```"
+    return httpx.Response(
+        200,
+        json={"candidates": [{"content": {"parts": [{"text": content}]}}]},
+    )
+
+
+def _ollama_handler(request: httpx.Request) -> httpx.Response:
+    body = json.loads(request.content)
+    assert body["model"] == "qwen2.5-coder:7b"
+    assert body["stream"] is False
+    assert "system" in body
+    return httpx.Response(
+        200,
+        json={
+            "model": "qwen2.5-coder:7b",
+            "response": "def fibonacci(n):\n    return [0, 1]",
+            "done": True,
+        },
+    )
+
+
+class TestGeminiProvider:
+    def test_generate_code_calls_api_and_strips_fences(self):
+        provider = GeminiProvider(
+            api_key="test-gemini-key",
+            transport=httpx.MockTransport(_gemini_handler),
+        )
+        code = provider.generate_code("two sum please")
+        assert code == "def two_sum(nums, target):\n    return []"
+        provider.close()
+
+    def test_no_candidates_raises(self):
+        provider = GeminiProvider(
+            api_key="test-gemini-key",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"candidates": []})
+            ),
+        )
+        with pytest.raises(ValueError, match="no candidates"):
+            provider.generate_code("anything")
+        provider.close()
+
+    def test_unsupported_language_raises_before_request(self):
+        provider = GeminiProvider(
+            api_key="test-gemini-key",
+            transport=httpx.MockTransport(_gemini_handler),
+        )
+        with pytest.raises(ValueError, match="not supported"):
+            provider.generate_code("anything", language="ruby")
+        provider.close()
+
+    def test_http_error_surfaces(self):
+        provider = GeminiProvider(
+            api_key="bad",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(403, json={"error": "permission denied"})
+            ),
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.generate_code("two sum")
+        provider.close()
+
+
+class TestOllamaProvider:
+    def test_generate_code_calls_local_api(self):
+        provider = OllamaProvider(transport=httpx.MockTransport(_ollama_handler))
+        code = provider.generate_code("fibonacci")
+        assert code == "def fibonacci(n):\n    return [0, 1]"
+        provider.close()
+
+    def test_different_model_via_constructor(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            assert body["model"] == "codellama"
+            return httpx.Response(200, json={"response": "def f():\n    pass", "done": True})
+
+        provider = OllamaProvider(model="codellama", transport=httpx.MockTransport(handler))
+        assert "def f():" in provider.generate_code("anything")
+        provider.close()
+
+    def test_connection_error_surfaces(self):
+        provider = OllamaProvider(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(500, json={"error": "server error"})
+            )
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            provider.generate_code("fibonacci")
+        provider.close()
+
+
 class TestProviderErrorPaths:
     """HTTP failures (rate limits, server errors) must surface as errors."""
 
@@ -313,6 +413,26 @@ class TestGetLLMProvider:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         assert isinstance(get_llm_provider("openai"), OpenAIProvider)
 
+    def test_gemini_requires_key(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+            get_llm_provider("gemini")
+
+    def test_gemini_explicit_key_without_env(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        provider = get_llm_provider("gemini", api_key="sk-gem-call")
+        assert isinstance(provider, GeminiProvider)
+
+    def test_gemini_env_key(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "sk-gem-env")
+        assert isinstance(get_llm_provider("gemini"), GeminiProvider)
+
+    def test_ollama_is_keyless(self, monkeypatch):
+        # No API key and no env var — Ollama must still construct (local server).
+        monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+        provider = get_llm_provider("ollama")
+        assert isinstance(provider, OllamaProvider)
+
     def test_unknown_provider_raises(self):
         with pytest.raises(ValueError, match="Unknown LLM provider"):
-            get_llm_provider("gemini")
+            get_llm_provider("watson")

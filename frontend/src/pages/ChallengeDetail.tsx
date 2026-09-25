@@ -44,6 +44,18 @@ const PROVIDERS = [
     description: "claude-3-5-haiku",
     requiresKey: true,
   },
+  {
+    value: "gemini",
+    name: "Gemini",
+    description: "gemini-2.0-flash",
+    requiresKey: true,
+  },
+  {
+    value: "ollama",
+    name: "Ollama (local)",
+    description: "qwen2.5-coder · no API key",
+    requiresKey: false,
+  },
 ];
 
 const DIFFICULTY_VARIANT: Record<
