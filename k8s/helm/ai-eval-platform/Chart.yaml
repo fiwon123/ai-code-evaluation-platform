@@ -5,7 +5,7 @@ description: >-
   Celery worker + beat (periodic stale-submission recovery), PostgreSQL
   (StatefulSet) and Redis.
 type: application
-version: 0.6.0
+version: 0.7.0
 appVersion: "0.6.0"
 kubeVersion: ">=1.28.0"
 

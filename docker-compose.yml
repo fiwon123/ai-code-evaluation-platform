@@ -60,6 +60,13 @@ services:
       # (e.g. the worker discarding the recovery sweep as "unregistered").
       # PYTHONPATH precedes site-packages in sys.path and shadows that .pth.
       - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
+      # LLM provider keys (host-interpolated, `:-` keeps the sandbox runnable
+      # without them). Mirrors k8s/base/secrets.yaml — same env names, no
+      # drift. Ollama is keyless and needs nothing here.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # GitHub OAuth2 — inert until client credentials are supplied.
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
       # Forward the host GITHUB_TOKEN into the dev sandbox so `gh` (which the
       # agent uses for issues/PRs) actually works INSIDE the container: the
       # read-only ~/.config/gh mount only carries an invalid/stale stored token,
@@ -121,6 +128,11 @@ services:
       - DOCKER_IMAGE=eval-sandbox:latest
       # Live source (see dev service): stale images must not run baked code.
       - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
+      # LLM provider keys — the worker GENERATES the code, so it needs the
+      # same key surface as the dev sandbox (mirrors k8s/base/secrets.yaml).
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

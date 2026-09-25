@@ -11,6 +11,13 @@ metadata:
   {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  # TLS terminates at the ingress. Pair with cert-manager via
+  # ingress.annotations (e.g. cert-manager.io/cluster-issuer) and a tls entry
+  # whose secretName holds the issued certificate.
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   rules:
     - host: {{ .Values.ingress.host | quote }}
       http:

@@ -10,7 +10,9 @@ data:
   LLM_PROVIDER: {{ .Values.config.llmProvider | quote }}
   CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
   ACCESS_TOKEN_EXPIRE_MINUTES: {{ .Values.config.accessTokenExpireMinutes | quote }}
-  REDIS_URL: {{ .Values.config.redisUrl | quote }}
+  # Redis URL falls back to the in-chart redis Service (redisServiceName
+  # helper) when blank, so it can never drift from the Service manifest.
+  REDIS_URL: {{ .Values.config.redisUrl | default (printf "redis://%s:6379/0" (include "ai-eval-platform.redisServiceName" .)) | quote }}
   EVALUATION_TIMEOUT: {{ .Values.config.evaluation.timeout | quote }}
   EVALUATION_DIR: {{ .Values.config.evaluation.dir | quote }}
   DOCKER_ENABLED: {{ .Values.config.evaluation.dockerEnabled | quote }}

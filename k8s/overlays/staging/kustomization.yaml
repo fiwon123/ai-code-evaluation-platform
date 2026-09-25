@@ -63,3 +63,8 @@ secretGenerator:
     literals:
       # Replace with real values in CI (e.g. via sealed-secrets / SOPS).
       - JWT_SECRET_KEY=change-me-staging
+      # OAuth + provider keys — staging defaults are empty; wire real values
+      # via the same mechanism (sealed-secrets / SOPS / external-secrets).
+      - GITHUB_CLIENT_ID=change-me-staging
+      - GITHUB_CLIENT_SECRET=change-me-staging
+      - GEMINI_API_KEY=change-me-staging

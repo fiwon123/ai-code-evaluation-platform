@@ -80,3 +80,8 @@ secretGenerator:
     literals:
       # MUST be overridden by sealed-secrets / SOPS / external-secrets.
       - JWT_SECRET_KEY=change-me-production
+      # OAuth + provider keys — production values MUST come from the secrets
+      # manager (sealed-secrets / SOPS / external-secrets), never from this file.
+      - GITHUB_CLIENT_ID=change-me-production
+      - GITHUB_CLIENT_SECRET=change-me-production
+      - GEMINI_API_KEY=change-me-production

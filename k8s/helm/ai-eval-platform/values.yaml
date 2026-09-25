@@ -88,7 +88,11 @@ redis:
 config:
   environment: development
   corsOrigins: '["http://localhost:5173","http://localhost:8000"]'
-  redisUrl: "redis://ai-eval-platform-redis:6379/0"
+  # Blank by default — the configmap falls back to the in-chart redis Service
+  # ({{ fullname }}-redis via the redisServiceName helper), mirroring how the
+  # kustomize base names its redis (ai-eval-redis). Set explicitly to point at
+  # a managed/external Redis.
+  redisUrl: ""
   llmProvider: demo
   accessTokenExpireMinutes: "1440"
   evaluation:
@@ -110,25 +114,51 @@ config:
 
 # Secrets come from the generated Secret; override with --set secrets.* or
 # wire in external-secrets. DEV DEFAULTS ONLY — production MUST override.
+# `databaseUrl`/`postgresPassword` are also blank by default: the templates
+# fall back to the in-chart postgres Service (see _helpers.tpl) when unset,
+# so the managed-PG escape hatch is `secrets.databaseUrl=...` at install time.
 secrets:
-  databaseUrl: "postgresql+psycopg://postgres:postgres@ai-eval-platform-postgres:5432/ai_eval"
+  databaseUrl: ""
   postgresPassword: "postgres"
   jwtSecretKey: "dev-secret-key-change-in-production"
   openaiApiKey: ""
   anthropicApiKey: ""
+  geminiApiKey: ""
+  # GitHub OAuth2 — inert until client credentials are supplied.
+  githubClientId: ""
+  githubClientSecret: ""
+  # Ollama needs NO secret (keyless by design, see ollama_provider.py).
 
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 5
   targetCPUUtilizationPercentage: 70
+  # Optional worker HPA — disabled by default; tune on a busy evaluation
+  # cluster. Renders a second HorizontalPodAutoscaler for the Celery worker.
+  worker:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
 
 ingress:
   enabled: true
   className: nginx
   host: ai-eval.local
   annotations: {}
+  # TLS terminates at the ingress. Typically combined with cert-manager via
+  # annotations, e.g.:
+  #   annotations:
+  #     cert-manager.io/cluster-issuer: letsencrypt-prod
+  #   tls:
+  #     - hosts: [eval.example.com]
+  #       secretName: ai-eval-tls
+  tls: []
 
 serviceAccount:
+  # Creates a dedicated ServiceAccount (fullname) and attaches it to every
+  # workload when true. With false (default), pods run under the namespace's
+  # default account — fine unless you need Role/RoleBinding scoping.
   create: false
   name: ""
