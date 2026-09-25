@@ -81,26 +81,80 @@ WORKDIR /sandbox/ai-code-evaluation-platform
 # /sandbox/ai-code-evaluation-platform). The bind-mounted source at runtime
 # stays in sync with this lockfile via `uv sync` whenever
 # pyproject.toml/uv.lock change.
+# All build steps above run as root; the runtime user created further down takes
+# ownership of this venv, so the runtime `uv sync` guard in dev-entrypoint.sh
+# and the celery/beat services can still refresh it.
 ENV UV_PROJECT_ENVIRONMENT=/opt/backend-venv
 COPY backend/ /sandbox/ai-code-evaluation-platform/backend/
 RUN cd /sandbox/ai-code-evaluation-platform/backend && uv sync
+
+# --- Runtime (non-root) user -------------------------------------------------
+# The workspace is bind-mounted from the host, so anything the containers write
+# lands on the host with the container's UID. Running as root therefore leaves
+# every build artifact, __pycache__ dir and agent edit owned by root:root — the
+# host user then sees "locked" (unwritable) files in their editor, and git
+# inside the sandbox refuses to operate ("dubious ownership"). The Makefile
+# exports HOST_UID/HOST_GID (the host's `id -u`/`id -g`, NOT bash's read-only,
+# non-exported `UID`) and docker-compose.yml passes them to both these build
+# args and the `user:` directive, so the container matches the host user.
+ARG USER_NAME=devuser
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+ENV DEV_USER=${USER_NAME}
+ENV HOME=/home/${USER_NAME}
+# The runtime user owns the baked venv and its home (caches/config the agent
+# and tooling expect), so the runtime `uv sync`/`npm ci` paths work.
+#
+# The group/user creation is conditional: a future base image (or a host whose
+# UID/GID already exists in it) must not fail the build — we then reuse the
+# existing id and still guarantee the home directory exists and is owned by the
+# runtime uid. The system-level safe.directory only matters when the image was
+# built with different build args than the UID it runs as: normally the bind
+# mount is owned by the same UID as the caller and git is happy without it.
+RUN if ! getent group ${GROUP_ID} >/dev/null; then groupadd --gid ${GROUP_ID} ${USER_NAME}; fi \
+    && if ! getent passwd ${USER_ID} >/dev/null; then \
+         useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /usr/bin/zsh ${USER_NAME}; \
+       fi \
+    && mkdir -p /home/${USER_NAME} \
+    && chown -R ${USER_ID}:${GROUP_ID} /home/${USER_NAME} /opt/backend-venv \
+    && git config --system --add safe.directory /sandbox/ai-code-evaluation-platform
+
+# Caches live in /tmp (container-local, always writable) rather than the
+# baked-in home, so a container started with a different runtime UID than the
+# build args can still `uv sync` / `npm ci` without a permission error.
+RUN mkdir -p /tmp/uv-cache /tmp/npm-cache
+ENV UV_CACHE_DIR=/tmp/uv-cache
+ENV NPM_CONFIG_CACHE=/tmp/npm-cache
 
 # Install dev sandbox shell config (prompt + terminal title indicators). The
 # script is shell-aware (bash + zsh) and sourced from the rc files below.
 COPY scripts/dev-sandbox-rc.sh /etc/profile.d/00-dev-sandbox.sh
 
 # Make zsh the default interactive shell for the sandbox (bash stays installed
-# for scripts/entrypoints, which carry their own shebangs).
-RUN chsh -s /usr/bin/zsh root
+# for scripts/entrypoints, which carry their own shebangs). Tolerates the
+# uid-collision case above, where the login name may differ.
+RUN chsh -s /usr/bin/zsh ${USER_NAME} 2>/dev/null || true
 
-# Ensure interactive non-login shells (docker compose exec -it dev bash) also pick up config
-RUN printf '\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' >> /root/.bashrc
-
+# Sandbox prompt/title config for BOTH the runtime user and root (keep root
+# usable for `docker compose exec -u root` debugging).
+#
 # zsh startup files:
 #   ~/.zshrc    — interactive shells (make shell / dev-exec / docker exec -it)
 #   ~/.zprofile — login shells (zsh -lc from `make opencode` sets the title)
-RUN printf '\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' >> /root/.zshrc \
-    && printf '\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' >> /root/.zprofile
+# bash: interactive non-login shells (docker compose exec -it dev bash)
+RUN SANDBOX_RC='\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' \
+    && for rc in /root/.bashrc /root/.zshrc /root/.zprofile \
+                "/home/${USER_NAME}/.bashrc" "/home/${USER_NAME}/.zshrc" "/home/${USER_NAME}/.zprofile"; do \
+        printf '%b' "$SANDBOX_RC" >> "$rc"; \
+    done \
+    && chown ${USER_ID}:${GROUP_ID} \
+        "/home/${USER_NAME}/.bashrc" "/home/${USER_NAME}/.zshrc" "/home/${USER_NAME}/.zprofile"
+
+# Default to the non-root user so a service added to docker-compose.yml without
+# a `user:` directive can't silently reintroduce root-owned workspace files.
+# Compose still pins the exact UID/GID via `user:`; root remains available for
+# debugging with `docker compose exec -u root`.
+USER ${USER_NAME}
 
 # Keep the container alive when started without an explicit command; the dev
 # and celery compose services override this with their real entrypoints.

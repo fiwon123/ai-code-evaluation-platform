@@ -141,6 +141,15 @@ The dev image mounts (all read-only): the host opencode binary
 config (`${HOME}/.config/opencode`) and git identity (`${HOME}/.gitconfig`);
 `make dev-up` pre-creates the config paths and errors if opencode is missing.
 
+**Ownership**: `dev`, `celery` and `beat` run as the **host user** (`user:` +
+`group_add:` in `docker-compose.yml`, fed by `HOST_UID`/`HOST_GID`/`DOCKER_GID`
+exported from the `Makefile`; the image bakes a matching `devuser` via
+`USER_ID`/`GROUP_ID` build args). Files an agent or service writes into the
+bind-mounted workspace therefore keep the host's ownership — never `root:root`,
+which would leave the host user unable to edit them. Start the stack with the
+Makefile so those variables are passed; a bare `docker compose up` falls back to
+1000:1000. See DEVELOPMENT.md → "File ownership".
+
 **Trusted-agent model by design**: the dev container also mounts the workspace
 and the Docker socket, so an agent running inside it can write the repo and
 spawn eval-sandbox containers. That is the same trust granted to opencode on

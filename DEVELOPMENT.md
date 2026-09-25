@@ -22,6 +22,28 @@ docker compose up dev  ──▶  dev (uvicorn :8000 + vite :5173)
 opencode (the AI coding agent) can run **on the host** or **inside the `dev`
 container** (`scripts/open-in-sandbox.sh`). Both see the same files.
 
+## File ownership (dev/celery/beat run as *you*)
+
+The workspace is a bind mount, so anything the containers write lands on your
+host with the container's UID. To keep that ownership *yours*, the `dev`,
+`celery` and `beat` services run as the host user:
+
+- The `Makefile` exports `HOST_UID`/`HOST_GID` (from `id -u`/`id -g`) and
+  `DOCKER_GID` (the group of `/var/run/docker.sock`).
+- `docker-compose.yml` passes them to each service as `user:` + `group_add:`,
+  and to the image build as `USER_ID`/`GROUP_ID` so the baked `devuser` matches.
+- `group_add` is what keeps Docker working: the evaluation worker drives the
+  socket to spawn isolated eval-sandbox containers, and the sandboxed agent
+  can run `docker` too.
+
+Practical consequences: no more `sudo chown` after a heavy sandbox session, no
+"locked" files in your editor, and git inside the sandbox works without a
+`safe.directory` workaround. Start the stack with the Makefile (`make dev-up`)
+so those variables are picked up — a bare `docker compose up` falls back to
+1000:1000 and group 0, which is only correct on a 1000:1000 host. First run
+after upgrading an existing checkout: `sudo chown -R "$USER": "$(pwd)"` once,
+to clean up what earlier root-running containers left behind.
+
 ## Start / stop
 
 ```bash
@@ -139,7 +161,9 @@ make check                                 # backend lint+tests, frontend lint+b
 | DB in a bad state / want fresh data | `docker compose down -v && make dev-up` (wipes postgres + redis) |
 | Eval sandbox image outdated | `docker compose build sandbox` (or `make infra-up`) |
 | `make dev-up` errors "opencode not found" | Install opencode (see above) — only required for the sandboxed-agent mounts |
-| Working tree owned by root (from an old sandbox) | `sudo chown -R "$USER": "$(pwd)"` |
+| Working tree owned by root (files "locked" in the editor, from an older root-running sandbox) | `sudo chown -R "$USER": "$(pwd)"` — **one-time** cleanup; a working tree that keeps drifting back to root means the stack was started without the Makefile (`docker compose up` directly) — use `make dev-up`, which passes `HOST_UID`/`HOST_GID` |
+| `dev` container logs "UID … has no passwd entry" | The image was built for a different UID than the one you're running as — `make dev-build` to rebuild it for your UID |
+| Evaluations fail with a Docker socket permission error in `celery` | The host Docker socket group wasn't passed through — start the stack via the Makefile so `DOCKER_GID` is picked up (check `make -n dev-up`) |
 | Docker unavailable | Backend falls back to subprocess execution (`DOCKER_ENABLED=false`) |
 | Submissions stuck "pending" for hours | The recovery sweep (Celery beat) must be running: `docker compose ps` should show `beat` healthy. Stale `pending` rows are re-dispatched after 10 min and **abandoned (failed) 60 min after creation** (`PENDING_MAX_MINUTES` in `backend/src/app/tasks/recover.py`). The Profile/SubmissionDetail UI shows "stuck"/"waiting over 10 minutes" in the meantime. |
 

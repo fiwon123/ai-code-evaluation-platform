@@ -12,6 +12,25 @@ COMPOSE ?= docker compose
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 
+# --- Host identity for the dev sandbox ---------------------------------------
+# The workspace is bind-mounted into the dev/celery/beat containers, so those
+# services run as the HOST user: without this every file they write (build
+# output, __pycache__, agent edits) lands on the host owned by root:root and
+# shows up "locked" in the host editor.
+#
+# NOTE: deliberately NOT named UID — bash defines UID as a read-only shell
+# variable that is *not* exported, so compose interpolation of ${UID} would
+# silently fall back to its default for every user whose UID isn't 1000.
+HOST_UID ?= $(shell id -u)
+HOST_GID ?= $(shell id -g)
+# Host Docker socket group (root:docker, 660 on Fedora/Ubuntu). Passed to
+# compose as group_add so the non-root user can still drive Docker — required
+# by the evaluation worker (isolated eval-sandbox containers) and by the
+# sandboxed agent. Defaults to 0 where the socket is root-owned or absent
+# (macOS/Windows Docker Desktop, remote daemons).
+DOCKER_GID ?= $(shell stat -c %g /var/run/docker.sock 2>/dev/null || echo 0)
+export HOST_UID HOST_GID DOCKER_GID
+
 # --- Host-native path (fastest, no containers) -------------------------------
 install: setup ## Alias for setup (kept for backwards compatibility)
 setup: ## Install host-native deps (uv sync + npm install)

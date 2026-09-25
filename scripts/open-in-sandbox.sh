@@ -8,8 +8,13 @@ set -euo pipefail
 # the `dev` container. opencode is injected via read-only compose mounts (see
 # docker-compose.yml):
 #   - binary: ${HOME}/.opencode/bin/opencode          → /usr/local/bin/opencode
-#   - config: ${HOME}/.config/opencode                → /root/.config/opencode
-#   - git identity: ${HOME}/.gitconfig                 → /root/.gitconfig
+#   - config: ${HOME}/.config/opencode                → /home/devuser/.config/opencode
+#   - git identity: ${HOME}/.gitconfig                 → /home/devuser/.gitconfig
+#
+# The container runs as the host user (`user:` in docker-compose.yml, fed by
+# HOST_UID/HOST_GID from the Makefile) so files written here — including the
+# agent's own edits — keep the host's ownership instead of becoming root:root
+# and unreadable in the host editor.
 #
 # Trusted-agent model: the dev container shares the workspace (bind mount) and
 # the Docker socket with the host BY DESIGN — isolation covers the agent's

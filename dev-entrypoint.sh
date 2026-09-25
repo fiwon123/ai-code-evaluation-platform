@@ -19,6 +19,28 @@ BACKEND_DIR=/sandbox/ai-code-evaluation-platform/backend
 FRONTEND_DIR=/sandbox/ai-code-evaluation-platform/frontend
 BACKEND_VENV="${UV_PROJECT_ENVIRONMENT:-/opt/backend-venv}"
 
+# --- Passwd entry for the runtime user ---------------------------------------
+# The image bakes a `devuser` matching the build args, and compose normally runs
+# the container with that same UID (`user:` in docker-compose.yml), so this is
+# usually a no-op. When the image was built with different build args than the
+# UID it now runs with (e.g. a cached image, or a plain `docker compose up`
+# without the Makefile's HOST_UID), no passwd entry exists for the caller —
+# which leaves $HOME, `~`, git and npm without an identity to resolve. Append a
+# minimal entry when we can (running as root); as a non-root user without an
+# entry the tools still work via the explicit HOME/USER env vars set in
+# docker-compose.yml, so a warning is enough there.
+if ! getent passwd "$(id -u)" >/dev/null; then
+    if [[ "$(id -u)" -eq 0 ]]; then
+        echo "[dev] UID 0 has no passwd entry — adding a fallback identity."
+        printf 'sandbox:x:%s:%s:Sandbox User:/home/%s:/usr/bin/zsh\n' \
+            "$(id -u)" "$(id -g)" "${DEV_USER:-devuser}" >> /etc/passwd
+    else
+        echo "[dev] WARNING: UID $(id -u) has no passwd entry." >&2
+        echo "[dev]          Rebuild the image for this UID (make dev-build) so the" >&2
+        echo "[dev]          dev user matches, or run with 'docker compose exec -u root'." >&2
+    fi
+fi
+
 # --- Bootstrap dependencies if missing (first run on a fresh workspace) ---
 if [[ ! -x "$BACKEND_VENV/bin/uvicorn" ]]; then
     echo "[dev] Backend dependencies missing — running 'uv sync' into $BACKEND_VENV ..."

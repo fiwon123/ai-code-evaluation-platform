@@ -17,6 +17,21 @@ name: ai-eval
 # intentionally generous so normal dev workflows (uv sync, npm install,
 # uvicorn, Vite) run comfortably while still bounding resource use.
 # Note: limits apply to running containers with `docker compose up` (Compose v2).
+#
+# --- Host identity ------------------------------------------------------------
+# `user: "${HOST_UID}:${HOST_GID}"` makes the dev/celery/beat services run as
+# the host user, so files written into the bind-mounted workspace keep the
+# host's ownership instead of landing as root:root (which shows up "locked" in
+# the host editor and breaks git with "dubious ownership"). The Makefile
+# exports HOST_UID/HOST_GID from `id -u`/`id -g` — override them explicitly when
+# running `docker compose` by hand (the defaults below keep plain
+# `docker compose up` working for a 1000:1000 host).
+#
+# `group_add: ["${DOCKER_GID}"]` grants access to the host Docker socket
+# (root:docker 0660) for the non-root user — required by the evaluation worker
+# (it spawns isolated eval-sandbox containers) and by the sandboxed agent.
+# DOCKER_GID comes from `stat -c %g /var/run/docker.sock` in the Makefile and
+# defaults to 0 (root group) for platforms where the socket is root-owned.
 services:
   # Dev sandbox — the coding/runtime environment. Source is bind-mounted for
   # hot reload; backend deps are baked into /opt/backend-venv; node_modules is
@@ -25,6 +40,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Keep the runtime user aligned with the `user:` directive below.
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    # Run as the host user so bind-mounted files stay host-owned (see header).
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Docker socket group (host) — keep evaluation container spawning working.
+    group_add:
+      - "${DOCKER_GID:-0}"
     command: ["/sandbox/ai-code-evaluation-platform/dev-entrypoint.sh"]
     # Friendly hostname so prompts (`%n@%m`) and `hostname` clearly show you're
     # inside the sandbox (containers otherwise get a random hex ID).
@@ -34,20 +58,27 @@ services:
       # Mount the host Docker socket so evaluations can spawn isolated
       # eval-sandbox containers (docker_sandbox uses the Python SDK).
       - /var/run/docker.sock:/var/run/docker.sock
-      # Share the host gh CLI auth with the dev sandbox.
-      - ${HOME}/.config/gh:/root/.config/gh:ro
+      # Share the host gh CLI auth with the dev sandbox (read-only). The
+      # container runs as the host user, so the target home is the
+      # non-root user's (/home/devuser), not /root.
+      - ${HOME}/.config/gh:/home/devuser/.config/gh:ro
       # Sandboxed AI coding agent: mount the host opencode binary + config and
       # git identity read-only so `opencode` can run INSIDE the dev container
       # (same trusted-agent model as gh: workspace bind mount + docker socket
       # are shared by design). `make dev-up` pre-creates ${HOME}/.config/opencode
       # and ${HOME}/.gitconfig so these mounts never fail on a fresh machine.
       - ${HOME}/.opencode/bin/opencode:/usr/local/bin/opencode:ro
-      - ${HOME}/.config/opencode:/root/.config/opencode:ro
-      - ${HOME}/.gitconfig:/root/.gitconfig:ro
+      - ${HOME}/.config/opencode:/home/devuser/.config/opencode:ro
+      - ${HOME}/.gitconfig:/home/devuser/.gitconfig:ro
     ports:
       - "8000:8000"
       - "5173:5173"
     environment:
+      # HOME/USER/LOGNAME for the non-root runtime user (npm, uv, gh, git all
+      # resolve their config/cache from HOME).
+      - HOME=/home/devuser
+      - USER=devuser
+      - LOGNAME=devuser
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
@@ -111,6 +142,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Keep the runtime user aligned with the `user:` directive below.
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    # Run as the host user so bind-mounted files (e.g. the __pycache__ dirs the
+    # worker writes under the bind-mounted PYTHONPATH) stay host-owned.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Docker socket group (host) — the worker creates isolated eval-sandbox
+    # containers for code evaluation, so it needs socket access as non-root.
+    group_add:
+      - "${DOCKER_GID:-0}"
     # Re-sync the baked venv only when it's missing (same guard as
     # dev-entrypoint.sh) so an image predating a pyproject change can't
     # crash-loop the worker at import time.
@@ -121,6 +163,10 @@ services:
       # isolated eval-sandbox containers for code evaluation.
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      # HOME/USER/LOGNAME for the non-root runtime user (uv cache/config).
+      - HOME=/home/devuser
+      - USER=devuser
+      - LOGNAME=devuser
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
@@ -164,12 +210,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Keep the runtime user aligned with the `user:` directive below.
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    # Run as the host user so bind-mounted files stay host-owned.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     # Same venv guard as celery: sync only when the baked venv is missing so
     # an image predating a pyproject change can't crash-loop beat at import.
     command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && { [[ -x /opt/backend-venv/bin/celery ]] || uv sync; } && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app beat --loglevel=info'
     volumes:
       - .:/sandbox/ai-code-evaluation-platform:cached
     environment:
+      # HOME/USER/LOGNAME for the non-root runtime user (uv cache/config).
+      - HOME=/home/devuser
+      - USER=devuser
+      - LOGNAME=devuser
       - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=dev-secret-key-change-in-production
