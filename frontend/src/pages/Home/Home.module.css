@@ -361,3 +361,65 @@
     transform: rotate(90deg);
   }
 }
+
+.sampleReport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 2rem;
+  padding: 1rem 1.5rem;
+  border-radius: 16px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.03)
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.sampleTests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: left;
+}
+
+.sampleTestPass {
+  color: var(--color-success);
+  opacity: 0;
+  animation: rowIn 500ms ease-out forwards;
+}
+
+.sampleTestFail {
+  color: var(--color-danger);
+  opacity: 0;
+  animation: rowIn 500ms ease-out 200ms forwards;
+}
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sampleTestPass,
+  .sampleTestFail {
+    animation: none;
+    opacity: 1;
+  }
+}

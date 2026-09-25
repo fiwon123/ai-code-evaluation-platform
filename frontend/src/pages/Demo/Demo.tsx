@@ -6,10 +6,13 @@ import Card from "../../components/Card/Card.tsx";
 import CodeBlock from "../../components/CodeBlock/CodeBlock.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
+import { useNow } from "../../hooks/useNow.ts";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
+import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
+import { formatElapsed } from "../../utils/formatting.ts";
 import {
   extensionForLanguage,
   runnerForLanguage,
@@ -197,6 +200,9 @@ function Demo() {
   }, [running, submissionId]);
 
   const inProgress = running && result === null;
+  const now = useNow(inProgress);
+  const phaseLabel =
+    liveSubmission?.phase === "testing" ? "Running tests…" : "Generating code…";
 
   return (
     <div className={styles.page}>
@@ -275,6 +281,12 @@ function Demo() {
 
               {inProgress && (
                 <Card className={styles.resultCard}>
+                  {liveSubmission?.started_at && (
+                    <p className={styles.phaseText} role="status">
+                      {phaseLabel}{" "}
+                      · {formatElapsed(liveSubmission.started_at, now)} elapsed
+                    </p>
+                  )}
                   <p className={styles.progressText}>
                     ⏳ Generating code and running tests… usually takes 10–30
                     seconds. This page updates automatically.
@@ -299,10 +311,10 @@ function Demo() {
                   {result.evaluation_result && (
                     <div className={styles.resultStats}>
                       <div className={styles.resultStat}>
-                        <span className={styles.resultStatValue}>
-                          {result.evaluation_result.score}%
-                        </span>
-                        <span className={styles.resultStatLabel}>Score</span>
+                        <ScoreRing
+                          value={result.evaluation_result.score}
+                          label="Score"
+                        />
                       </div>
                       <div className={styles.resultStat}>
                         <span className={styles.resultStatValue}>
@@ -315,6 +327,27 @@ function Demo() {
                       </div>
                     </div>
                   )}
+
+                  {result.evaluation_result?.test_results?.length ? (
+                    <ul
+                      className={styles.testBreakdown}
+                      aria-label="Per-test breakdown"
+                    >
+                      {result.evaluation_result.test_results.map((t, i) => (
+                        <li
+                          key={i}
+                          className={
+                            t.passed ? styles.testRowPass : styles.testRowFail
+                          }
+                        >
+                          <span aria-hidden="true">
+                            {t.passed ? "✓" : "✗"}
+                          </span>
+                          <span>{t.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                   {result.code && (
                     <div className={styles.resultCode}>
                       <p className={styles.resultCodeLabel}>Generated code</p>
@@ -327,8 +360,15 @@ function Demo() {
                   )}
                   <p className={styles.resultMeta}>
                     Submitted at{" "}
-                    {new Date(result.created_at).toLocaleString()} · provider:{" "}
-                    <code>demo</code>
+                    {new Date(result.created_at).toLocaleString()} · duration:{" "}
+                    <code>
+                      {formatElapsed(
+                        result.created_at,
+                        Date.parse(result.updated_at),
+                      )}
+                    </code>{" "}
+                    · provider: <code>demo</code> · runs with{" "}
+                    <code>{runnerForLanguage(resultLanguage)?.runner}</code>
                   </p>
                   <Link to={`/submissions/${result.id}`}>
                     <Button variant="secondary" size="sm">
