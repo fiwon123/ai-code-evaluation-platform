@@ -211,6 +211,19 @@ export interface AdminListParams {
   status?: SubmissionStatus;
 }
 
+export interface ProviderStat {
+  provider: string;
+  count: number;
+  avg_score: number | null;
+  /** Share of the provider's completed submissions that passed all tests (0..1). */
+  pass_rate: number;
+}
+
+export interface ErrorTypeStat {
+  error_type: string;
+  count: number;
+}
+
 export interface PlatformStats {
   total_users: number;
   total_challenges: number;
@@ -222,8 +235,17 @@ export interface PlatformStats {
   // Breakdown groups consumed by the admin dashboard charts.
   submissions_by_status: StatusCount[];
   submissions_by_language: LanguageStat[];
+  submissions_by_provider: ProviderStat[];
+  submissions_by_error_type: ErrorTypeStat[];
   top_challenges: TopChallengeStat[];
   submissions_last_14_days: DailySubmissionStat[];
+}
+
+/** Admin submission view — Submission plus the owner's username and the
+ *  challenge title (backend resolves both for the admin listing). */
+export interface AdminSubmission extends Submission {
+  username: string;
+  challenge_title: string;
 }
 
 export interface StatusCount {

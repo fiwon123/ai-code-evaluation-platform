@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
 import { TextInput } from "../../components/Input/Input.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
@@ -28,6 +29,8 @@ function AdminUsers() {
   const [pages, setPages] = useState(0);
   const [total, setTotal] = useState(0);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<User | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -106,6 +109,41 @@ function AdminUsers() {
     }
   }
 
+  async function reactivate(user: User) {
+    setUpdatingId(user.id);
+    setError(null);
+    try {
+      const updated = await adminApi.reactivateUser(user.id);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === updated.id ? updated : u)),
+      );
+      showToast(`${updated.username} restored.`, "success");
+    } catch (err) {
+      setError(extractError(err));
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await adminApi.deleteUser(pendingDelete.id);
+      setUsers((prev) => prev.filter((u) => u.id !== pendingDelete.id));
+      setPendingDelete(null);
+      showToast(`${pendingDelete.username} deleted.`, "success");
+    } catch (err) {
+      setError(extractError(err));
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div role="status" aria-label="Loading users" className={styles.status}>
@@ -129,7 +167,8 @@ function AdminUsers() {
       <div className={styles.pageHeader}>
         <h1 className={styles.title}>Users</h1>
         <p className={styles.subtitle}>
-          Manage accounts: promote admins and deactivate inactive accounts.
+          Manage accounts: promote admins, deactivate or restore, and delete
+          users.
         </p>
       </div>
 
@@ -192,13 +231,32 @@ function AdminUsers() {
                         >
                           {user.is_admin ? "Revoke admin" : "Make admin"}
                         </Button>
+                        {user.is_active ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            disabled={own || updatingId === user.id}
+                            onClick={() => void deactivate(user)}
+                          >
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={own || updatingId === user.id}
+                            onClick={() => void reactivate(user)}
+                          >
+                            Restore
+                          </Button>
+                        )}
                         <Button
-                          variant="danger"
+                          variant="ghost"
                           size="sm"
-                          disabled={own || !user.is_active || updatingId === user.id}
-                          onClick={() => void deactivate(user)}
+                          disabled={own || updatingId === user.id}
+                          onClick={() => setPendingDelete(user)}
                         >
-                          Deactivate
+                          Delete
                         </Button>
                       </div>
                     </td>
@@ -220,6 +278,20 @@ function AdminUsers() {
         pageSize={PAGE_SIZE}
         onPageChange={setPage}
       />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete user?"
+        confirmLabel="Delete"
+        variant="danger"
+        loading={deleting}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => void confirmDelete()}
+      >
+        {pendingDelete
+          ? `"${pendingDelete.username}" and their challenges, submissions, and results will be permanently removed. This cannot be undone.`
+          : ""}
+      </ConfirmDialog>
     </div>
   );
 }

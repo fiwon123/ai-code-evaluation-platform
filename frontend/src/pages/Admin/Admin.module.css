@@ -215,3 +215,131 @@
     max-width: none;
   }
 }
+
+/* Chart sections (status/provider/error-type bars + 14-day trend) */
+.statusList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.statusLabel {
+  min-width: 9rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusBarTrack {
+  flex: 1;
+  height: 0.625rem;
+  background: var(--color-surface-secondary);
+  border-radius: var(--radius-full, 999px);
+  overflow: hidden;
+}
+
+.statusBar,
+.statusBarDanger {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full, 999px);
+  transition: width 0.25s ease;
+}
+
+.statusBar {
+  background: linear-gradient(
+    90deg,
+    var(--color-primary),
+    var(--color-primary-hover)
+  );
+}
+
+.statusBarDanger {
+  background: linear-gradient(90deg, var(--color-danger, #dc2626), #ef4444);
+}
+
+.statusCount {
+  min-width: 6.5rem;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.topList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.topRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.topTitle {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.topMeta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.dailyChart {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  height: 9rem;
+}
+
+.dailyCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  height: 100%;
+  min-width: 0;
+}
+
+.dailyBarWrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.dailyBar {
+  width: 100%;
+  min-height: 4px;
+  border-radius: var(--radius-sm, 4px) var(--radius-sm, 4px) 0 0;
+  background: linear-gradient(
+    180deg,
+    var(--color-primary),
+    var(--color-primary-hover)
+  );
+}
+
+.dailyLabel {
+  font-size: var(--font-size-2xs, 0.625rem);
+  color: var(--color-text-muted);
+}

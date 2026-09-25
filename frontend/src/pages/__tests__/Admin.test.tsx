@@ -8,7 +8,7 @@ import AdminSubmissions from "../Admin/AdminSubmissions.tsx";
 import AdminUsers from "../Admin/AdminUsers.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { adminApi } from "../../services/api.ts";
-import type { Challenge, Submission, User } from "../../types.ts";
+import type { AdminSubmission, Challenge, User } from "../../types.ts";
 
 vi.mock("../../context/AuthContext.tsx", () => ({
   useAuth: vi.fn(),
@@ -20,6 +20,8 @@ vi.mock("../../services/api.ts", () => ({
     listUsers: vi.fn(),
     updateUser: vi.fn(),
     deactivateUser: vi.fn(),
+    reactivateUser: vi.fn(),
+    deleteUser: vi.fn(),
     listChallenges: vi.fn(),
     removeChallenge: vi.fn(),
     listSubmissions: vi.fn(),
@@ -40,6 +42,8 @@ const mockStats = vi.mocked(adminApi.stats);
 const mockListUsers = vi.mocked(adminApi.listUsers);
 const mockUpdateUser = vi.mocked(adminApi.updateUser);
 const mockDeactivateUser = vi.mocked(adminApi.deactivateUser);
+const mockReactivateUser = vi.mocked(adminApi.reactivateUser);
+const mockDeleteUser = vi.mocked(adminApi.deleteUser);
 const mockListChallenges = vi.mocked(adminApi.listChallenges);
 const mockRemoveChallenge = vi.mocked(adminApi.removeChallenge);
 const mockListSubmissions = vi.mocked(adminApi.listSubmissions);
@@ -88,7 +92,7 @@ const challenges: Challenge[] = [
   },
 ];
 
-const submissions: Submission[] = [
+const submissions: AdminSubmission[] = [
   {
     id: "s1",
     user_id: "u1",
@@ -101,6 +105,8 @@ const submissions: Submission[] = [
     evaluation_result: null,
     created_at: "2026-09-10T00:00:00Z",
     updated_at: "2026-09-10T00:00:00Z",
+    username: "alice",
+    challenge_title: "Two Sum",
   },
 ];
 
@@ -140,6 +146,14 @@ describe("AdminDashboard", () => {
         { language: "python", count: 2, avg_score: 88 },
         { language: "javascript", count: 1, avg_score: 90 },
       ],
+      submissions_by_provider: [
+        { provider: "openai", count: 2, avg_score: 80, pass_rate: 1 },
+        { provider: "ollama", count: 1, avg_score: 50, pass_rate: 0 },
+      ],
+      submissions_by_error_type: [
+        { error_type: "timeout", count: 1 },
+        { error_type: "auth failure", count: 1 },
+      ],
       top_challenges: [
         { challenge_id: "c1", title: "Two Sum", runs: 3, avg_score: 86 },
       ],
@@ -166,6 +180,19 @@ describe("AdminDashboard", () => {
       "Server unreachable",
     );
   });
+
+  it("renders provider and error-type breakdowns", async () => {
+    renderPage(<AdminDashboard />);
+    expect(
+      await screen.findByLabelText("Submissions by provider"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Failed submissions by error type"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("openai")).toBeInTheDocument();
+    expect(screen.getByText("ollama")).toBeInTheDocument();
+    expect(screen.getByText("auth failure")).toBeInTheDocument();
+  });
 });
 
 describe("AdminUsers", () => {
@@ -182,6 +209,8 @@ describe("AdminUsers", () => {
     mockListUsers.mockResolvedValue(paginated(users) as never);
     mockUpdateUser.mockReset();
     mockDeactivateUser.mockReset();
+    mockReactivateUser.mockReset();
+    mockDeleteUser.mockReset();
   });
 
   it("lists users with role and status badges", async () => {
@@ -216,8 +245,6 @@ describe("AdminUsers", () => {
     renderPage(<AdminUsers />);
     await screen.findByText("alice");
 
-    // alice's row (has the "admin" badge) contains the enabled Deactivate
-    // button; bob's row also has one but it is disabled.
     const aliceRow = screen
       .getByText("alice")
       .closest("tr") as HTMLElement;
@@ -229,6 +256,62 @@ describe("AdminUsers", () => {
       expect(mockDeactivateUser).toHaveBeenCalledWith("u1");
     });
     expect(screen.getByText(/alice deactivated/i)).toBeInTheDocument();
+  });
+
+  it("restores a deactivated user", async () => {
+    mockReactivateUser.mockResolvedValue({
+      ...users[1],
+      is_active: true,
+    } as never);
+    renderPage(<AdminUsers />);
+    await screen.findByText("bob");
+
+    // bob is inactive, so his row offers Restore (not Deactivate).
+    const bobRow = screen.getByText("bob").closest("tr") as HTMLElement;
+    fireEvent.click(
+      within(bobRow).getByRole("button", { name: "Restore" }),
+    );
+
+    await waitFor(() => {
+      expect(mockReactivateUser).toHaveBeenCalledWith("u2");
+    });
+    expect(screen.getByText(/bob restored/i)).toBeInTheDocument();
+  });
+
+  it("deletes a user after confirmation", async () => {
+    mockDeleteUser.mockResolvedValue(undefined);
+    renderPage(<AdminUsers />);
+    await screen.findByText("alice");
+
+    const aliceRow = screen.getByText("alice").closest("tr") as HTMLElement;
+    fireEvent.click(
+      within(aliceRow).getByRole("button", { name: "Delete" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Delete user?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(mockDeleteUser).toHaveBeenCalledWith("u1");
+    });
+    expect(screen.queryByText("alice")).not.toBeInTheDocument();
+    expect(screen.getByText(/alice deleted/i)).toBeInTheDocument();
+  });
+
+  it("disables destructive actions for the own account", async () => {
+    mockListUsers.mockResolvedValueOnce(
+      paginated([currentAdmin, ...users]) as never,
+    );
+    renderPage(<AdminUsers />);
+    await screen.findByText("root");
+
+    const ownRow = screen.getByText("root").closest("tr") as HTMLElement;
+    // root is the current admin: revoke/restore/delete are all disabled.
+    expect(
+      within(ownRow).getByRole("button", { name: "Revoke admin" }),
+    ).toBeDisabled();
+    expect(
+      within(ownRow).getByRole("button", { name: "Delete" }),
+    ).toBeDisabled();
   });
 });
 
@@ -264,10 +347,12 @@ describe("AdminSubmissions", () => {
     mockListSubmissions.mockResolvedValue(paginated(submissions) as never);
   });
 
-  it("lists submissions with status and score", async () => {
+  it("lists submissions with status, owner, and challenge", async () => {
     renderPage(<AdminSubmissions />);
     expect(await screen.findAllByText("completed")).not.toHaveLength(0);
     expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.getByText("Two Sum")).toBeInTheDocument();
   });
 
   it("passes the status filter when one is selected", async () => {
