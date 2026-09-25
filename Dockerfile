@@ -97,11 +97,16 @@ RUN cd /sandbox/ai-code-evaluation-platform/backend && uv sync
 # exports HOST_UID/HOST_GID (the host's `id -u`/`id -g`, NOT bash's read-only,
 # non-exported `UID`) and docker-compose.yml passes them to both these build
 # args and the `user:` directive, so the container matches the host user.
-ARG USER_NAME=devuser
+#
+# The account NAME is deliberately NOT a build arg: docker-compose.yml pins
+# HOME and the host-config mount targets to /home/devuser, so a configurable
+# name could only ever drift away from what the running container expects (the
+# build would succeed and the agent/gh config would land in an unreadable
+# home). The *ids* are the variable part and mirror the host user.
+ENV DEV_USER=devuser
+ENV HOME=/home/devuser
 ARG USER_ID=1000
 ARG GROUP_ID=1000
-ENV DEV_USER=${USER_NAME}
-ENV HOME=/home/${USER_NAME}
 # The runtime user owns the baked venv and its home (caches/config the agent
 # and tooling expect), so the runtime `uv sync`/`npm ci` paths work.
 #
@@ -111,18 +116,35 @@ ENV HOME=/home/${USER_NAME}
 # runtime uid. The system-level safe.directory only matters when the image was
 # built with different build args than the UID it runs as: normally the bind
 # mount is owned by the same UID as the caller and git is happy without it.
-RUN if ! getent group ${GROUP_ID} >/dev/null; then groupadd --gid ${GROUP_ID} ${USER_NAME}; fi \
+#
+# Because creation is conditional, the account can still be missing at the end
+# (uid already taken by another name, or a group already named `devuser`), and
+# `USER devuser` below is resolved BEFORE dev-entrypoint.sh's passwd fallback
+# ever runs — so verify here, at build time, where the error can be readable.
+RUN if ! getent group ${GROUP_ID} >/dev/null; then groupadd --gid ${GROUP_ID} devuser; fi \
     && if ! getent passwd ${USER_ID} >/dev/null; then \
-         useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /usr/bin/zsh ${USER_NAME}; \
+         useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home --shell /usr/bin/zsh devuser; \
        fi \
-    && mkdir -p /home/${USER_NAME} \
-    && chown -R ${USER_ID}:${GROUP_ID} /home/${USER_NAME} /opt/backend-venv \
+    && { getent passwd devuser >/dev/null \
+         || { echo "ERROR: uid ${USER_ID} is already used by another account, so 'devuser' cannot be created. Rebuild for a different host uid (make dev-build)." >&2; exit 1; }; } \
+    && mkdir -p /home/devuser \
+    && chown -R ${USER_ID}:${GROUP_ID} /home/devuser /opt/backend-venv \
     && git config --system --add safe.directory /sandbox/ai-code-evaluation-platform
 
-# Caches live in /tmp (container-local, always writable) rather than the
-# baked-in home, so a container started with a different runtime UID than the
-# build args can still `uv sync` / `npm ci` without a permission error.
-RUN mkdir -p /tmp/uv-cache /tmp/npm-cache
+# Caches live in /tmp (container-local) rather than in the baked-in home, so a
+# container started with a different runtime UID than the build args can still
+# `uv sync` / `npm ci`.
+#
+# They are chowned AND left 1777 on purpose: a root-owned 0755 cache dir is NOT
+# writable by the non-root user the entrypoint/celery/beat run as, which broke
+# the dependency bootstrap on a fresh workspace (node_modules absent) with
+# `uv: Could not create temporary file ... Permission denied` and
+# `npm: sudo chown -R 1000:1000 /tmp/npm-cache`. The chown gives sane ownership
+# for the normal matching-UID case; 1777 keeps the "different UID than the build
+# args" case working too.
+RUN mkdir -p /tmp/uv-cache /tmp/npm-cache \
+    && chown ${USER_ID}:${GROUP_ID} /tmp/uv-cache /tmp/npm-cache \
+    && chmod 1777 /tmp/uv-cache /tmp/npm-cache
 ENV UV_CACHE_DIR=/tmp/uv-cache
 ENV NPM_CONFIG_CACHE=/tmp/npm-cache
 
@@ -131,9 +153,10 @@ ENV NPM_CONFIG_CACHE=/tmp/npm-cache
 COPY scripts/dev-sandbox-rc.sh /etc/profile.d/00-dev-sandbox.sh
 
 # Make zsh the default interactive shell for the sandbox (bash stays installed
-# for scripts/entrypoints, which carry their own shebangs). Tolerates the
-# uid-collision case above, where the login name may differ.
-RUN chsh -s /usr/bin/zsh ${USER_NAME} 2>/dev/null || true
+# for scripts/entrypoints with their own shebangs). `|| true` tolerates images
+# where the shell cannot be changed (read-only /etc/passwd), not a missing
+# account — that case already failed above.
+RUN chsh -s /usr/bin/zsh devuser 2>/dev/null || true
 
 # Sandbox prompt/title config for BOTH the runtime user and root (keep root
 # usable for `docker compose exec -u root` debugging).
@@ -144,17 +167,17 @@ RUN chsh -s /usr/bin/zsh ${USER_NAME} 2>/dev/null || true
 # bash: interactive non-login shells (docker compose exec -it dev bash)
 RUN SANDBOX_RC='\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh\n' \
     && for rc in /root/.bashrc /root/.zshrc /root/.zprofile \
-                "/home/${USER_NAME}/.bashrc" "/home/${USER_NAME}/.zshrc" "/home/${USER_NAME}/.zprofile"; do \
+                /home/devuser/.bashrc /home/devuser/.zshrc /home/devuser/.zprofile; do \
         printf '%b' "$SANDBOX_RC" >> "$rc"; \
     done \
     && chown ${USER_ID}:${GROUP_ID} \
-        "/home/${USER_NAME}/.bashrc" "/home/${USER_NAME}/.zshrc" "/home/${USER_NAME}/.zprofile"
+        /home/devuser/.bashrc /home/devuser/.zshrc /home/devuser/.zprofile
 
 # Default to the non-root user so a service added to docker-compose.yml without
 # a `user:` directive can't silently reintroduce root-owned workspace files.
 # Compose still pins the exact UID/GID via `user:`; root remains available for
 # debugging with `docker compose exec -u root`.
-USER ${USER_NAME}
+USER devuser
 
 # Keep the container alive when started without an explicit command; the dev
 # and celery compose services override this with their real entrypoints.

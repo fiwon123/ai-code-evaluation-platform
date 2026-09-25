@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = REPO_ROOT / "docker-compose.yml"
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 MAKEFILE = REPO_ROOT / "Makefile"
+SANDBOX_SCRIPT = REPO_ROOT / "scripts" / "open-in-sandbox.sh"
 
 # Every service that bind-mounts the workspace and therefore writes host files.
 WORKSPACE_SERVICES = ("dev", "celery", "beat")
@@ -70,6 +71,11 @@ class TestComposeHostIdentity:
             )
             assert '"${DOCKER_GID:-0}"' in block
 
+    def test_only_socket_consumers_join_the_socket_group(self):
+        # `beat` only schedules sweeps; container-creation rights belong to the
+        # two services that actually spawn eval-sandbox containers.
+        assert "group_add:" not in _service_block("beat")
+
     def test_services_set_home_for_non_root_user(self):
         for service in WORKSPACE_SERVICES:
             block = _service_block(service)
@@ -99,18 +105,43 @@ class TestImageRuntimeUser:
         assert "useradd --uid ${USER_ID}" in text
         # Handing the baked venv to the runtime user keeps the runtime
         # `uv sync` guard (dev-entrypoint.sh, celery, beat) working.
-        assert "chown -R ${USER_ID}:${GROUP_ID} /home/${USER_NAME} /opt/backend-venv" in text
+        assert "chown -R ${USER_ID}:${GROUP_ID} /home/devuser /opt/backend-venv" in text
         # Default to the non-root account so a new service can't silently
         # reintroduce root-owned workspace files.
-        assert re.search(r"^USER \$\{USER_NAME\}$", text, re.MULTILINE)
+        assert re.search(r"^USER devuser$", text, re.MULTILINE)
+
+    def test_account_name_is_fixed_because_compose_pins_the_home(self):
+        # compose hardcodes HOME=/home/devuser and the host-config mount
+        # targets; a USER_NAME build arg could only build an image whose
+        # account, $HOME and mounts disagree.
+        text = DOCKERFILE.read_text()
+        assert "ARG USER_NAME" not in text
+        assert "${USER_NAME}" not in text
+        assert "ENV HOME=/home/devuser" in text
+
+    def test_dependency_caches_are_writable_by_the_runtime_user(self):
+        # A root-owned 0755 cache dir is not writable by the non-root user the
+        # entrypoint/celery/beat run as, which broke the `uv sync` / `npm ci`
+        # bootstrap on a fresh workspace (node_modules absent) with EACCES.
+        text = DOCKERFILE.read_text()
+        assert "mkdir -p /tmp/uv-cache /tmp/npm-cache" in text
+        assert "chmod 1777 /tmp/uv-cache /tmp/npm-cache" in text
+
+    def test_uid_collision_fails_at_build_time(self):
+        # useradd is conditional, so the account can still be missing at the
+        # end (uid taken by another name). `USER devuser` is resolved before the
+        # entrypoint's passwd fallback runs, so this must fail at build time
+        # with a readable message instead of an opaque container start error.
+        text = DOCKERFILE.read_text()
+        assert "getent passwd devuser" in text
 
     def test_dockerfile_does_not_depend_on_root_runtime_paths(self):
         text = DOCKERFILE.read_text()
         # /root keeps its sandbox rc for `exec -u root` debugging, but the
         # runtime user's rc files must be configured too.
-        assert '"/home/${USER_NAME}/.zshrc"' in text
-        assert '"/home/${USER_NAME}/.zprofile"' in text
-        assert '"/home/${USER_NAME}/.bashrc"' in text
+        assert "/home/devuser/.zshrc" in text
+        assert "/home/devuser/.zprofile" in text
+        assert "/home/devuser/.bashrc" in text
 
 
 class TestMakefileHostIdentityExport:
@@ -118,7 +149,14 @@ class TestMakefileHostIdentityExport:
         text = MAKEFILE.read_text()
         assert "HOST_UID ?= $(shell id -u)" in text
         assert "HOST_GID ?= $(shell id -g)" in text
-        assert "DOCKER_GID ?= $(shell stat -c %g /var/run/docker.sock" in text
+        # GNU stat (-c) first, BSD/macOS stat (-f) second, 0 as last resort:
+        # a macOS host must not silently end up with the wrong socket group.
+        assert re.search(
+            r"^DOCKER_GID \?= \$\(shell stat -c %g /var/run/docker\.sock .*"
+            r"stat -f %g /var/run/docker\.sock .*\|\| echo 0\)$",
+            text,
+            re.MULTILINE,
+        )
         assert "export HOST_UID HOST_GID DOCKER_GID" in text
 
     def test_does_not_rely_on_bash_uid_variable(self):
@@ -127,3 +165,35 @@ class TestMakefileHostIdentityExport:
         text = MAKEFILE.read_text()
         assert not re.search(r"^UID \?= ", text, re.MULTILINE)
         assert not re.search(r"export .*\bUID\b", text, re.MULTILINE)
+
+    def test_dev_build_rebuilds_every_workspace_service(self):
+        # celery/beat build from the same Dockerfile into their own images;
+        # building only `dev` left the worker on the pre-fix image.
+        text = MAKEFILE.read_text()
+        assert re.search(
+            r"^dev-build:.*\n\t\$\(COMPOSE\) build dev celery beat$", text, re.MULTILINE
+        )
+
+
+class TestSandboxScriptHostIdentity:
+    """`scripts/open-in-sandbox.sh` starts the stack itself, so it must export
+    the same identity the Makefile does — otherwise compose falls back to
+    1000:1000 + socket group 0 and the bug of issue #183 returns."""
+
+    def test_exports_host_identity(self):
+        text = SANDBOX_SCRIPT.read_text()
+        assert 'export HOST_UID="${HOST_UID:-$(id -u)}"' in text
+        assert 'export HOST_GID="${HOST_GID:-$(id -g)}"' in text
+        assert re.search(r"DOCKER_GID=.*stat -c %g .*stat -f %g", text)
+
+    def test_exports_happen_before_compose_runs(self):
+        # Compare against the first *executed* compose call, not the prose in
+        # the header comments.
+        lines = SANDBOX_SCRIPT.read_text().splitlines()
+        first_compose = next(
+            i
+            for i, line in enumerate(lines)
+            if re.match(r"\s*(if .*;\s*)?(exec )?docker compose", line)
+        )
+        first_export = next(i for i, line in enumerate(lines) if "export HOST_UID" in line)
+        assert first_export < first_compose

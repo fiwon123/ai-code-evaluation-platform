@@ -148,7 +148,9 @@ exported from the `Makefile`; the image bakes a matching `devuser` via
 bind-mounted workspace therefore keep the host's ownership — never `root:root`,
 which would leave the host user unable to edit them. Start the stack with the
 Makefile so those variables are passed; a bare `docker compose up` falls back to
-1000:1000. See DEVELOPMENT.md → "File ownership".
+1000:1000. `make dev-build` rebuilds **all three** workspace images (they share
+the Dockerfile but each has its own image). See DEVELOPMENT.md → "File
+ownership".
 
 **Trusted-agent model by design**: the dev container also mounts the workspace
 and the Docker socket, so an agent running inside it can write the repo and
