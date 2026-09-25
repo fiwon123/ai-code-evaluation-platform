@@ -1,0 +1,7 @@
+.button {
+  width: 100%;
+}
+
+.mark {
+  margin-right: var(--space-2);
+}

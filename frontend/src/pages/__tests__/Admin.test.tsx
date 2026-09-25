@@ -177,6 +177,7 @@ describe("AdminUsers", () => {
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
     });
     mockListUsers.mockResolvedValue(paginated(users) as never);
     mockUpdateUser.mockReset();

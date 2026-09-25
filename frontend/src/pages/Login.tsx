@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
+import GithubOAuthButton from "../components/GithubOAuthButton.tsx";
 import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
 import Logo from "../components/Logo/Logo.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
@@ -50,6 +51,10 @@ function Login() {
           <Logo size="lg" />
           <h1 className={styles.title}>Welcome back</h1>
           <p className={styles.subtitle}>Log in to your account</p>
+        </div>
+        <GithubOAuthButton onError={setError} />
+        <div className={styles.divider} role="separator">
+          <span>or</span>
         </div>
         <form onSubmit={(e) => void handleSubmit(e)} className={styles.form}>
           <Field label="Email or username" id={identifierId} error={fieldErrors.identifier}>

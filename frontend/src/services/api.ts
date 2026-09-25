@@ -8,6 +8,8 @@ import type {
   ChallengeUpdatePayload,
   ChangePasswordPayload,
   LoginPayload,
+  OAuthAuthorizeResponse,
+  OAuthProvider,
   PaginatedResponse,
   PlatformStats,
   ProviderComparison,
@@ -211,6 +213,12 @@ export const authApi = {
   me: () => api.get<User>("/api/auth/me"),
   changePassword: (payload: ChangePasswordPayload) =>
     api.postNoContent("/api/auth/change-password", payload),
+  oauthAuthorize: (provider: OAuthProvider) =>
+    api.get<OAuthAuthorizeResponse>(`/api/auth/oauth/${provider}/authorize`),
+  oauthCallback: (provider: OAuthProvider, code: string, state: string) =>
+    api.get<AuthResponse>(
+      `/api/auth/oauth/${provider}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+    ),
 };
 
 export const challengesApi = {

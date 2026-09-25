@@ -29,6 +29,14 @@ export interface ChangePasswordPayload {
   new_password: string;
 }
 
+/** OAuth providers supported by the backend /api/auth/oauth/* routes. */
+export type OAuthProvider = "github";
+
+export interface OAuthAuthorizeResponse {
+  authorization_url: string;
+  state: string;
+}
+
 export type ChallengeDifficulty = "easy" | "medium" | "hard";
 
 export interface Challenge {

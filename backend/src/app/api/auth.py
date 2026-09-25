@@ -60,7 +60,11 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_session))
 async def login(payload: LoginRequest, db: AsyncSession = Depends(get_session)) -> TokenResponse:
     """Authenticate with email/username + password and return an access token."""
     user = await _find_by_identifier(db, payload.identifier)
-    if user is None or not verify_password(payload.password, user.hashed_password):
+    if (
+        user is None
+        or not user.hashed_password
+        or not verify_password(payload.password, user.hashed_password)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -92,6 +96,11 @@ async def change_password(
     hash. Existing JWTs remain valid (tokens carry the user id, not the
     password hash).
     """
+    if not current_user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account uses OAuth login and has no password",
+        )
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

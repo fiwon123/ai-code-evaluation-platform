@@ -81,6 +81,7 @@ describe("ChallengeDetail", () => {
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
     });
     mockChallengesGet.mockResolvedValue(challenge as never);
     mockNavigate.mockReturnValue(vi.fn());
@@ -173,6 +174,7 @@ describe("ChallengeDetail", () => {
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
     });
 
     renderPage();

@@ -105,4 +105,46 @@ describe("AuthContext", () => {
     expect(result.current.token).toBeNull();
     expect(localStorage.getItem("access_token")).toBeNull();
   });
+
+  it("completes an OAuth exchange and stores the token", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: "oauth-jwt",
+          token_type: "bearer",
+          user: { id: "u9", email: "octo@example.com", username: "octocat", is_admin: false, is_active: true, created_at: "2026-01-01T00:00:00Z" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await result.current.loginWithOAuth("github", "code123", "state456");
+    });
+
+    expect(result.current.token).toBe("oauth-jwt");
+    expect(result.current.user?.username).toBe("octocat");
+    expect(localStorage.getItem("access_token")).toBe("oauth-jwt");
+  });
+
+  it("clears the token when an OAuth exchange fails", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ detail: "GitHub authorization failed" }), { status: 400 }),
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+
+    await act(async () => {
+      await expect(
+        result.current.loginWithOAuth("github", "bad", "state456"),
+      ).rejects.toThrow("GitHub authorization failed");
+    });
+
+    expect(result.current.token).toBeNull();
+    expect(result.current.user).toBeNull();
+  });
 });
