@@ -127,7 +127,7 @@ function ResultReport({ result, code, language, status }: ResultReportProps) {
       <Card>
         <h2 className={styles.sectionTitle}>Execution logs</h2>
         {result.logs ? (
-          <CodeBlock code={result.logs} language="text" />
+          <CodeBlock code={result.logs} log />
         ) : (
           <p className={styles.muted}>No logs recorded.</p>
         )}

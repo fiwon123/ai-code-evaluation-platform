@@ -145,6 +145,19 @@ Dark in both themes, for readability.
 | `--color-code-header` | Code block header bar |
 | `--color-code-border` | Code block border |
 | `--color-code-text` | Code text |
+| `--color-code-muted` | Log gutter numbers, traceback frames |
+| `--color-code-error` | `FAIL` / `ERROR` / traceback lines |
+| `--color-code-warn` | `WARN` / `WARNING` lines |
+| `--color-code-ok` | `PASS` / `ok` / `✓` lines |
+| `--color-code-gutter` | Line-number gutter rule |
+
+The severity tokens are **not** the page status tokens (`--color-danger`
+and friends). On this dark surface light-mode `--color-danger` (#dc2626) manages
+only 3.70:1 and `--color-text-muted` only 2.36:1, so reusing them would leave
+light-mode logs unreadable. Because the code surface is dark in both palettes,
+the severity tokens are theme-independent and defined once outside the palette
+blocks. `theme-contrast.test.ts` asserts each clears 4.5:1 against both
+`--color-code-bg` values.
 
 ## Typography
 
