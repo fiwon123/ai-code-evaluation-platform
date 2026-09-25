@@ -55,8 +55,25 @@ Every color token must have a value in **both** palettes. Neutrals follow an
 inverse scheme (light text on dark surfaces). Code surfaces
 (`--color-code-*`) stay dark in both themes for readability.
 
-Text on colored/accent surfaces uses `--color-on-accent` (e.g. button labels,
-active pagination page, avatars) instead of hardcoded white.
+Text on colored/accent surfaces uses a token instead of hardcoded white, and
+which one depends on how bright the surface is:
+
+- `--color-on-accent` — for **dark** accents of arbitrary colour: the language
+  badge colours (`#3776AB`, `#CC342D`, …), which are dark in both themes.
+- `--color-on-solid` — for the theme's own **solid brand surfaces**: primary
+  buttons, the danger button, the active pagination page, avatars and primary
+  gradients. White in the light palette; dark ink in the dark palette, because
+  the dark theme's surfaces are bright.
+
+That split is not cosmetic. In the dark palette, white on `--color-primary`
+(`#3b82f6`) is **3.68:1** and white on `--color-danger` (`#f87171`) is **2.77:1**,
+both under the 4.5:1 that WCAG AA requires for button labels. Dark ink
+(`#0b1220`) gives 5.09:1 and 6.77:1. Nor can the surfaces simply be darkened
+instead: a dark blue button on a dark card is 1.92:1, failing WCAG 1.4.11 for
+non-text contrast, and darkening `--color-primary` would also drag
+`--gradient-title` (built from the primary tokens) down from 5.15:1 to 3.67:1
+against the dark page. Flipping the text is the only option that satisfies both
+criteria. `e2e/contrast.spec.ts` measures all of this in both themes.
 
 ### Page titles
 
@@ -134,6 +151,7 @@ below.
 | `--color-text-muted` | Placeholders, meta text |
 | `--color-focus-ring` | Focus ring color |
 | `--color-on-accent` | Text on colored surfaces (button labels, active pagination, badges) |
+| `--color-on-solid` | Text on solid brand surfaces (primary/danger buttons, active pagination, avatars, primary gradients) |
 
 ### Code surfaces
 

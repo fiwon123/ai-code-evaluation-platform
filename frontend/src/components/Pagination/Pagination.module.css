@@ -54,7 +54,7 @@
 .page.active {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--color-on-accent);
+  color: var(--color-on-solid);
   font-weight: 600;
 }
 

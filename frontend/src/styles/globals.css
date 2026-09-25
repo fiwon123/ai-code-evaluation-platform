@@ -42,6 +42,19 @@
   /* Text on colored (accent) surfaces */
   --color-on-accent: #ffffff;
 
+  /* Text on a SOLID brand surface (primary, danger, primary gradients).
+     Distinct from --color-on-accent because the two cannot share a value: the
+     dark theme's primary #3b82f6 and danger #f87171 are bright and need dark
+     ink, while arbitrary accents (the language badge colours, e.g. #3776AB)
+     are dark and need white. Measured in the dark theme:
+       ink #0b1220 on #3b82f6 = 5.09  (WCAG 1.4.3 text, needs 4.5)
+       ink #0b1220 on #f87171 = 6.77
+       #3b82f6 against card #131d33 = 4.56 (WCAG 1.4.11, needs 3.0)
+     Darkening the primary instead would have fixed the label and broken 1.4.11
+     (a dark blue button on a dark card = 1.92) while dimming --gradient-title
+     from 5.15 to 3.67. */
+  --color-on-solid: #ffffff;
+
   /* Code surfaces (stay dark in both themes for readability) */
   --color-code-bg: #0f172a;
   --color-code-header: #1e293b;
@@ -90,6 +103,10 @@
 
   /* Text on colored (accent) surfaces */
   --color-on-accent: #ffffff;
+
+  /* Dark ink, because the dark theme's solid surfaces are bright. The
+     measurements and the rejected alternative are in the light block above. */
+  --color-on-solid: #0b1220;
 
   /* Code surfaces (stay dark in both themes for readability) */
   --color-code-bg: #0b1220;

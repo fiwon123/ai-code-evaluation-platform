@@ -300,7 +300,7 @@
   justify-content: center;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  color: var(--color-on-accent);
+  color: var(--color-on-solid);
   font-size: var(--font-size-xs);
   font-weight: 700;
   box-shadow: var(--shadow-card);
@@ -584,7 +584,7 @@
   height: 40px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  color: var(--color-on-accent);
+  color: var(--color-on-solid);
   font-weight: 700;
   font-size: var(--font-size-lg);
   margin-bottom: var(--space-4);

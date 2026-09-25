@@ -168,3 +168,39 @@ describe("evaluationEstimate", () => {
     expect(evaluationEstimate(null)).toBe("under a minute");
   });
 });
+
+/**
+ * Issue #203 introduced `--color-on-solid` (dark ink, for the dark theme's
+ * bright brand surfaces) alongside `--color-on-accent` (white). The language
+ * badge deliberately stays on `--color-on-accent`: its background is a
+ * per-language colour that is dark in BOTH themes, so white is correct there and
+ * dark ink would drop it to ~3.9:1. This pins that pairing down, because the
+ * temptation to "fix contrast" by flipping the global token would break every
+ * badge at once.
+ */
+describe("language badge contrast", () => {
+  const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const luminance = ([r, g, b]: number[]) =>
+    [r, g, b]
+      .map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      })
+      .reduce((acc, channel, i) => acc + channel * [0.2126, 0.7152, 0.0722][i]!, 0);
+  const contrast = (a: number[], b: number[]) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it("keeps a white label readable on every language colour", () => {
+    const white = channels("#ffffff");
+    for (const language of LANGUAGES) {
+      const { color, label } = languageMeta(language);
+      const ratio = contrast(white, channels(color));
+      expect(
+        ratio,
+        `${label} badge (${color}) is ${ratio.toFixed(2)}:1 with a white label and needs 4.5:1`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
