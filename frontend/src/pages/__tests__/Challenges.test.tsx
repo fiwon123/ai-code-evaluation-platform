@@ -158,10 +158,25 @@ describe("Challenges", () => {
 
     const languageOptions = [
       "Python",
-      "Javascript",
-      "Typescript",
+      "JavaScript",
+      "TypeScript",
       "Java",
       "Go",
+      "C",
+      "C++",
+      "Rust",
+      "PHP",
+      "Ruby",
+      "Perl",
+      "Kotlin",
+      "Lua",
+      "C#",
+      "Swift",
+      "Dart",
+      "Scala",
+      "R",
+      "Haskell",
+      "Objective-C",
     ];
     const options = screen
       .getAllByRole("option")

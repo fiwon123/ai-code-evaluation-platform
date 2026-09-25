@@ -324,7 +324,7 @@ describe("AdminChallenges", () => {
   it("lists challenges", async () => {
     renderPage(<AdminChallenges />);
     expect(await screen.findByText("Two Sum")).toBeInTheDocument();
-    expect(screen.getByText("python")).toBeInTheDocument();
+    expect(screen.getByText("Python")).toBeInTheDocument();
   });
 
   it("deletes a challenge after confirmation", async () => {
