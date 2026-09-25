@@ -12,8 +12,10 @@ describe("ScoreRing", () => {
     expect(
       screen.getByRole("img", { name: "Average score 72 / 100" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Average score")).toBeInTheDocument();
-    expect(screen.getByText("72%")).toBeInTheDocument();
+    // The value is the only in-ring text, vertically centered (no label).
+    const value = screen.getByText("72%");
+    expect(value).toBeInTheDocument();
+    expect(value.getAttribute("dominant-baseline")).toBe("central");
   });
 
   it("clamps the value into the 0–100 range", () => {

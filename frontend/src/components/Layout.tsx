@@ -54,6 +54,16 @@ function Layout() {
                   Pricing
                 </NavLink>
               </li>
+              <li>
+                <NavLink to="/about" className={navLinkClass} onClick={closeMenus}>
+                  About
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="/contact" className={navLinkClass} onClick={closeMenus}>
+                  Contact
+                </NavLink>
+              </li>
               <li className={styles.mobileAuth}>
                 {user ? (
                   <>

@@ -26,12 +26,6 @@
   font-weight: 700;
 }
 
-.ringLabel {
-  fill: var(--color-text-secondary);
-  font-family: var(--font-sans);
-  font-size: calc(var(--ring-size, 92px) * 0.12);
-}
-
 .ringSuccess {
   stroke: var(--color-success);
 }

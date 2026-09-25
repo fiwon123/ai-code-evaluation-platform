@@ -35,6 +35,17 @@
   }
 }
 
+/* Light mode: solid title — the blue-heavy gradient text mixed with the
+   pale hero background; a plain dark heading anchors the page better. The
+   subtle animated gradient stays for dark mode. */
+:global([data-theme="light"]) .heroTitle {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: var(--color-text);
+  animation: none;
+}
+
 .heroSubtitle {
   font-size: var(--font-size-xl);
   color: var(--color-text-secondary);
