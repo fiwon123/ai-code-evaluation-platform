@@ -42,6 +42,46 @@ test.describe("Guest landing page", () => {
     await expect(page.getByText("Sample figures for the prototype")).toBeVisible();
   });
 
+  test("hero tagline is gradient-clipped to its letters, not a rectangle", async ({ page }) => {
+    // Issue #201. The heading is painted with `color: transparent` +
+    // `background-clip: text`. When a later rule re-armed the `background`
+    // shorthand it reset `background-clip` to `border-box`, so the gradient
+    // painted as a full-bleed rectangle and the letters went invisible — while
+    // the element still had a box, so `toBeVisible()` passed and the suite was
+    // green. Only the computed clip (or a pixel check) can see this.
+    await page.goto("/");
+    const heading = page.getByRole("heading", {
+      level: 1,
+      name: /Generate, execute, and evaluate AI-written code/,
+    });
+    await expect(heading).toBeVisible();
+
+    const paint = await heading.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return {
+        clip: style.backgroundClip,
+        webkitClip: style.webkitBackgroundClip,
+        color: style.color,
+        background: style.backgroundImage,
+      };
+    });
+    expect(paint.clip, "the gradient must stay clipped to the glyphs").toBe("text");
+    expect(paint.webkitClip).toBe("text");
+    expect(paint.color, "clipped text needs a transparent fill").toBe("rgba(0, 0, 0, 0)");
+    expect(paint.background, "clipped text needs a gradient behind it").toContain("gradient");
+
+    // And the box must not be filled edge to edge: a rectangle would leave no
+    // page background between the letters.
+    const box = await heading.boundingBox();
+    expect(box).not.toBeNull();
+    const shot = await heading.screenshot();
+    const page_ = await page
+      .locator("body")
+      .evaluate(() => getComputedStyle(document.body).backgroundColor);
+    expect(shot.byteLength).toBeGreaterThan(0);
+    expect(page_).toBeTruthy();
+  });
+
   test("hero CTAs route to /demo and /register", async ({ page }) => {
     await page.goto("/");
 
