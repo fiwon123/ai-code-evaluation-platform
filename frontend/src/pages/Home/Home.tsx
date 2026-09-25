@@ -197,7 +197,7 @@ function Home() {
               className={styles.sampleReport}
               aria-label="Sample evaluation report"
             >
-              <ScoreRing value={88} label="Sample score" />
+              <ScoreRing value={88} label="Sample score" animate />
               <div className={styles.sampleMeta}>
                 <ul className={styles.sampleTests}>
                   {SAMPLE_TESTS.map((test) => (
@@ -259,7 +259,6 @@ function Home() {
 
       <section className={`${styles.section} ${styles.sectionAlt}`}>
         <Reveal>
-          <span className="eyebrow">Features</span>
           <h2 className={styles.sectionTitle}>
             Everything you need to evaluate code
           </h2>
@@ -281,7 +280,6 @@ function Home() {
 
       <section className={styles.section}>
         <Reveal>
-          <span className="eyebrow">How it works</span>
           <h2 className={styles.sectionTitle}>From challenge to score in four steps</h2>
           <p className={styles.sectionSubtitle}>
             A guided flow that takes you from idea to evaluation result.
@@ -302,7 +300,6 @@ function Home() {
       <section className={styles.section}>
         <Reveal>
           <div className="sectionHighlight teaser">
-            <span className="eyebrow">Try it yourself</span>
             <h2 className={styles.teaserTitle}>
               {user ? "Run your first evaluation" : "See a sample evaluation — no account needed"}
             </h2>

@@ -4,10 +4,10 @@
 :root,
 [data-theme="light"] {
   /* Colors */
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
   --color-primary-light: #dbeafe;
-  --color-secondary: #64748b;
+  --color-secondary: #475569;
   --color-success: #16a34a;
   --color-success-light: #dcfce7;
   --color-warning: #f59e0b;
@@ -30,7 +30,7 @@
   --color-border-hover: #94a3b8;
   --color-text: #0f172a;
   --color-text-secondary: #3b4a5f;
-  --color-text-muted: #64748b;
+  --color-text-muted: #475569;
   --color-header: rgba(255, 255, 255, 0.85);
 
   /* Shadows (theme-aware) */
@@ -38,7 +38,7 @@
   --shadow-elevated: 0 2px 4px rgba(15, 23, 42, 0.06), 0 12px 28px -6px rgba(15, 23, 42, 0.18);
 
   /* Focus ring */
-  --color-focus-ring: rgba(37, 99, 235, 0.35);
+  --color-focus-ring: rgba(29, 78, 216, 0.35);
 
   /* Text on colored (accent) surfaces */
   --color-on-accent: #ffffff;
@@ -341,6 +341,15 @@ h4 { font-size: var(--font-size-xl); }
   border-radius: var(--radius-full);
   padding: 2px var(--space-3);
   line-height: 1.6;
+}
+
+/* Light mode: neutral pill — blue-on-pale-blue tags blended into the
+   whitish background and added blue to titles; a calm gray tag reads better
+   and keeps the section heading as the visual anchor. */
+[data-theme="light"] .eyebrow {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-secondary);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 /* Accent panel with left border — used to highlight key blocks */
