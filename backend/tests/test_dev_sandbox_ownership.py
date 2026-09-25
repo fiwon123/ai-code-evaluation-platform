@@ -125,6 +125,9 @@ class TestImageRuntimeUser:
         # bootstrap on a fresh workspace (node_modules absent) with EACCES.
         text = DOCKERFILE.read_text()
         assert "mkdir -p /tmp/uv-cache /tmp/npm-cache" in text
+        # chown covers the normal matching-uid case, 1777 the "container runs as
+        # a different uid than the build args" case; both are needed.
+        assert "chown ${USER_ID}:${GROUP_ID} /tmp/uv-cache /tmp/npm-cache" in text
         assert "chmod 1777 /tmp/uv-cache /tmp/npm-cache" in text
 
     def test_uid_collision_fails_at_build_time(self):
