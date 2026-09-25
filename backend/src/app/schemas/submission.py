@@ -146,3 +146,11 @@ class SubmissionRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     evaluation_result: EvaluationResultRead | None = None
+
+
+class AdminSubmissionRead(SubmissionRead):
+    """Admin submission view — SubmissionRead plus the owner's username and
+    the challenge title (resolved via joins in the admin router)."""
+
+    username: str
+    challenge_title: str
