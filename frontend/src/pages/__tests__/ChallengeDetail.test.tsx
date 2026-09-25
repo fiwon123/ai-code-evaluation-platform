@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChallengeDetail from "../ChallengeDetail.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
-import { challengesApi, submissionsApi } from "../../services/api.ts";
+import { challengesApi, modelsApi, submissionsApi } from "../../services/api.ts";
 import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
 
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -18,6 +18,7 @@ vi.mock("../../context/AuthContext.tsx", () => ({
 vi.mock("../../services/api.ts", () => ({
   challengesApi: { get: vi.fn(), remove: vi.fn() },
   submissionsApi: { create: vi.fn(), comparison: vi.fn() },
+  modelsApi: { list: vi.fn() },
   ApiError: class ApiError extends Error {
     status: number;
     detail: string;
@@ -36,6 +37,15 @@ const mockChallengesGet = vi.mocked(challengesApi.get);
 const mockChallengesRemove = vi.mocked(challengesApi.remove);
 const mockSubmissionsCreate = vi.mocked(submissionsApi.create);
 const mockSubmissionsComparison = vi.mocked(submissionsApi.comparison);
+const mockModelsList = vi.mocked(modelsApi.list);
+
+// Trimmed catalog mirroring backend/src/app/services/llm_models.py.
+const modelCatalog = [
+  { id: "mock-coder", provider: "demo", label: "Mock Coder", description: "Free sentinel", is_default: true },
+  { id: "gpt-4o-mini", provider: "openai", label: "GPT-4o Mini", description: "Fast", is_default: true },
+  { id: "gpt-4o", provider: "openai", label: "GPT-4o", description: "Strong", is_default: false },
+  { id: "claude-3-5-haiku-latest", provider: "anthropic", label: "Claude 3.5 Haiku", description: "Fast", is_default: true },
+];
 
 const challenge = {
   id: "c1",
@@ -85,6 +95,7 @@ describe("ChallengeDetail", () => {
     });
     mockChallengesGet.mockResolvedValue(challenge as never);
     mockNavigate.mockReturnValue(vi.fn());
+    mockModelsList.mockResolvedValue(modelCatalog as never);
     mockSubmissionsComparison.mockResolvedValue({
       challenge_id: "c1",
       entries: [],
@@ -148,6 +159,78 @@ describe("ChallengeDetail", () => {
       /Enter your Anthropic API key/,
     );
     expect(mockSubmissionsCreate).not.toHaveBeenCalled();
+  });
+
+  it("lists the selected provider's models in the dropdown", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+
+    // Demo is the default provider → its single model, flagged as default.
+    const demoSelect = await screen.findByLabelText("Model");
+    expect(demoSelect).toHaveValue("");
+    expect(screen.getByRole("option", { name: "Provider default — mock-coder" })).toBeInTheDocument();
+
+    // Switching providers swaps the option set.
+    fireEvent.click(screen.getByRole("radio", { name: /OpenAI/ }));
+    const openaiSelect = await screen.findByLabelText("Model");
+    expect(screen.getByRole("option", { name: "Provider default — gpt-4o-mini" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "GPT-4o — gpt-4o" })).toBeInTheDocument();
+    // Demo models are gone once the provider changes.
+    expect(screen.queryByRole("option", { name: "Provider default — mock-coder" })).not.toBeInTheDocument();
+    expect(openaiSelect).toHaveValue("");
+  });
+
+  it("sends the selected model with the submission", async () => {
+    const navigate = vi.fn();
+    mockNavigate.mockReturnValue(navigate);
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+
+    fireEvent.click(screen.getByRole("radio", { name: /OpenAI/ }));
+    fireEvent.change(await screen.findByLabelText("API key"), {
+      target: { value: "sk-test-123" },
+    });
+    fireEvent.change(await screen.findByLabelText("Model"), {
+      target: { value: "gpt-4o" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+
+    await waitFor(() => {
+      expect(mockSubmissionsCreate).toHaveBeenCalledWith({
+        challenge_id: "c1",
+        provider: "openai",
+        api_key: "sk-test-123",
+        model: "gpt-4o",
+      });
+    });
+    expect(navigate).toHaveBeenCalledWith("/submissions/s1");
+  });
+
+  it("resets the model selection when the provider changes", async () => {
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Two Sum" });
+
+    fireEvent.click(screen.getByRole("radio", { name: /OpenAI/ }));
+    fireEvent.change(await screen.findByLabelText("Model"), {
+      target: { value: "gpt-4o" },
+    });
+    expect(screen.getByLabelText("Model")).toHaveValue("gpt-4o");
+
+    // Back to demo — the openai-only pick must reset to the default.
+    fireEvent.click(screen.getByRole("radio", { name: /Demo/ }));
+    expect(await screen.findByLabelText("Model")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+    await waitFor(() => {
+      expect(mockSubmissionsCreate).toHaveBeenCalledWith({
+        challenge_id: "c1",
+        provider: "demo",
+      });
+    });
   });
 
   it("does not send an api_key for the demo provider", async () => {

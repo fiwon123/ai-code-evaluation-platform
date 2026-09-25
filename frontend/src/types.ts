@@ -116,6 +116,9 @@ export interface Submission {
   /** When evaluation began (status → processing); null while queued. */
   started_at?: string | null;
   provider: string | null;
+  /** Catalog model id used for generation (see GET /api/models). Null on
+   *  rows created before the model column existed. */
+  model?: string | null;
   language: string | null;
   code: string | null;
   score: number | null;
@@ -127,8 +130,19 @@ export interface Submission {
 export interface SubmissionCreatePayload {
   challenge_id: string;
   provider: string;
+  /** Catalog model id — omitted to use the provider's default. */
+  model?: string;
   /** Per-run LLM API key — never stored server-side. */
   api_key?: string;
+}
+
+/** One entry of the LLM model catalog (GET /api/models). */
+export interface ModelInfo {
+  id: string;
+  provider: string;
+  label: string;
+  description: string;
+  is_default: boolean;
 }
 
 /** Aggregated evaluation stats for one provider on a challenge. */

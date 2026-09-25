@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.pagination import paginate
+from app.config import settings
 from app.core.database import get_session
 from app.core.events import apublish_submission_event
 from app.core.security import get_current_user
@@ -27,6 +28,7 @@ from app.schemas.submission import (
     SubmissionStatsRead,
     SubmissionUpdate,
 )
+from app.services.llm_models import model_default
 
 logger = getLogger(__name__)
 
@@ -93,6 +95,10 @@ async def create_submission(
         challenge_id=payload.challenge_id,
         status="pending",
         provider=payload.provider,
+        # Resolve the catalog default now so the worker and every later read
+        # (dashboard, comparison, share) see the concrete model chosen.
+        model=payload.model
+        or model_default(payload.provider or settings.llm_provider or "demo"),
         language=challenge.language,
     )
     db.add(submission)

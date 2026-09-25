@@ -9,6 +9,7 @@ import type {
   ChallengeUpdatePayload,
   ChangePasswordPayload,
   LoginPayload,
+  ModelInfo,
   OAuthAuthorizeResponse,
   OAuthProvider,
   PaginatedResponse,
@@ -234,6 +235,11 @@ export const challengesApi = {
   update: (id: string, payload: ChallengeUpdatePayload) =>
     api.patch<Challenge>(`/api/challenges/${id}`, payload),
   remove: (id: string) => api.del(`/api/challenges/${id}`),
+};
+
+export const modelsApi = {
+  /** Public LLM model catalog — static, no auth required. */
+  list: () => api.get<ModelInfo[]>("/api/models"),
 };
 
 export const submissionsApi = {

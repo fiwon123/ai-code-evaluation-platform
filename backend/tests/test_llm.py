@@ -436,3 +436,23 @@ class TestGetLLMProvider:
     def test_unknown_provider_raises(self):
         with pytest.raises(ValueError, match="Unknown LLM provider"):
             get_llm_provider("watson")
+
+    def test_model_forwarded_to_keyed_provider(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        provider = get_llm_provider("openai", api_key="sk-call", model="gpt-4o")
+        assert isinstance(provider, OpenAIProvider)
+        assert provider._model == "gpt-4o"
+
+    def test_model_forwarded_to_ollama(self):
+        provider = get_llm_provider("ollama", model="codellama")
+        assert isinstance(provider, OllamaProvider)
+        assert provider._model == "codellama"
+
+    def test_model_ignored_when_default_for_keyed_provider(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        provider = get_llm_provider("openai", api_key="sk-call")
+        assert provider._model == "gpt-4o-mini"
+
+    def test_demo_ignores_model(self):
+        # The demo provider is fixed — passing a model must not break it.
+        assert isinstance(get_llm_provider("demo", model="mock-coder"), MockProvider)

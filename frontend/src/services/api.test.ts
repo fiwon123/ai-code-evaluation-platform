@@ -7,6 +7,7 @@ import {
   challengesApi,
   clearToken,
   getToken,
+  modelsApi,
   setToken,
   submissionsApi,
 } from "./api.ts";
@@ -372,6 +373,37 @@ it("lists challenges with pagination and search query params", async () => {
       expect.stringContaining("/api/challenges/c1"),
       expect.objectContaining({ method: "PATCH" }),
     );
+  });
+});
+
+describe("modelsApi", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    clearToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearToken();
+  });
+
+  it("lists the model catalog via GET /api/models", async () => {
+    const catalog = [
+      { id: "gpt-4o-mini", provider: "openai", label: "GPT-4o Mini", description: "Fast", is_default: true },
+      { id: "gpt-4o", provider: "openai", label: "GPT-4o", description: "Strong", is_default: false },
+    ];
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(catalog), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const result = await modelsApi.list();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/models",
+      expect.anything(),
+    );
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ id: "gpt-4o-mini", provider: "openai", is_default: true });
   });
 });
 

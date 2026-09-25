@@ -244,6 +244,87 @@ async def test_create_submission_does_not_return_api_key_for_demo(
 
 
 @pytest.mark.asyncio
+async def test_create_submission_resolves_provider_default_model(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    submission = await create_submission(db_client, token, challenge["id"], provider="demo")
+
+    assert submission["model"] == "mock-coder"
+
+
+@pytest.mark.asyncio
+async def test_create_submission_stores_explicit_model(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    submission = await create_submission(
+        db_client, token, challenge["id"], provider="demo", model="mock-coder"
+    )
+
+    assert submission["model"] == "mock-coder"
+
+
+@pytest.mark.asyncio
+async def test_create_submission_rejects_unknown_model(db_client: AsyncClient) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={"challenge_id": challenge["id"], "provider": "demo", "model": "not-a-model"},
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "not available" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_submission_rejects_model_from_other_provider(
+    db_client: AsyncClient,
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    # gpt-4o-mini belongs to openai, not demo.
+    response = await db_client.post(
+        SUBMISSIONS_URL,
+        json={"challenge_id": challenge["id"], "provider": "demo", "model": "gpt-4o-mini"},
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "not available" in response.text
+
+
+@pytest.mark.asyncio
+async def test_create_submission_accepts_keyed_provider_model(
+    db_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api import submissions as submissions_module
+
+    monkeypatch.setattr(
+        submissions_module,
+        "dispatch_evaluation",
+        lambda submission_id, api_key=None: True,
+    )
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    submission = await create_submission(
+        db_client,
+        token,
+        challenge["id"],
+        provider="openai",
+        api_key="sk-test-123",
+        model="gpt-4o",
+    )
+
+    assert submission["model"] == "gpt-4o"
+
+
+@pytest.mark.asyncio
 async def test_create_submission_inherits_challenge_language(db_client: AsyncClient) -> None:
     token, _ = await register_user(db_client)
     challenge = await create_challenge(db_client, token, language="go")
