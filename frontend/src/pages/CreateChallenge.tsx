@@ -16,6 +16,7 @@ import {
   LANGUAGES,
   examplesForLanguage,
   languageGuide,
+  languageLabel,
 } from "../utils/language.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import type { ChallengeDifficulty } from "../types.ts";
@@ -114,7 +115,7 @@ export default function CreateChallenge() {
               >
                 {LANGUAGES.map((lang) => (
                   <option key={lang} value={lang}>
-                    {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                    {languageLabel(lang)}
                   </option>
                 ))}
               </SelectInput>

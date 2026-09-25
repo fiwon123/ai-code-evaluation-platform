@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
+import LanguageBadge from "../components/LanguageBadge/LanguageBadge.tsx";
 import { SelectInput, TextInput } from "../components/Input/Input.tsx";
 import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
@@ -11,7 +12,7 @@ import { challengesApi } from "../services/api.ts";
 import type { Challenge, ChallengeDifficulty } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import { formatRelativeTime } from "../utils/formatting.ts";
-import { LANGUAGES } from "../utils/language.ts";
+import { LANGUAGES, languageLabel } from "../utils/language.ts";
 import styles from "./Challenges.module.css";
 
 const PAGE_SIZE = 12;
@@ -188,7 +189,7 @@ function Challenges() {
           <option value="all">All languages</option>
           {LANGUAGES.map((lang) => (
             <option key={lang} value={lang}>
-              {lang.charAt(0).toUpperCase() + lang.slice(1)}
+              {languageLabel(lang)}
             </option>
           ))}
         </SelectInput>
@@ -236,7 +237,7 @@ function Challenges() {
                 <Card className={styles.card}>
                   <div className={styles.cardTop}>
                     <div className={styles.cardBadges}>
-                      <Badge variant="neutral">{challenge.language}</Badge>
+                      <LanguageBadge language={challenge.language} />
                       <Badge variant={DIFFICULTY_VARIANT[challenge.difficulty]}>
                         {challenge.difficulty}
                       </Badge>

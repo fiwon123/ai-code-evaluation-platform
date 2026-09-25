@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
 import { TextInput } from "../../components/Input/Input.tsx";
+import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
@@ -146,7 +146,7 @@ function AdminChallenges() {
                     <span className={styles.cellMuted}>{challenge.id}</span>
                   </td>
                   <td>
-                    <Badge variant="neutral">{challenge.language}</Badge>
+                    <LanguageBadge language={challenge.language} />
                   </td>
                   <td className={styles.cellMuted}>
                     {formatRelativeTime(challenge.created_at)}
