@@ -145,9 +145,7 @@ class TestRecoverStalePending:
         session.expire_all()
         fresh = session.get(Submission, submission.id)
         assert fresh.status == "pending"
-        assert _as_utc(fresh.updated_at) == T0 - timedelta(
-            minutes=PENDING_STALE_MINUTES + 1
-        )
+        assert _as_utc(fresh.updated_at) == T0 - timedelta(minutes=PENDING_STALE_MINUTES + 1)
 
 
 class TestRecoverKeyedProviders:

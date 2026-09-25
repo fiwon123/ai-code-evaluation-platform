@@ -19,10 +19,7 @@ from app.services.example_challenges import seed_example_challenges
 async def _main() -> None:
     async with async_session() as session:
         result = await seed_example_challenges(session)
-    print(
-        f"Example challenges seeded: {result.created} created, "
-        f"{result.updated} updated"
-    )
+    print(f"Example challenges seeded: {result.created} created, {result.updated} updated")
 
 
 if __name__ == "__main__":

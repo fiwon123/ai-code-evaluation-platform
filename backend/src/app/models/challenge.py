@@ -28,11 +28,16 @@ class Challenge(UUIDMixin, TimestampMixin, Base):
     prompt: Mapped[str] = mapped_column(Text)
     test_code: Mapped[str] = mapped_column(Text, default="")
     language: Mapped[str] = mapped_column(String(50), default="python")
+    difficulty: Mapped[str] = mapped_column(String(20), default="medium", server_default="medium")
 
     __table_args__ = (
         CheckConstraint(
             "language IN ('python', 'javascript', 'typescript', 'java', 'go')",
             name="ck_challenges_language_supported",
+        ),
+        CheckConstraint(
+            "difficulty IN ('easy', 'medium', 'hard')",
+            name="ck_challenges_difficulty_supported",
         ),
     )
 

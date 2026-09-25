@@ -53,9 +53,7 @@ class TestMockProvider:
             "go": "func ValidParentheses(s string) bool",
         }
         for language, signature in signatures.items():
-            code = MockProvider().generate_code(
-                "valid parentheses", language=language
-            )
+            code = MockProvider().generate_code("valid parentheses", language=language)
             assert signature in code, f"missing valid_parentheses for {language}"
 
     def test_generates_longest_common_prefix(self):
@@ -73,16 +71,12 @@ class TestMockProvider:
             "go": "func LongestCommonPrefix(strs []string) string",
         }
         for language, signature in signatures.items():
-            code = MockProvider().generate_code(
-                "longest common prefix", language=language
-            )
+            code = MockProvider().generate_code("longest common prefix", language=language)
             assert signature in code, f"missing longest_common_prefix for {language}"
 
     def test_camelcase_alias_for_new_keywords(self):
         # Frontend prompts may use camelCase forms ("validParentheses").
-        code = MockProvider().generate_code(
-            "Write validParentheses", language="javascript"
-        )
+        code = MockProvider().generate_code("Write validParentheses", language="javascript")
         assert "function validParentheses" in code
 
     def test_all_languages_share_the_same_keyword_set(self):

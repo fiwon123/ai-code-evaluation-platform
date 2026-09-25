@@ -391,12 +391,12 @@ _JAVA_SOLUTIONS: dict[str, str] = {
     "longest_common_prefix": (
         "public class Solution {\n"
         "    public static String longestCommonPrefix(String[] strs) {\n"
-        "        if (strs.length == 0) return \"\";\n"
+        '        if (strs.length == 0) return "";\n'
         "        String prefix = strs[0];\n"
         "        for (int i = 1; i < strs.length; i++) {\n"
         "            while (!strs[i].startsWith(prefix)) {\n"
         "                prefix = prefix.substring(0, prefix.length() - 1);\n"
-        "                if (prefix.isEmpty()) return \"\";\n"
+        '                if (prefix.isEmpty()) return "";\n'
         "            }\n"
         "        }\n"
         "        return prefix;\n"
@@ -567,14 +567,14 @@ _GO_SOLUTIONS: dict[str, str] = {
         "\n"
         "func LongestCommonPrefix(strs []string) string {\n"
         "    if len(strs) == 0 {\n"
-        "        return \"\"\n"
+        '        return ""\n'
         "    }\n"
         "    prefix := strs[0]\n"
         "    for _, s := range strs[1:] {\n"
         "        for !strings.HasPrefix(s, prefix) {\n"
         "            prefix = prefix[:len(prefix)-1]\n"
-        "            if prefix == \"\" {\n"
-        "                return \"\"\n"
+        '            if prefix == "" {\n'
+        '                return ""\n'
         "            }\n"
         "        }\n"
         "    }\n"

@@ -34,9 +34,7 @@ def _payload(submission_id: UUID, event_type: str, **fields: object) -> str:
 _sync_redis_client = _sync_redis.from_url(settings.redis_url, decode_responses=True)
 
 
-def publish_submission_event(
-    submission_id: UUID, event_type: str, **fields: object
-) -> None:
+def publish_submission_event(submission_id: UUID, event_type: str, **fields: object) -> None:
     """Publish a submission update event (sync, for the Celery worker)."""
     try:
         _sync_redis_client.publish(
@@ -46,9 +44,7 @@ def publish_submission_event(
         logger.exception("Failed to publish event for submission %s", submission_id)
 
 
-async def apublish_submission_event(
-    submission_id: UUID, event_type: str, **fields: object
-) -> None:
+async def apublish_submission_event(submission_id: UUID, event_type: str, **fields: object) -> None:
     """Publish a submission update event (async, for the API server)."""
     try:
         await redis_client.publish(

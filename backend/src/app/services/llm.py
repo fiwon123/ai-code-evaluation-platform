@@ -26,16 +26,13 @@ def get_llm_provider(name: str | None = None, api_key: str | None = None) -> LLM
     provider_name = (name or settings.llm_provider or "demo").lower()
     if provider_name not in _PROVIDERS:
         raise ValueError(
-            f"Unknown LLM provider '{provider_name}' — "
-            f"available: {sorted(_PROVIDERS)}"
+            f"Unknown LLM provider '{provider_name}' — available: {sorted(_PROVIDERS)}"
         )
 
     if provider_name == "openai":
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
-            raise ValueError(
-                "OpenAI API key missing — provide an api_key or set OPENAI_API_KEY"
-            )
+            raise ValueError("OpenAI API key missing — provide an api_key or set OPENAI_API_KEY")
         return OpenAIProvider(api_key=key)
 
     if provider_name == "anthropic":

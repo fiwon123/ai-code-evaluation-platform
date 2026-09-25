@@ -9,7 +9,12 @@ from app.core.database import get_session
 from app.core.security import get_current_user
 from app.models.challenge import Challenge
 from app.models.user import User
-from app.schemas.challenge import ChallengeCreate, ChallengeRead, ChallengeUpdate
+from app.schemas.challenge import (
+    DIFFICULTIES,
+    ChallengeCreate,
+    ChallengeRead,
+    ChallengeUpdate,
+)
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
@@ -35,10 +40,15 @@ async def list_challenges(
         default=None, max_length=255, description="Search title/description"
     ),
     language: str | None = Query(default=None, max_length=50, description="Filter by language"),
+    difficulty: str | None = Query(default=None, description="Filter by difficulty"),
+    sort: str = Query(
+        default="newest",
+        description="Sort order: 'newest' (default) or 'title'",
+    ),
     owner_id: UUID | None = Query(default=None, description="Filter by owner (public challenges)"),
     db: AsyncSession = Depends(get_session),
 ) -> PaginatedResponse[ChallengeRead]:
-    """List all challenges (public) with search, filter, and pagination."""
+    """List all challenges (public) with search, filter, sort, and pagination."""
     filters = []
     if search and search.strip():
         pattern = f"%{search.strip()}%"
@@ -50,13 +60,23 @@ async def list_challenges(
         )
     if language:
         filters.append(Challenge.language == language)
+    if difficulty:
+        if difficulty not in DIFFICULTIES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Unsupported difficulty '{difficulty}' — supported: {sorted(DIFFICULTIES)}",
+            )
+        filters.append(Challenge.difficulty == difficulty)
     if owner_id:
         filters.append(Challenge.user_id == owner_id)
 
     base = select(Challenge)
     if filters:
         base = base.where(*filters)
-    base = base.order_by(Challenge.created_at.desc())
+    if sort == "title":
+        base = base.order_by(Challenge.title.asc(), Challenge.created_at.desc())
+    else:
+        base = base.order_by(Challenge.created_at.desc(), Challenge.id.asc())
 
     orm_items, total, pages = await paginate(db, base, page=page, page_size=page_size)
     items = [ChallengeRead.model_validate(item) for item in orm_items]
@@ -84,6 +104,7 @@ async def create_challenge(
         prompt=payload.prompt,
         test_code=payload.test_code,
         language=payload.language,
+        difficulty=payload.difficulty,
     )
     db.add(challenge)
     await db.commit()

@@ -93,9 +93,7 @@ async def test_upsert_refreshes_changed_catalog_fields(db_sessionmaker, monkeypa
     patched = [dict(entry) for entry in EXAMPLE_CHALLENGES]
     patched[0]["prompt"] = "NEW prompt for the first example"
     patched[0]["test_code"] = "assert True  # NEW tests"
-    monkeypatch.setattr(
-        "app.services.example_challenges.EXAMPLE_CHALLENGES", patched
-    )
+    monkeypatch.setattr("app.services.example_challenges.EXAMPLE_CHALLENGES", patched)
 
     async with db_sessionmaker() as session:
         result = await seed_example_challenges(session)
@@ -176,13 +174,12 @@ async def test_examples_are_playable_with_demo_provider():
 
 def _spy_seeder(monkeypatch, calls):
     """Replace the seeder with a spy recording its invocations."""
+
     async def fake_seed(session):
         calls.append(session)
         return SeedResult(created=15, updated=0)
 
-    monkeypatch.setattr(
-        "app.services.example_challenges.seed_example_challenges", fake_seed
-    )
+    monkeypatch.setattr("app.services.example_challenges.seed_example_challenges", fake_seed)
 
 
 def test_lifespan_seeds_when_enabled(monkeypatch):
@@ -229,9 +226,7 @@ def test_lifespan_survives_seed_failure(monkeypatch):
     async def broken_seed(session):
         raise RuntimeError("database unreachable")
 
-    monkeypatch.setattr(
-        "app.services.example_challenges.seed_example_challenges", broken_seed
-    )
+    monkeypatch.setattr("app.services.example_challenges.seed_example_challenges", broken_seed)
     monkeypatch.setattr(settings, "seed_examples", True)
     with TestClient(create_app()):
         pass  # boot must succeed despite the failure

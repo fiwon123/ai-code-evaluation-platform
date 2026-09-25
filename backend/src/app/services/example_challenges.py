@@ -33,8 +33,7 @@ DESCRIPTIONS = {
         "empty result when there is no solution."
     ),
     "valid_parentheses": (
-        "Determine whether the parentheses, brackets, and braces in a string "
-        "are properly balanced."
+        "Determine whether the parentheses, brackets, and braces in a string are properly balanced."
     ),
     "longest_common_prefix": (
         "Return the longest common prefix shared by a list of strings, or an "
@@ -52,6 +51,14 @@ class SeedResult:
 
 
 # 3 example problems × 5 supported languages = 15 challenges.
+# Difficulty is derived from the problem kind; the server_default ("medium")
+# covers any future catalog entry without an explicit classification.
+_DIFFICULTY_BY_TITLE = {
+    "Two Sum": "easy",
+    "Longest Common Prefix": "easy",
+    "Valid Parentheses": "medium",
+}
+
 EXAMPLE_CHALLENGES: list[dict[str, str]] = [
     # --- Python ------------------------------------------------------------
     {
@@ -63,14 +70,14 @@ EXAMPLE_CHALLENGES: list[dict[str, str]] = [
             "indices of the two numbers that add up to target, or [] when "
             "there is no solution."
         ),
-        "test_code": '''from solution import two_sum
+        "test_code": """from solution import two_sum
 
 def test_basic():
     assert two_sum([2, 7, 11, 15], 9) == [0, 1]
 
 def test_no_solution():
     assert two_sum([1, 2, 3], 99) == []
-''',
+""",
     },
     {
         "title": "Valid Parentheses",
@@ -81,7 +88,7 @@ def test_no_solution():
             "when the parentheses, brackets, and braces in s are properly "
             "balanced."
         ),
-        "test_code": '''from solution import valid_parentheses
+        "test_code": """from solution import valid_parentheses
 
 def test_balanced():
     assert valid_parentheses("()[]{}")
@@ -91,7 +98,7 @@ def test_mismatched():
 
 def test_unclosed():
     assert not valid_parentheses("([)")
-''',
+""",
     },
     {
         "title": "Longest Common Prefix",
@@ -102,14 +109,14 @@ def test_unclosed():
             "the longest common prefix shared by a list of strings, or an "
             "empty string when there is none."
         ),
-        "test_code": '''from solution import longest_common_prefix
+        "test_code": """from solution import longest_common_prefix
 
 def test_common_prefix():
     assert longest_common_prefix(["flower", "flow", "flight"]) == "fl"
 
 def test_no_common_prefix():
     assert longest_common_prefix(["dog", "racecar", "car"]) == ""
-''',
+""",
     },
     # --- JavaScript ---------------------------------------------------------
     {
@@ -121,7 +128,7 @@ def test_no_common_prefix():
             "the indices of the two numbers that add up to target, or [] when "
             "there is no solution."
         ),
-        "test_code": '''const { twoSum } = require('./solution.js');
+        "test_code": """const { twoSum } = require('./solution.js');
 const { test } = require('node:test');
 const assert = require('assert');
 
@@ -132,7 +139,7 @@ test('twoSum', () => {
 test('no solution', () => {
   assert.deepStrictEqual(twoSum([1, 2, 3], 99), []);
 });
-''',
+""",
     },
     {
         "title": "Valid Parentheses",
@@ -143,7 +150,7 @@ test('no solution', () => {
             "true when the parentheses, brackets, and braces in s are "
             "properly balanced."
         ),
-        "test_code": '''const { validParentheses } = require('./solution.js');
+        "test_code": """const { validParentheses } = require('./solution.js');
 const { test } = require('node:test');
 const assert = require('assert');
 
@@ -154,7 +161,7 @@ test('balanced', () => {
 test('mismatched', () => {
   assert.equal(validParentheses('(]'), false);
 });
-''',
+""",
     },
     {
         "title": "Longest Common Prefix",
@@ -165,7 +172,7 @@ test('mismatched', () => {
             "returns the longest common prefix shared by a list of strings, "
             "or an empty string when there is none."
         ),
-        "test_code": '''const { longestCommonPrefix } = require('./solution.js');
+        "test_code": """const { longestCommonPrefix } = require('./solution.js');
 const { test } = require('node:test');
 const assert = require('assert');
 
@@ -176,7 +183,7 @@ test('common prefix', () => {
 test('no common prefix', () => {
   assert.equal(longestCommonPrefix(['dog', 'racecar', 'car']), '');
 });
-''',
+""",
     },
     # --- TypeScript ---------------------------------------------------------
     {
@@ -188,7 +195,7 @@ test('no common prefix', () => {
             "number): number[] that returns the indices of the two numbers "
             "that add up to target, or [] when there is no solution."
         ),
-        "test_code": '''import { test } from 'node:test';
+        "test_code": """import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { twoSum } from './solution.ts';
 
@@ -199,7 +206,7 @@ test('twoSum', () => {
 test('no solution', () => {
   assert.deepEqual(twoSum([1, 2, 3], 99), []);
 });
-''',
+""",
     },
     {
         "title": "Valid Parentheses",
@@ -210,7 +217,7 @@ test('no solution', () => {
             "boolean that returns true when the parentheses, brackets, and "
             "braces in s are properly balanced."
         ),
-        "test_code": '''import { test } from 'node:test';
+        "test_code": """import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validParentheses } from './solution.ts';
 
@@ -221,7 +228,7 @@ test('balanced', () => {
 test('mismatched', () => {
   assert.equal(validParentheses('(]'), false);
 });
-''',
+""",
     },
     {
         "title": "Longest Common Prefix",
@@ -232,7 +239,7 @@ test('mismatched', () => {
             "string that returns the longest common prefix shared by a list "
             "of strings, or an empty string when there is none."
         ),
-        "test_code": '''import { test } from 'node:test';
+        "test_code": """import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { longestCommonPrefix } from './solution.ts';
 
@@ -243,7 +250,7 @@ test('common prefix', () => {
 test('no common prefix', () => {
   assert.equal(longestCommonPrefix(['dog', 'racecar', 'car']), '');
 });
-''',
+""",
     },
     # --- Java ---------------------------------------------------------------
     {
@@ -255,7 +262,7 @@ test('no common prefix', () => {
             "class Solution that returns the indices of the two numbers that "
             "add up to target, or an empty array when there is no solution."
         ),
-        "test_code": '''import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+        "test_code": """import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 import org.junit.jupiter.api.Test;
 
@@ -274,7 +281,7 @@ class SolutionTest {
             Solution.twoSum(new int[] { 1, 2, 3 }, 99));
     }
 }
-''',
+""",
     },
     {
         "title": "Valid Parentheses",
@@ -285,7 +292,7 @@ class SolutionTest {
             "class Solution that returns true when the parentheses, brackets, "
             "and braces in s are properly balanced."
         ),
-        "test_code": '''import static org.junit.jupiter.api.Assertions.assertFalse;
+        "test_code": """import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -301,7 +308,7 @@ class SolutionTest {
         assertFalse(Solution.validParentheses("(]"));
     }
 }
-''',
+""",
     },
     {
         "title": "Longest Common Prefix",
@@ -312,7 +319,7 @@ class SolutionTest {
             "the class Solution that returns the longest common prefix shared "
             "by the strings, or an empty string when there is none."
         ),
-        "test_code": '''import static org.junit.jupiter.api.Assertions.assertEquals;
+        "test_code": """import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
@@ -333,7 +340,7 @@ class SolutionTest {
                 new String[] { "dog", "racecar", "car" }));
     }
 }
-''',
+""",
     },
     # --- Go -----------------------------------------------------------------
     {
@@ -345,7 +352,7 @@ class SolutionTest {
             "returns the indices of the two numbers that add up to target, or "
             "an empty slice when there is no solution."
         ),
-        "test_code": '''package main
+        "test_code": """package main
 
 import "testing"
 
@@ -361,7 +368,7 @@ func TestTwoSumNoSolution(t *testing.T) {
         t.Errorf("expected empty result, got %v", got)
     }
 }
-''',
+""",
     },
     {
         "title": "Valid Parentheses",
@@ -372,7 +379,7 @@ func TestTwoSumNoSolution(t *testing.T) {
             "true when the parentheses, brackets, and braces in s are "
             "properly balanced."
         ),
-        "test_code": '''package main
+        "test_code": """package main
 
 import "testing"
 
@@ -387,7 +394,7 @@ func TestValidParenthesesMismatched(t *testing.T) {
         t.Errorf("expected mismatched input to be invalid")
     }
 }
-''',
+""",
     },
     {
         "title": "Longest Common Prefix",
@@ -398,7 +405,7 @@ func TestValidParenthesesMismatched(t *testing.T) {
             "that returns the longest common prefix shared by the strings, or "
             "an empty string when there is none."
         ),
-        "test_code": '''package main
+        "test_code": """package main
 
 import "testing"
 
@@ -413,7 +420,7 @@ func TestLongestCommonPrefixNone(t *testing.T) {
         t.Errorf("expected empty string, got %q", got)
     }
 }
-''',
+""",
     },
 ]
 
@@ -421,9 +428,7 @@ func TestLongestCommonPrefixNone(t *testing.T) {
 async def _ensure_examples_owner(session: AsyncSession) -> User:
     """Return the system examples account, creating it once if missing."""
     result = await session.execute(
-        select(User).where(
-            or_(User.username == EXAMPLES_USERNAME, User.email == EXAMPLES_EMAIL)
-        )
+        select(User).where(or_(User.username == EXAMPLES_USERNAME, User.email == EXAMPLES_EMAIL))
     )
     owner = result.scalar_one_or_none()
     if owner is not None:
@@ -451,9 +456,7 @@ async def seed_example_challenges(session: AsyncSession) -> SeedResult:
     """
     owner = await _ensure_examples_owner(session)
 
-    existing = await session.execute(
-        select(Challenge).where(Challenge.user_id == owner.id)
-    )
+    existing = await session.execute(select(Challenge).where(Challenge.user_id == owner.id))
     by_key = {(c.language, c.title): c for c in existing.scalars()}
 
     created = 0
@@ -470,6 +473,7 @@ async def seed_example_challenges(session: AsyncSession) -> SeedResult:
                     prompt=example["prompt"],
                     test_code=example["test_code"],
                     language=example["language"],
+                    difficulty=_DIFFICULTY_BY_TITLE.get(example["title"], "medium"),
                 )
             )
             created += 1
@@ -478,17 +482,17 @@ async def seed_example_challenges(session: AsyncSession) -> SeedResult:
             challenge.prompt != example["prompt"]
             or challenge.test_code != example["test_code"]
             or challenge.description != example["description"]
+            or challenge.difficulty != _DIFFICULTY_BY_TITLE.get(example["title"], "medium")
         ):
             challenge.prompt = example["prompt"]
             challenge.test_code = example["test_code"]
             challenge.description = example["description"]
+            challenge.difficulty = _DIFFICULTY_BY_TITLE.get(example["title"], "medium")
             updated += 1
 
     await session.commit()
     if created or updated:
-        logger.info(
-            "Example challenges seeded: %d created, %d updated", created, updated
-        )
+        logger.info("Example challenges seeded: %d created, %d updated", created, updated)
     else:
         logger.debug("Example challenges already up to date")
     return SeedResult(created=created, updated=updated)
