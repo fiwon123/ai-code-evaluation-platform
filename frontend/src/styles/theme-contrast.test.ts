@@ -101,6 +101,28 @@ function normalise(path: string): string {
   return path.replace(/^\.\.\//, "");
 }
 
+/** The bodies of every `@media (prefers-reduced-motion: ...)` block. */
+function reducedMotionBlocks(css: string): string[] {
+  const blocks: string[] = [];
+  const opener = /@media\s*\(prefers-reduced-motion[^)]*\)\s*\{/g;
+  for (const match of css.matchAll(opener)) {
+    let depth = 0;
+    for (let i = match.index + match[0].length - 1; i < css.length; i += 1) {
+      if (css[i] === "{") depth += 1;
+      else if (css[i] === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          blocks.push(css.slice(match.index + match[0].length, i));
+          break;
+        }
+      }
+    }
+  }
+  // Comments are stripped first: prose that merely mentions a gradient (e.g.
+  // "the gradient now lives in PageTitle") is not a declaration.
+  return blocks.map((block) => block.replace(/\/\*[\s\S]*?\*\//g, ""));
+}
+
 describe("title gradient is not duplicated per page", () => {
   // `.reportScore` is the decorative score in the Features mock report: same
   // clip-text technique, but a 135deg sweep on a mock UI element, not a page
@@ -132,6 +154,20 @@ describe("title gradient is not duplicated per page", () => {
     // handles both themes, so no stylesheet should do that any more.
     const offenders = Object.entries(gradientStylesheets())
       .filter(([, css]) => /\[data-theme="light"\]/.test(css) && /background:\s*none/.test(css))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("leaves reduced-motion title repainting to the shared component", () => {
+    // A page module that repaints a title gradient under
+    // `prefers-reduced-motion` competes with PageTitle for the same element:
+    // whichever rule lands later in the cascade wins, so the heading either
+    // loses its sweep or shows a clipped, half-painted gradient. This slipped
+    // through the `background-clip: text` check above because such a block
+    // re-declares the gradient without restating the clip.
+    const offenders = Object.entries(gradientStylesheets())
+      .filter(([path]) => !ALLOWED.has(path))
+      .filter(([, css]) => reducedMotionBlocks(css).some((block) => /gradient/.test(block)))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
   });

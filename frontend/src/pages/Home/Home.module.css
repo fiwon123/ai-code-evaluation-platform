@@ -712,11 +712,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .heroTitle {
-    animation: none;
-    background: linear-gradient(90deg, var(--color-text), var(--color-primary-hover));
-    background-size: auto;
-  }
+  /* The hero title is NOT handled here: its gradient, sweep and reduced-motion
+     collapse all live in the shared PageTitle module. A page-level override
+     would fight the component for the same element. */
 
   .animStatusDot,
   .animCaret {
