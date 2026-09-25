@@ -28,13 +28,21 @@ class TestMockProvider:
         assert "if n <= 0" in code
 
     def test_generates_fizzbuzz_empty_edges_every_language(self):
-        # Every language's fizzbuzz solution guards n <= 0.
+        # Every executable language's fizzbuzz solution guards n <= 0.
         edge_guards = {
             "python": "if n <= 0",
             "javascript": "if (n <= 0) return []",
             "typescript": "if (n <= 0) return []",
             "java": "if (n <= 0) return result",
             "go": "if n <= 0",
+            "c": "if (n <= 0)",
+            "cpp": "if (n <= 0) return result;",
+            "rust": "if n <= 0 { return Vec::new(); }",
+            "php": "if ($n <= 0) return [];",
+            "ruby": "return [] if n <= 0",
+            "perl": "return \\@result if $n <= 0;",
+            "lua": "if n <= 0 then return result end",
+            "kotlin": "if (n <= 0) return emptyList()",
         }
         for language, guard in edge_guards.items():
             code = MockProvider().generate_code("fizzbuzz", language=language)
@@ -53,6 +61,14 @@ class TestMockProvider:
             "typescript": "export function validParentheses(s: string): boolean",
             "java": "public static boolean validParentheses(String s)",
             "go": "func ValidParentheses(s string) bool",
+            "c": "bool valid_parentheses(const char* s)",
+            "cpp": "bool valid_parentheses(const std::string& s)",
+            "rust": "pub fn valid_parentheses(s: &str) -> bool",
+            "php": "function valid_parentheses(string $s): bool",
+            "ruby": "def valid_parentheses(s)",
+            "perl": "sub valid_parentheses {",
+            "lua": "function valid_parentheses(s)",
+            "kotlin": "fun validParentheses(s: String): Boolean",
         }
         for language, signature in signatures.items():
             code = MockProvider().generate_code("valid parentheses", language=language)
@@ -71,6 +87,14 @@ class TestMockProvider:
             "typescript": "export function longestCommonPrefix(strs: string[]): string",
             "java": "public static String longestCommonPrefix(String[] strs)",
             "go": "func LongestCommonPrefix(strs []string) string",
+            "c": "char* longest_common_prefix(char** strs, int strs_size)",
+            "cpp": "std::string longest_common_prefix(const std::vector<std::string>& strs)",
+            "rust": "pub fn longest_common_prefix(strs: &[&str]) -> String",
+            "php": "function longest_common_prefix(array $strs): string",
+            "ruby": "def longest_common_prefix(strs)",
+            "perl": "sub longest_common_prefix {",
+            "lua": "function longest_common_prefix(strs)",
+            "kotlin": "fun longestCommonPrefix(strs: Array<String>): String",
         }
         for language, signature in signatures.items():
             code = MockProvider().generate_code("longest common prefix", language=language)
@@ -81,15 +105,26 @@ class TestMockProvider:
         code = MockProvider().generate_code("Write validParentheses", language="javascript")
         assert "function validParentheses" in code
 
-    def test_all_languages_share_the_same_keyword_set(self):
-        # The example corpus is mirrored across every supported language, so a
-        # prompt that resolves in Python behaves identically in JS/TS/Java/Go.
+    def test_all_languages_share_the_core_keyword_set(self):
+        # The example corpus is mirrored across every executable language. The
+        # five original languages also keep the extra trapping_rain_water
+        # example, so the guarantee is a shared core, not identical sets.
+        from app.services.languages import EXECUTABLE_LANGUAGES
         from app.services.llm_providers.mock_provider import SOLUTIONS_BY_LANGUAGE
 
-        key_sets = {frozenset(solutions) for solutions in SOLUTIONS_BY_LANGUAGE.values()}
-        assert len(key_sets) == 1
-        assert "valid_parentheses" in next(iter(key_sets))
-        assert "longest_common_prefix" in next(iter(key_sets))
+        assert set(SOLUTIONS_BY_LANGUAGE) == EXECUTABLE_LANGUAGES
+        core = {
+            "two_sum",
+            "valid_parentheses",
+            "longest_common_prefix",
+            "fizzbuzz",
+            "fibonacci",
+        }
+        for language, solutions in SOLUTIONS_BY_LANGUAGE.items():
+            assert core <= set(solutions), f"{language} is missing core keywords"
+        # The original five retain the hard Trapping Rain Water example.
+        for language in ("python", "javascript", "typescript", "java", "go"):
+            assert "trapping_rain_water" in SOLUTIONS_BY_LANGUAGE[language]
 
     def test_generates_fibonacci(self):
         code = MockProvider().generate_code("Return fibonacci sequence of length n")
@@ -107,7 +142,7 @@ class TestMockProvider:
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="not supported"):
-            MockProvider().generate_code("anything", language="ruby")
+            MockProvider().generate_code("anything", language="csharp")
 
     def test_generates_javascript_solution(self):
         code = MockProvider().generate_code(
@@ -225,7 +260,7 @@ class TestAnthropicProvider:
             transport=httpx.MockTransport(_anthropic_handler),
         )
         with pytest.raises(ValueError, match="not supported"):
-            provider.generate_code("anything", language="ruby")
+            provider.generate_code("anything", language="csharp")
         provider.close()
 
 
@@ -284,7 +319,7 @@ class TestGeminiProvider:
             transport=httpx.MockTransport(_gemini_handler),
         )
         with pytest.raises(ValueError, match="not supported"):
-            provider.generate_code("anything", language="ruby")
+            provider.generate_code("anything", language="csharp")
         provider.close()
 
     def test_http_error_surfaces(self):

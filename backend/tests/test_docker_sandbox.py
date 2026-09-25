@@ -276,7 +276,7 @@ class TestRunPerLanguage:
     def test_unsupported_language_raises_before_client_use(self):
         sandbox = DockerSandbox(client=FakeClient())
         with pytest.raises(ValueError, match="not supported"):
-            sandbox.run("x", "", language="ruby")
+            sandbox.run("x", "", language="csharp")
 
     def test_uses_runtime_timeout_when_not_specified(self):
         # Go compilation headroom must apply even when the caller omits

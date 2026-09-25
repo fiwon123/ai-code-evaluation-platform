@@ -14,8 +14,16 @@ from app.services.example_challenges import (
     SeedResult,
     seed_example_challenges,
 )
+from app.services.languages import CATALOG_LANGUAGES, EXECUTABLE_LANGUAGES
 
-SUPPORTED_LANGUAGES = {"python", "javascript", "typescript", "java", "go"}
+ALL_TITLES = {
+    "Two Sum",
+    "Valid Parentheses",
+    "Longest Common Prefix",
+    "FizzBuzz",
+    "Fibonacci",
+    "Trapping Rain Water",
+}
 
 
 async def _count_rows(session, model) -> int:
@@ -32,28 +40,24 @@ def test_catalog_shape():
     """The catalog holds 3 curated examples per supported language."""
     by_language = Counter(entry["language"] for entry in EXAMPLE_CHALLENGES)
 
-    assert len(EXAMPLE_CHALLENGES) == 15
-    assert set(by_language) == SUPPORTED_LANGUAGES
-    for language in SUPPORTED_LANGUAGES:
+    assert len(EXAMPLE_CHALLENGES) == len(CATALOG_LANGUAGES) * 3
+    assert set(by_language) == CATALOG_LANGUAGES
+    for language in CATALOG_LANGUAGES:
         assert by_language[language] == 3
 
     for entry in EXAMPLE_CHALLENGES:
-        assert entry["title"] in {
-            "Two Sum",
-            "Valid Parentheses",
-            "Longest Common Prefix",
-        }
+        assert entry["title"] in ALL_TITLES
         for field in ("description", "prompt", "test_code"):
             assert entry[field].strip(), f"missing {field!r} in {entry['title']}"
 
 
 async def test_seeds_all_examples_and_system_user(db_sessionmaker):
-    """First run creates the system owner plus all 15 example challenges."""
+    """First run creates the system owner plus all example challenges."""
     async with db_sessionmaker() as session:
         result = await seed_example_challenges(session)
 
-        assert result == SeedResult(created=15, updated=0)
-        assert await _count_rows(session, Challenge) == 15
+        assert result == SeedResult(created=60, updated=0)
+        assert await _count_rows(session, Challenge) == 60
 
         owner = await _find(session, User, username=EXAMPLES_USERNAME)
         assert owner is not None
@@ -67,7 +71,7 @@ async def test_seeds_all_examples_and_system_user(db_sessionmaker):
         challenges = (await session.execute(select(Challenge))).scalars().all()
         for challenge in challenges:
             user_ids.add(challenge.user_id)
-            assert challenge.language in SUPPORTED_LANGUAGES
+            assert challenge.language in CATALOG_LANGUAGES
         assert user_ids == {owner.id}
 
 
@@ -75,12 +79,12 @@ async def test_seed_is_idempotent(db_sessionmaker):
     """Re-running creates nothing and refreshes nothing."""
     async with db_sessionmaker() as session:
         first = await seed_example_challenges(session)
-        assert first.created == 15
+        assert first.created == 60
 
     async with db_sessionmaker() as session:
         second = await seed_example_challenges(session)
         assert second == SeedResult(created=0, updated=0)
-        assert await _count_rows(session, Challenge) == 15
+        assert await _count_rows(session, Challenge) == 60
         assert await _count_rows(session, User) == 1
 
 
@@ -132,7 +136,7 @@ async def test_never_touches_user_owned_challenges(db_sessionmaker):
         await session.commit()
 
         result = await seed_example_challenges(session)
-        assert result.created == 15  # system rows created alongside
+        assert result.created == 60  # system rows created alongside
 
         # User row is untouched.
         refreshed = await session.get(Challenge, user_challenge.id)
@@ -151,12 +155,16 @@ async def test_never_touches_user_owned_challenges(db_sessionmaker):
         assert system.user_id != user.id
         assert "indices of the two numbers" in system.prompt
 
-        assert await _count_rows(session, Challenge) == 16
+        assert await _count_rows(session, Challenge) == 61
         assert await _count_rows(session, User) == 2
 
 
 async def test_examples_are_playable_with_demo_provider():
-    """Every seeded prompt resolves to a canned demo solution (not a fallback)."""
+    """Every executable seeded prompt resolves to a canned demo solution.
+
+    Display-only languages are intentionally not executable — generation
+    must fail with a clean ValueError instead of slipping through.
+    """
     from app.services.llm_providers.mock_provider import (
         DEFAULT_SOLUTIONS,
         MockProvider,
@@ -164,6 +172,8 @@ async def test_examples_are_playable_with_demo_provider():
 
     provider = MockProvider()
     for entry in EXAMPLE_CHALLENGES:
+        if entry["language"] not in EXECUTABLE_LANGUAGES:
+            continue
         code = provider.generate_code(entry["prompt"], language=entry["language"])
         expected_fallback = DEFAULT_SOLUTIONS[entry["language"]]
         assert code != expected_fallback, (
@@ -171,13 +181,21 @@ async def test_examples_are_playable_with_demo_provider():
             "default solution — catalog and demo provider are out of sync"
         )
 
+    for language in CATALOG_LANGUAGES - EXECUTABLE_LANGUAGES:
+        try:
+            provider.generate_code("Write a function", language=language)
+        except ValueError as exc:
+            assert "not supported" in str(exc)
+        else:
+            raise AssertionError(f"{language} should be display-only, got code")
+
 
 def _spy_seeder(monkeypatch, calls):
     """Replace the seeder with a spy recording its invocations."""
 
     async def fake_seed(session):
         calls.append(session)
-        return SeedResult(created=15, updated=0)
+        return SeedResult(created=60, updated=0)
 
     monkeypatch.setattr("app.services.example_challenges.seed_example_challenges", fake_seed)
 
