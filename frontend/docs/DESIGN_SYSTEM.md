@@ -7,17 +7,17 @@ forbidden in component styles.
 
 ## Naming conventions
 
-| Prefix                           | Group                                        | Examples                                                        |
-| -------------------------------- | -------------------------------------------- | --------------------------------------------------------------- |
-| `--color-*`                      | Color tokens (semantic intent, not raw hues) | `--color-primary`, `--color-danger-light`, `--color-text-muted` |
-| `--color-*-hover`                | Hover variants of a color                    | `--color-primary-hover`, `--color-danger-hover`                 |
-| `--color-*-light`                | Tinted surface variants                      | `--color-success-light`, `--color-warning-light`                |
-| `--font-*`                       | Font family / size tokens                    | `--font-sans`, `--font-mono`, `--font-size-lg`                  |
-| `--space-*`                      | Spacing scale (0.25rem steps)                | `--space-1` … `--space-20`                                      |
-| `--radius-*`                     | Border radius                                | `--radius-sm` … `--radius-full`                                 |
-| `--shadow-*`                     | Elevation shadows                            | `--shadow-sm`, `--shadow-md`, `--shadow-lg`                     |
-| `--transition-*`                 | Motion durations                             | `--transition-fast`, `--transition-base`                        |
-| `--max-width`, `--header-height` | Layout constants                             | —                                                               |
+| Prefix | Group | Examples |
+|--------|-------|----------|
+| `--color-*` | Color tokens (semantic intent, not raw hues) | `--color-primary`, `--color-danger-light`, `--color-text-muted` |
+| `--color-*-hover` | Hover variants of a color | `--color-primary-hover`, `--color-danger-hover` |
+| `--color-*-light` | Tinted surface variants | `--color-success-light`, `--color-warning-light` |
+| `--font-*` | Font family / size tokens | `--font-sans`, `--font-mono`, `--font-size-lg` |
+| `--space-*` | Spacing scale (0.25rem steps) | `--space-1` … `--space-20` |
+| `--radius-*` | Border radius | `--radius-sm` … `--radius-full` |
+| `--shadow-*` | Elevation shadows | `--shadow-sm`, `--shadow-md`, `--shadow-lg` |
+| `--transition-*` | Motion durations | `--transition-fast`, `--transition-base` |
+| `--max-width`, `--header-height` | Layout constants | — |
 
 **Rules**
 
@@ -32,7 +32,7 @@ forbidden in component styles.
 - **No inline fallbacks on a color token** — write `var(--color-danger)`, never
   `var(--color-danger, #dc2626)`. Every color token exists in both palettes, so a
   fallback is dead weight; worse, it hides a typo. A fallback on a token that is
-  _never defined_ is worse still: it renders silently and the intended style
+  *never defined* is worse still: it renders silently and the intended style
   never applies (this is how the admin table row hover became a no-op).
   `design-tokens.test.ts` fails on both.
 - The only raw values allowed in component CSS are decorative ones that are not
@@ -60,23 +60,14 @@ active pagination page, avatars) instead of hardcoded white.
 
 #### Hover surfaces
 
-`--color-surface-hover` is the state a row or list item rests in under the
-pointer, and it **darkens in both palettes** — the light palette steps down from
-`#ffffff`, the dark palette from `#131d33`. That is against the usual dark-UI
-instinct to lighten, and the reason is measurable: the dark palette's
-`--color-text-muted` (`#7c8ca6`) is only 4.92:1 on the surface, so 0.48 of
-headroom above AA for 12px text. The obvious dark hover, `#1c2846`, drops the
-muted cell (the email under each username in the admin tables) to **4.27:1** — a
-regression. Stepping down to `#0d1322` instead keeps both palettes behaving
-identically and _improves_ muted contrast to 5.43:1 while hovered:
+`--color-surface-hover` is the state a row or list item rests in under the pointer, and it **darkens in both palettes** — the light palette steps down from `#ffffff`, the dark palette from `#131d33`. That is against the usual dark-UI instinct to lighten, and the reason is measurable: the dark palette's `--color-text-muted` (`#7c8ca6`) is only 4.92:1 on the surface, so there is 0.48 of headroom above AA for 12px text, and the obvious hover (`#1c2846`) spends it — the muted cell in each admin row (the email under the username) drops to **4.27:1**. Stepping down instead keeps both palettes behaving identically and *improves* muted contrast to 5.43:1 while hovered:
 
-| Palette | Surface   | Hover     | Step   | Muted text on hover |
-| ------- | --------- | --------- | ------ | ------------------- |
-| light   | `#ffffff` | `#e3eaf7` | 1.21:1 | 6.27:1              |
-| dark    | `#131d33` | `#0d1322` | 1.10:1 | 5.43:1              |
+| Palette | Surface | Hover | Step | Muted text on hover |
+|---------|---------|-------|------|---------------------|
+| light | `#ffffff` | `#e3eaf7` | 1.21:1 | 6.27:1 |
+| dark | `#131d33` | `#0d1322` | 1.10:1 | 5.43:1 |
 
-Both hovers are also kept clear of `--color-surface-secondary` / `--color-surface-raised`
-so "hovered" and "secondary" or "raised" never read as the same state.
+Both hovers are also kept clear of `--color-surface-secondary` / `--color-surface-raised`, so "hovered" and "secondary" or "raised" never read as the same state. A hover only *slightly* different from its surface is worse than a missing one: it looks broken rather than absent, so the palette invariant in `design-tokens.test.ts` enforces a 1.05:1 minimum step (GitHub's light-theme row hover is 1.07:1).
 
 ### Page titles
 
@@ -91,11 +82,7 @@ The gradient comes from `--gradient-title`, which is composed from the
 per-theme primary tokens rather than fixed hex values:
 
 ```css
---gradient-title: linear-gradient(
-  90deg,
-  var(--color-primary),
-  var(--color-primary-hover)
-);
+--gradient-title: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
 ```
 
 That composition is why titles need **no light-mode override**: both palettes
@@ -110,13 +97,13 @@ per-page divergence the component exists to remove, and
 
 The `hero` variant sweeps a wider gradient. Its range is not a matter of taste:
 because the heading is transparent text, the gradient must cover the text box
-for the _whole_ animation, which caps `background-position` at
+for the *whole* animation, which caps `background-position` at
 `1 / (background-size - 1)`. `hero-sweep.test.ts` enforces that.
 
 ## Color tokens
 
 **Values are not repeated in this document.** `src/styles/globals.css` is the
-single source of truth for both palettes; this file records _which_ token to
+single source of truth for both palettes; this file records *which* token to
 reach for and what it is for. Duplicating the hexes here is what let the tables
 drift out of sync in the first place, so
 `src/styles/design-tokens.test.ts` fails if a color token is undocumented, if a
@@ -125,56 +112,56 @@ below.
 
 ### Accent and status
 
-| Token                    | Used for                                                                |
-| ------------------------ | ----------------------------------------------------------------------- |
-| `--color-primary`        | Primary actions, links, focus accents                                   |
-| `--color-primary-hover`  | Primary button hover                                                    |
-| `--color-primary-light`  | Primary-tinted surfaces                                                 |
-| `--color-secondary`      | Reserved — secondary text uses `--color-text-secondary`; no current use |
-| `--color-success`        | Positive status, pass indicators                                        |
-| `--color-success-light`  | Success-tinted surfaces                                                 |
-| `--color-warning`        | Warning status                                                          |
-| `--color-warning-strong` | Warning text on a tinted background                                     |
-| `--color-warning-light`  | Warning-tinted surfaces                                                 |
-| `--color-danger`         | Errors, destructive actions                                             |
-| `--color-danger-hover`   | Destructive button hover                                                |
-| `--color-danger-light`   | Error-tinted surfaces                                                   |
+| Token | Used for |
+|-------|----------|
+| `--color-primary` | Primary actions, links, focus accents |
+| `--color-primary-hover` | Primary button hover |
+| `--color-primary-light` | Primary-tinted surfaces |
+| `--color-secondary` | Reserved — secondary text uses `--color-text-secondary`; no current use |
+| `--color-success` | Positive status, pass indicators |
+| `--color-success-light` | Success-tinted surfaces |
+| `--color-warning` | Warning status |
+| `--color-warning-strong` | Warning text on a tinted background |
+| `--color-warning-light` | Warning-tinted surfaces |
+| `--color-danger` | Errors, destructive actions |
+| `--color-danger-hover` | Destructive button hover |
+| `--color-danger-light` | Error-tinted surfaces |
 
 ### Surfaces and text
 
-| Token                       | Used for                                                            |
-| --------------------------- | ------------------------------------------------------------------- |
-| `--color-bg`                | Page background                                                     |
-| `--color-bg-subtle`         | Subtle background accents                                           |
-| `--color-bg-gradient`       | Landing hero gradient                                               |
-| `--color-surface`           | Cards, panels, table rows                                           |
-| `--color-surface-secondary` | Nested surfaces                                                     |
-| `--color-surface-raised`    | Raised surfaces (menus, popovers)                                   |
-| `--color-surface-hover`     | Resting state for a hoverable surface (table rows, list items)      |
-| `--color-divider`           | Dividers and separators                                             |
-| `--color-border`            | Borders                                                             |
-| `--color-border-hover`      | Border hover states                                                 |
-| `--color-text`              | Body text, headings                                                 |
-| `--color-text-secondary`    | Secondary text, labels                                              |
-| `--color-text-muted`        | Placeholders, meta text                                             |
-| `--color-focus-ring`        | Focus ring color                                                    |
-| `--color-on-accent`         | Text on colored surfaces (button labels, active pagination, badges) |
+| Token | Used for |
+|-------|----------|
+| `--color-bg` | Page background |
+| `--color-bg-subtle` | Subtle background accents |
+| `--color-bg-gradient` | Landing hero gradient |
+| `--color-surface` | Cards, panels, table rows |
+| `--color-surface-secondary` | Nested surfaces |
+| `--color-surface-raised` | Raised surfaces (menus, popovers) |
+| `--color-surface-hover` | Resting state for a hoverable surface (table rows, list items) |
+| `--color-divider` | Dividers and separators |
+| `--color-border` | Borders |
+| `--color-border-hover` | Border hover states |
+| `--color-text` | Body text, headings |
+| `--color-text-secondary` | Secondary text, labels |
+| `--color-text-muted` | Placeholders, meta text |
+| `--color-focus-ring` | Focus ring color |
+| `--color-on-accent` | Text on colored surfaces (button labels, active pagination, badges) |
 
 ### Code surfaces
 
 Dark in both themes, for readability.
 
-| Token                 | Used for                             |
-| --------------------- | ------------------------------------ |
-| `--color-code-bg`     | Code block background                |
-| `--color-code-header` | Code block header bar                |
-| `--color-code-border` | Code block border                    |
-| `--color-code-text`   | Code text                            |
-| `--color-code-muted`  | Log gutter numbers, traceback frames |
-| `--color-code-error`  | `FAIL` / `ERROR` / traceback lines   |
-| `--color-code-warn`   | `WARN` / `WARNING` lines             |
-| `--color-code-ok`     | `PASS` / `ok` / `✓` lines            |
-| `--color-code-gutter` | Line-number gutter rule              |
+| Token | Used for |
+|-------|----------|
+| `--color-code-bg` | Code block background |
+| `--color-code-header` | Code block header bar |
+| `--color-code-border` | Code block border |
+| `--color-code-text` | Code text |
+| `--color-code-muted` | Log gutter numbers, traceback frames |
+| `--color-code-error` | `FAIL` / `ERROR` / traceback lines |
+| `--color-code-warn` | `WARN` / `WARNING` lines |
+| `--color-code-ok` | `PASS` / `ok` / `✓` lines |
+| `--color-code-gutter` | Line-number gutter rule |
 
 The severity tokens are **not** the page status tokens (`--color-danger`
 and friends). On this dark surface light-mode `--color-danger` (#dc2626) manages
@@ -186,18 +173,18 @@ blocks. `theme-contrast.test.ts` asserts each clears 4.5:1 against both
 
 ## Typography
 
-| Token              | Value                     |
-| ------------------ | ------------------------- |
-| `--font-sans`      | system-ui stack           |
-| `--font-mono`      | SF Mono / Fira Code stack |
-| `--font-size-xs`   | `0.75rem`                 |
-| `--font-size-sm`   | `0.875rem`                |
-| `--font-size-base` | `1rem`                    |
-| `--font-size-lg`   | `1.125rem`                |
-| `--font-size-xl`   | `1.25rem`                 |
-| `--font-size-2xl`  | `1.5rem`                  |
-| `--font-size-3xl`  | `1.875rem`                |
-| `--font-size-4xl`  | `2.25rem`                 |
+| Token | Value |
+|-------|-------|
+| `--font-sans` | system-ui stack |
+| `--font-mono` | SF Mono / Fira Code stack |
+| `--font-size-xs` | `0.75rem` |
+| `--font-size-sm` | `0.875rem` |
+| `--font-size-base` | `1rem` |
+| `--font-size-lg` | `1.125rem` |
+| `--font-size-xl` | `1.25rem` |
+| `--font-size-2xl` | `1.5rem` |
+| `--font-size-3xl` | `1.875rem` |
+| `--font-size-4xl` | `2.25rem` |
 
 Headings: `h1`–`h4` map to `4xl`–`xl`. Body copy is `--font-size-base` with
 `1.6` line-height.
