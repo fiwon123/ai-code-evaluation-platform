@@ -10,7 +10,7 @@ import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../services/api.ts";
 import { COMPARE_POLL_MS } from "../constants/polling.ts";
 import { useNow } from "../hooks/useNow.ts";
-import type { Challenge, ProviderComparisonEntry } from "../types.ts";
+import type { Challenge, ChallengeDifficulty, ProviderComparisonEntry } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
 import {
@@ -45,6 +45,15 @@ const PROVIDERS = [
     requiresKey: true,
   },
 ];
+
+const DIFFICULTY_VARIANT: Record<
+  ChallengeDifficulty,
+  "success" | "warning" | "danger"
+> = {
+  easy: "success",
+  medium: "warning",
+  hard: "danger",
+};
 
 function ChallengeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -297,7 +306,12 @@ function ChallengeDetail() {
         <div>
           <h1 className={styles.title}>{challenge.title}</h1>
         </div>
-        <Badge variant="neutral">{challenge.language}</Badge>
+        <div className={styles.headerBadges}>
+          <Badge variant="neutral">{challenge.language}</Badge>
+          <Badge variant={DIFFICULTY_VARIANT[challenge.difficulty]}>
+            {challenge.difficulty}
+          </Badge>
+        </div>
       </div>
 
       <div className={styles.layout}>

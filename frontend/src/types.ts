@@ -29,6 +29,8 @@ export interface ChangePasswordPayload {
   new_password: string;
 }
 
+export type ChallengeDifficulty = "easy" | "medium" | "hard";
+
 export interface Challenge {
   id: string;
   title: string;
@@ -36,6 +38,7 @@ export interface Challenge {
   prompt: string;
   test_code: string;
   language: string;
+  difficulty: ChallengeDifficulty;
   owner_id: string;
   created_at: string;
   updated_at: string;
@@ -47,6 +50,7 @@ export interface ChallengeCreatePayload {
   prompt: string;
   test_code?: string;
   language?: string;
+  difficulty?: ChallengeDifficulty;
 }
 
 export interface PaginatedResponse<T> {
@@ -62,6 +66,8 @@ export interface ChallengeListParams {
   page_size?: number;
   search?: string;
   language?: string;
+  difficulty?: ChallengeDifficulty;
+  sort?: "newest" | "title";
   owner_id?: string;
 }
 
