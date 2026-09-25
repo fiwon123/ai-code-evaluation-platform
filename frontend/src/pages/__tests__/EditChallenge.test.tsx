@@ -116,6 +116,7 @@ describe("EditChallenge", () => {
         prompt: "Write a function two_sum(nums, target)",
         test_code: "from solution import two_sum",
         language: "python",
+        difficulty: "medium",
       });
     });
     expect(navigate).toHaveBeenCalledWith("/challenges/c1");

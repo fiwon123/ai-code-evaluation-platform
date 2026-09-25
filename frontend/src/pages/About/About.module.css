@@ -4,8 +4,22 @@
   margin: 0 auto;
 }
 
+.header {
+  margin-bottom: var(--space-12);
+}
+
 .pageTitle {
-  font-size: var(--font-size-4xl);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(
+    90deg,
+    var(--color-primary),
+    var(--color-primary-hover)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   margin-bottom: var(--space-4);
 }
 
@@ -13,7 +27,6 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-lg);
   max-width: 600px;
-  margin-bottom: var(--space-12);
 }
 
 .grid {

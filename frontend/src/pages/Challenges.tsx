@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
@@ -8,7 +8,7 @@ import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi } from "../services/api.ts";
-import type { Challenge } from "../types.ts";
+import type { Challenge, ChallengeDifficulty } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import { formatRelativeTime } from "../utils/formatting.ts";
 import { LANGUAGES } from "../utils/language.ts";
@@ -16,6 +16,17 @@ import styles from "./Challenges.module.css";
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
+
+const DIFFICULTIES: ChallengeDifficulty[] = ["easy", "medium", "hard"];
+
+const DIFFICULTY_VARIANT: Record<
+  ChallengeDifficulty,
+  "success" | "warning" | "danger"
+> = {
+  easy: "success",
+  medium: "warning",
+  hard: "danger",
+};
 
 function Challenges() {
   const { user } = useAuth();
@@ -25,9 +36,12 @@ function Challenges() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [language, setLanguage] = useState("all");
+  const [difficulty, setDifficulty] = useState("all");
+  const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [total, setTotal] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -36,10 +50,33 @@ function Challenges() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  // Reset to page 1 whenever search or language changes.
+  // Reset to page 1 whenever any filter or the sort changes.
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, language]);
+  }, [debouncedSearch, language, difficulty, sort]);
+
+  // "/" anywhere on the page focuses the search field (unless typing in one).
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      event.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,6 +88,9 @@ function Challenges() {
             page_size: PAGE_SIZE,
             search: debouncedSearch || undefined,
             language: language === "all" ? undefined : language,
+            difficulty:
+              difficulty === "all" ? undefined : (difficulty as ChallengeDifficulty),
+            sort: sort as "newest" | "title",
           },
           { signal: controller.signal },
         );
@@ -69,7 +109,7 @@ function Challenges() {
     }
     void load();
     return () => controller.abort();
-  }, [page, debouncedSearch, language]);
+  }, [page, debouncedSearch, language, difficulty, sort]);
 
   if (loading) {
     return (
@@ -112,14 +152,33 @@ function Challenges() {
       </div>
 
       <div className={styles.toolbar}>
-        <TextInput
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search challenges…"
-          aria-label="Search challenges"
-          className={styles.searchInput}
-        />
+        <div className={styles.searchWrap}>
+          <TextInput
+            ref={searchRef}
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search challenges…"
+            aria-label="Search challenges"
+            className={styles.searchInput}
+          />
+          <kbd className={styles.searchHint} aria-hidden="true">
+            /
+          </kbd>
+        </div>
+        <SelectInput
+          value={difficulty}
+          onChange={(e) => setDifficulty(e.target.value)}
+          aria-label="Filter by difficulty"
+          className={styles.filterSelect}
+        >
+          <option value="all">All difficulties</option>
+          {DIFFICULTIES.map((diff) => (
+            <option key={diff} value={diff}>
+              {diff.charAt(0).toUpperCase() + diff.slice(1)}
+            </option>
+          ))}
+        </SelectInput>
         <SelectInput
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
@@ -133,10 +192,19 @@ function Challenges() {
             </option>
           ))}
         </SelectInput>
+        <SelectInput
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+          aria-label="Sort challenges"
+          className={styles.sortSelect}
+        >
+          <option value="newest">Newest first</option>
+          <option value="title">Title A–Z</option>
+        </SelectInput>
       </div>
 
       {challenges.length === 0 ? (
-        total === 0 && !debouncedSearch && language === "all" ? (
+        total === 0 && !debouncedSearch && language === "all" && difficulty === "all" ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}>🧩</div>
             <h2 className={styles.emptyTitle}>No challenges yet</h2>
@@ -152,7 +220,7 @@ function Challenges() {
             <div className={styles.emptyIcon}>🔍</div>
             <h2 className={styles.emptyTitle}>No matching challenges</h2>
             <p className={styles.emptyText}>
-              Try a different search term or language filter.
+              Try a different search term or clear a filter.
             </p>
           </div>
         )
@@ -167,7 +235,12 @@ function Challenges() {
               >
                 <Card className={styles.card}>
                   <div className={styles.cardTop}>
-                    <Badge variant="neutral">{challenge.language}</Badge>
+                    <div className={styles.cardBadges}>
+                      <Badge variant="neutral">{challenge.language}</Badge>
+                      <Badge variant={DIFFICULTY_VARIANT[challenge.difficulty]}>
+                        {challenge.difficulty}
+                      </Badge>
+                    </div>
                     <span className={styles.date}>{formatRelativeTime(challenge.created_at)}</span>
                   </div>
                   <h3 className={styles.cardTitle}>{challenge.title}</h3>

@@ -27,9 +27,7 @@ async def rate_limit_db_client() -> AsyncGenerator[tuple[AsyncClient, AsyncMock]
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     redis = AsyncMock()
     redis.expire = AsyncMock(return_value=True)
@@ -108,9 +106,7 @@ async def test_rate_limit_429_includes_retry_after_header(
     blocked = await ac.get(CHALLENGES_URL)
 
     assert blocked.status_code == 429
-    assert blocked.headers.get("retry-after") == str(
-        settings.rate_limit_window_seconds
-    )
+    assert blocked.headers.get("retry-after") == str(settings.rate_limit_window_seconds)
 
 
 @pytest.mark.asyncio

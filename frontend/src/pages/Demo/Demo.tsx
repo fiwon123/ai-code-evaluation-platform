@@ -206,11 +206,14 @@ function Demo() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>See how it works</h1>
-      <p className={styles.pageSubtitle}>
-        A guided walkthrough of the evaluation pipeline, plus a live demo you
-        can try right now.
-      </p>
+      <header className={styles.header}>
+        <span className="eyebrow">Demo</span>
+        <h1 className={styles.pageTitle}>See how it works</h1>
+        <p className={styles.pageSubtitle}>
+          A guided walkthrough of the evaluation pipeline, plus a live demo you
+          can try right now.
+        </p>
+      </header>
 
       <div className={styles.walkthrough}>
         {STEPS.map((step) => (

@@ -67,6 +67,7 @@ const pythonChallenge = {
     "def test_basic():\n" +
     "    assert two_sum([2, 7, 11, 15], 9) == [0, 1]",
   language: "python",
+  difficulty: "easy",
   owner_id: "owner",
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -81,6 +82,7 @@ const goChallenge = {
     "package main\n\nimport \"testing\"\n\n" +
     'func TestLongestCommonPrefix(t *testing.T) {\n\tgot := LongestCommonPrefix([]string{"flower", "flow", "flight"})\n\tif got != "fl" {\n\t\tt.Errorf("expected fl, got %q", got)\n\t}\n}',
   language: "go",
+  difficulty: "medium",
   owner_id: "owner",
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -97,6 +99,7 @@ const jsChallenge = {
     "  assert.equal(validParentheses('()[]{}'), true);\n" +
     "});",
   language: "javascript",
+  difficulty: "medium",
   owner_id: "owner",
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",

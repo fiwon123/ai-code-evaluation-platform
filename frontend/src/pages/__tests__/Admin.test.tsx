@@ -81,6 +81,7 @@ const challenges: Challenge[] = [
     prompt: "Write two_sum",
     test_code: "def test_two_sum(): pass",
     language: "python",
+    difficulty: "easy",
     owner_id: "u1",
     created_at: "2026-09-10T10:00:00Z",
     updated_at: "2026-09-10T10:00:00Z",

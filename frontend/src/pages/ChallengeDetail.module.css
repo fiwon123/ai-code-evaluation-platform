@@ -27,6 +27,14 @@
   margin-bottom: var(--space-6);
 }
 
+.headerBadges {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .title {
   margin: 0;
   font-size: var(--font-size-3xl);

@@ -27,9 +27,7 @@ async def _build_token_response(user: User) -> TokenResponse:
 async def _find_by_identifier(db: AsyncSession, identifier: str) -> User | None:
     """Find a user by email or username."""
     result = await db.execute(
-        select(User).where(
-            or_(User.email == identifier, User.username == identifier)
-        )
+        select(User).where(or_(User.email == identifier, User.username == identifier))
     )
     return result.scalar_one_or_none()
 
@@ -38,9 +36,7 @@ async def _find_by_identifier(db: AsyncSession, identifier: str) -> User | None:
 async def register(payload: UserCreate, db: AsyncSession = Depends(get_session)) -> TokenResponse:
     """Register a new user and return an access token."""
     existing = await db.execute(
-        select(User).where(
-            or_(User.email == payload.email, User.username == payload.username)
-        )
+        select(User).where(or_(User.email == payload.email, User.username == payload.username))
     )
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(

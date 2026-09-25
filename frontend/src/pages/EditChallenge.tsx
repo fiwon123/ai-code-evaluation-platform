@@ -16,6 +16,7 @@ import {
 import { extractError } from "../utils/errors.ts";
 import { LANGUAGES, languageGuide } from "../utils/language.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
+import type { ChallengeDifficulty } from "../types.ts";
 
 export default function EditChallenge() {
   const { id } = useParams<{ id: string }>();
@@ -32,12 +33,14 @@ export default function EditChallenge() {
   const [prompt, setPrompt] = useState("");
   const [testCode, setTestCode] = useState("");
   const [language, setLanguage] = useState("python");
+  const [difficulty, setDifficulty] = useState<ChallengeDifficulty>("medium");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const guide = languageGuide(language);
   const titleId = useFieldId("title");
   const languageId = useFieldId("language");
+  const difficultyId = useFieldId("difficulty");
   const descriptionId = useFieldId("description");
   const promptId = useFieldId("prompt");
   const testCodeId = useFieldId("test-code");
@@ -59,6 +62,7 @@ export default function EditChallenge() {
         setPrompt(challenge.prompt);
         setTestCode(challenge.test_code ?? "");
         setLanguage(challenge.language ?? "python");
+        setDifficulty(challenge.difficulty ?? "medium");
         setIsOwner(challenge.owner_id === user?.id);
       } catch (err) {
           if (!cancelled) {
@@ -90,6 +94,7 @@ export default function EditChallenge() {
         prompt,
         test_code: testCode,
         language,
+        difficulty,
       });
       showToast("Challenge updated successfully.", "success");
       navigate(`/challenges/${id}`);
@@ -176,6 +181,20 @@ export default function EditChallenge() {
                     {lang.charAt(0).toUpperCase() + lang.slice(1)}
                   </option>
                 ))}
+              </SelectInput>
+            </Field>
+
+            <Field id={difficultyId} label="Difficulty">
+              <SelectInput
+                id={difficultyId}
+                value={difficulty}
+                onChange={(e) =>
+                  setDifficulty(e.target.value as ChallengeDifficulty)
+                }
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
               </SelectInput>
             </Field>
           </div>

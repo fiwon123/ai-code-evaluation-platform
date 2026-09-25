@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react";
-import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import {
@@ -29,7 +28,7 @@ function Contact() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <Badge variant="primary">Contact</Badge>
+        <span className="eyebrow">Contact</span>
         <h1 className={styles.title}>Get in touch</h1>
         <p className={styles.subtitle}>
           Questions about the platform, enterprise pricing, or contributing?

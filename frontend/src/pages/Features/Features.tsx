@@ -52,10 +52,119 @@ const FEATURES = [
   },
 ];
 
+/* ---- Mini UI mockups that convey each feature at a glance ---- */
+
+function ProviderMockup() {
+  return (
+    <div className={styles.mockup} aria-hidden="true">
+      <div className={styles.mockTitle}>LLM provider</div>
+      <div className={`${styles.providerRow} ${styles.providerSelected}`}>
+        <span className={styles.radio} /> Demo
+        <span className={styles.providerBadge}>free · no key</span>
+        <span className={styles.checkDot}>✓</span>
+      </div>
+      <div className={styles.providerRow}>
+        <span className={styles.radio} /> OpenAI
+        <span className={styles.providerSub}>gpt-4o-mini</span>
+      </div>
+      <div className={styles.providerRow}>
+        <span className={styles.radio} /> Anthropic
+        <span className={styles.providerSub}>claude-3-5-haiku</span>
+      </div>
+    </div>
+  );
+}
+
+function EditorMockup() {
+  return (
+    <div className={styles.mockup} aria-hidden="true">
+      <div className={styles.editorBar}>
+        <span className={styles.editorDot} />
+        <span className={styles.editorDot} />
+        <span className={styles.editorDot} />
+        <span className={styles.editorFile}>solution.py</span>
+      </div>
+      <div className={styles.code}>
+        <div className={styles.codeLine}>
+          <span className={styles.codeKw}>def</span>{" "}
+          <span className={styles.codeFn}>two_sum</span>(nums, target):
+        </div>
+        <div className={styles.codeLine}>
+          <span className={styles.codeKw}>for</span> i <span className={styles.codeKw}>in</span>{" "}
+          range(len(nums)):
+        </div>
+        <div className={styles.codeLine}>
+          <span className={styles.codeKw}>break</span>{" "}
+        </div>
+        <div className={styles.codeLine}>
+          <span className={styles.codeKw}>return</span> [i, j]
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TerminalMockup() {
+  return (
+    <div className={styles.mockup} aria-hidden="true">
+      <div className={styles.terminal}>
+        <div className={styles.codeLine}>
+          <span className={styles.codePrompt}>$</span> uv run pytest
+        </div>
+        <div className={styles.codeLine}>
+          <span className={styles.testPass}>✓</span> two_sum_basic passed
+        </div>
+        <div className={styles.codeLine}>
+          <span className={styles.testPass}>✓</span> two_sum_duplicates passed
+        </div>
+        <div className={styles.codeLine}>
+          <span className={styles.testFail}>✗</span> two_sum_unsorted failed
+        </div>
+        <div className={styles.codeLine}>
+          <span className={styles.codeResult}>2 passed, 1 failed</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportMockup() {
+  return (
+    <div className={styles.mockup} aria-hidden="true">
+      <div className={styles.reportHead}>
+        <div className={styles.reportScore}>88</div>
+        <div className={styles.reportHeadMeta}>
+          <div className={styles.reportScoreLabel}>Evaluation score</div>
+          <div className={styles.reportMeta}>3 tests · 142 ms · pytest</div>
+        </div>
+      </div>
+      <ul className={styles.reportList}>
+        <li className={`${styles.reportItem} ${styles.reportItemOk}`}>
+          <span className={styles.reportMark}>✓</span> two_sum_basic
+        </li>
+        <li className={`${styles.reportItem} ${styles.reportItemOk}`}>
+          <span className={styles.reportMark}>✓</span> two_sum_duplicates
+        </li>
+        <li className={`${styles.reportItem} ${styles.reportItemBad}`}>
+          <span className={styles.reportMark}>✗</span> two_sum_unsorted
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+const MOCKUPS: Record<string, () => React.JSX.Element> = {
+  multi: ProviderMockup,
+  pytest: EditorMockup,
+  sandbox: TerminalMockup,
+  report: ReportMockup,
+};
+
 function Features() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <span className="eyebrow">Features</span>
         <h1 className={styles.title}>Features</h1>
         <p className={styles.subtitle}>
           A complete, production-shaped evaluation pipeline — write challenges,
@@ -76,30 +185,33 @@ function Features() {
       </section>
 
       <section className={styles.features}>
-        {FEATURES.map((feature, index) => (
-          <div
-            className={`${styles.featureRow} ${
-              index % 2 === 0 ? styles.featureRowEven : styles.featureRowOdd
-            }`}
-            key={feature.icon}
-          >
-            <div className={styles.visual}>
-              <div className={`${styles.visualIcon} ${styles[feature.icon]}`} />
+        {FEATURES.map((feature, index) => {
+          const Mockup = MOCKUPS[feature.icon];
+          return (
+            <div
+              className={`${styles.featureRow} ${
+                index % 2 === 0 ? styles.featureRowEven : styles.featureRowOdd
+              }`}
+              key={feature.icon}
+            >
+              <div className={styles.visual}>
+                <Mockup />
+              </div>
+              <div className={styles.content}>
+                <h2 className={styles.featureTitle}>{feature.title}</h2>
+                <p className={styles.featureText}>{feature.text}</p>
+                <ul className={styles.list}>
+                  {feature.checkmarks.map((item) => (
+                    <li className={styles.listItem} key={item}>
+                      <span className={styles.check}>✓</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-            <div className={styles.content}>
-              <h2 className={styles.featureTitle}>{feature.title}</h2>
-              <p className={styles.featureText}>{feature.text}</p>
-              <ul className={styles.list}>
-                {feature.checkmarks.map((item) => (
-                  <li className={styles.listItem} key={item}>
-                    <span className={styles.check}>✓</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       <section className={styles.cta}>
