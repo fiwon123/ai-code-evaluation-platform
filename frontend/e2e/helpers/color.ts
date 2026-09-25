@@ -45,16 +45,6 @@ export function contrastRatio(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** Fully opaque, i.e. something that actually paints. */
-function isOpaque(value: string): boolean {
-  const parts = (value.match(/[\d.]+/g) ?? []).map(Number);
-  return (
-    value !== "rgba(0, 0, 0, 0)" &&
-    value !== "transparent" &&
-    (parts.length < 4 || parts[3] === 1)
-  );
-}
-
 /** Read an element's text color plus the nearest painted background behind it. */
 export async function paint(page: Page, target: Locator): Promise<Paint> {
   const handle = await target.elementHandle();
