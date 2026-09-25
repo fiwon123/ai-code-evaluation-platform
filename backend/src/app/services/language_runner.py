@@ -195,6 +195,43 @@ def parse_go_detail(output: str) -> tuple[int, int, list[dict[str, Any]]]:
     return sum(1 for d in details if d["passed"]), len(details), details
 
 
+# --- shared PASS/FAIL protocol (C, C++, Rust, PHP, Ruby, Perl, Kotlin, Lua) --
+#
+# New runtimes do not have a uniform TAP/JUnit summary, so their test
+# harnesses share one contract: every test prints exactly one line
+# ``PASS: <name>`` or ``FAIL: <name>`` (optionally followed by `` - msg``)
+# and the process exits non-zero when any test failed. The parsers below
+# count those lines, so the (passed, total) and per-test detail views stay
+# identical across all eight languages.
+_PASS_FAIL_RE = re.compile(
+    r"^(?P<status>PASS|FAIL):\s+(?P<name>.+?)(?:\s+-\s+(?P<message>.*))?$",
+    re.MULTILINE,
+)
+
+
+def parse_pass_fail(output: str) -> tuple[int, int]:
+    """Count ``PASS:`` / ``FAIL:`` lines from a harness run."""
+    matches = list(_PASS_FAIL_RE.finditer(output))
+    passed = sum(1 for m in matches if m.group("status") == "PASS")
+    return passed, len(matches)
+
+
+def parse_pass_fail_detail(output: str) -> tuple[int, int, list[dict[str, Any]]]:
+    """Detailed PASS/FAIL parsing: one row per printed test line."""
+    details = [
+        {
+            "name": match.group("name"),
+            "passed": match.group("status") == "PASS",
+            "message": (match.group("message") or "").strip() or None,
+        }
+        for match in _PASS_FAIL_RE.finditer(output)
+    ]
+    if not details:
+        passed, total = parse_pass_fail(output)
+        return passed, total, []
+    return sum(1 for d in details if d["passed"]), len(details), details
+
+
 # --- runner registry --------------------------------------------------------
 
 # -rA: after the run pytest prints a "short test summary info" block naming
@@ -297,6 +334,118 @@ GO_RUNNER = LanguageRunner(
     },
 )
 
+# --- new runtimes (shared PASS/FAIL protocol) -------------------------------
+#
+# Compiled languages write the test binary/jar into a fresh mktemp dir so
+# concurrent host-side evaluations never clobber a shared artifact (inside
+# Docker /tmp is per-container tmpfs, so it is harmless there too).
+_COMPILE_BUDGET = settings.evaluation_timeout + 30
+
+C_RUNNER = LanguageRunner(
+    language="c",
+    solution_filename="solution.c",
+    test_filename="test_solution.c",
+    command=[
+        "sh",
+        "-c",
+        "d=$(mktemp -d) && "
+        'gcc -std=c11 -Wall solution.c test_solution.c -o "$d/tests" && '
+        '"$d/tests"; rc=$?; rm -rf "$d"; exit $rc',
+    ],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+    timeout=_COMPILE_BUDGET,
+)
+
+CPP_RUNNER = LanguageRunner(
+    language="cpp",
+    solution_filename="solution.cpp",
+    test_filename="test_solution.cpp",
+    command=[
+        "sh",
+        "-c",
+        "d=$(mktemp -d) && "
+        'g++ -std=c++17 -Wall solution.cpp test_solution.cpp -o "$d/tests" && '
+        '"$d/tests"; rc=$?; rm -rf "$d"; exit $rc',
+    ],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+    timeout=_COMPILE_BUDGET,
+)
+
+# The test file is the crate root and pulls the solution in with `mod
+# solution;` (module resolution finds solution.rs beside the crate root).
+RUST_RUNNER = LanguageRunner(
+    language="rust",
+    solution_filename="solution.rs",
+    test_filename="test_solution.rs",
+    command=[
+        "sh",
+        "-c",
+        "d=$(mktemp -d) && "
+        'rustc --edition 2021 -O test_solution.rs -o "$d/tests" && '
+        '"$d/tests"; rc=$?; rm -rf "$d"; exit $rc',
+    ],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+    timeout=_COMPILE_BUDGET,
+)
+
+# Interpreted runtimes: the test file loads the solution (require/dofile)
+# and runs in the same process.
+PHP_RUNNER = LanguageRunner(
+    language="php",
+    solution_filename="solution.php",
+    test_filename="test_solution.php",
+    command=["php", "test_solution.php"],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+)
+
+RUBY_RUNNER = LanguageRunner(
+    language="ruby",
+    solution_filename="solution.rb",
+    test_filename="test_solution.rb",
+    command=["ruby", "test_solution.rb"],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+)
+
+PERL_RUNNER = LanguageRunner(
+    language="perl",
+    solution_filename="solution.pl",
+    test_filename="test_solution.pl",
+    command=["perl", "test_solution.pl"],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+)
+
+LUA_RUNNER = LanguageRunner(
+    language="lua",
+    solution_filename="solution.lua",
+    test_filename="test_solution.lua",
+    # `lua5.4` (not `lua`) — the Debian package installs the versioned binary.
+    command=["lua5.4", "test_solution.lua"],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+)
+
+KOTLIN_RUNNER = LanguageRunner(
+    language="kotlin",
+    solution_filename="solution.kt",
+    test_filename="test_solution.kt",
+    command=[
+        "sh",
+        "-c",
+        "d=$(mktemp -d) && "
+        'kotlinc solution.kt test_solution.kt -include-runtime -d "$d/tests.jar" && '
+        'java -jar "$d/tests.jar"; rc=$?; rm -rf "$d"; exit $rc',
+    ],
+    parse=parse_pass_fail,
+    parse_detail=parse_pass_fail_detail,
+    timeout=_COMPILE_BUDGET,
+)
+
 _RUNNERS: dict[str, LanguageRunner] = {
     runner.language: runner
     for runner in (
@@ -305,6 +454,14 @@ _RUNNERS: dict[str, LanguageRunner] = {
         TYPESCRIPT_RUNNER,
         JAVA_RUNNER,
         GO_RUNNER,
+        C_RUNNER,
+        CPP_RUNNER,
+        RUST_RUNNER,
+        PHP_RUNNER,
+        RUBY_RUNNER,
+        PERL_RUNNER,
+        LUA_RUNNER,
+        KOTLIN_RUNNER,
     )
 }
 
