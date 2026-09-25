@@ -1,10 +1,16 @@
 from abc import ABC, abstractmethod
 
-SUPPORTED_LANGUAGES = {"python", "javascript", "typescript", "java", "go"}
+from app.services.languages import EXECUTABLE_LANGUAGES
+
+#: Languages the LLM providers can generate code for. Display-only catalog
+#: languages (see ``app.services.languages``) intentionally fail validation
+#: here so generation reports a clean "not supported" error.
+SUPPORTED_LANGUAGES = EXECUTABLE_LANGUAGES
 
 # Language-aware system prompts: each model must emit only source code, never
 # prose or markdown fences. Go additionally requires an explicit `package`
-# clause so `go test` can compile the solution.
+# clause so `go test` can compile the solution; C/C++/Rust/Kotlin need a
+# visible `main`/entry point so the harness can compile and run them.
 _SYSTEM_PROMPTS: dict[str, str] = {
     "python": (
         "You are a coding assistant. Write a complete, correct Python solution "
@@ -34,6 +40,60 @@ _SYSTEM_PROMPTS: dict[str, str] = {
         "the problem described by the user. The file must start with "
         "`package main`. Output ONLY the source code with no markdown fences, "
         "no explanations, and no tests."
+    ),
+    "c": (
+        "You are a coding assistant. Write a complete, correct C11 solution for "
+        "the problem described by the user. The file must start with the "
+        "required includes and define the functions the tests call; do not add "
+        "a main() unless the tests need one. Output ONLY the source code with "
+        "no markdown fences, no explanations, and no tests."
+    ),
+    "cpp": (
+        "You are a coding assistant. Write a complete, correct C++17 solution "
+        "for the problem described by the user. The file must include the "
+        "needed standard headers and define the functions the tests call; do "
+        "not add a main() unless the tests need one. Output ONLY the source "
+        "code with no markdown fences, no explanations, and no tests."
+    ),
+    "rust": (
+        "You are a coding assistant. Write a complete, correct Rust solution "
+        "for the problem described by the user. Define the functions or items "
+        "the tests call; do not add a main() unless the tests need one. Output "
+        "ONLY the source code with no markdown fences, no explanations, and no "
+        "tests."
+    ),
+    "php": (
+        "You are a coding assistant. Write a complete, correct PHP solution "
+        "for the problem described by the user. Use `<?php` (no closing tag) "
+        "and define the functions the tests call. Output ONLY the source code "
+        "with no markdown fences, no explanations, and no tests."
+    ),
+    "ruby": (
+        "You are a coding assistant. Write a complete, correct Ruby solution "
+        "for the problem described by the user. Define the methods the tests "
+        "call. Output ONLY the source code with no markdown fences, no "
+        "explanations, and no tests."
+    ),
+    "perl": (
+        "You are a coding assistant. Write a complete, correct Perl solution "
+        "for the problem described by the user. Start with `use strict;` and "
+        "`use warnings;` and define the subroutines the tests call. Output "
+        "ONLY the source code with no markdown fences, no explanations, and "
+        "no tests."
+    ),
+    "kotlin": (
+        "You are a coding assistant. Write a complete, correct Kotlin solution "
+        "for the problem described by the user. Put top-level functions or a "
+        "solvable class named `Solution` where the tests expect it; do not "
+        "wrap code in a package. Output ONLY the source code with no markdown "
+        "fences, no explanations, and no tests."
+    ),
+    "lua": (
+        "You are a coding assistant. Write a complete, correct Lua 5.4 "
+        "solution for the problem described by the user. Define the functions "
+        "the tests call as globals (no module/return wrapping). Output ONLY "
+        "the source code with no markdown fences, no explanations, and no "
+        "tests."
     ),
 }
 
