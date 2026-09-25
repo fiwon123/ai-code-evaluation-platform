@@ -1,3 +1,4 @@
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import { Link } from "react-router-dom";
 import styles from "./Features.module.css";
 
@@ -165,7 +166,7 @@ function Features() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">Features</span>
-        <h1 className={styles.title}>Features</h1>
+        <PageTitle size="lg" className={styles.title}>Features</PageTitle>
         <p className={styles.subtitle}>
           A complete, production-shaped evaluation pipeline — write challenges,
           choose a provider, have an LLM generate the solution, and verify it

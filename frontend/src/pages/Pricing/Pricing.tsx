@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import styles from "./Pricing.module.css";
 
 const TIERS = [
@@ -89,7 +90,7 @@ function Pricing() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">Pricing</span>
-        <h1 className={styles.pageTitle}>Simple, transparent pricing</h1>
+        <PageTitle size="lg" className={styles.pageTitle}>Simple, transparent pricing</PageTitle>
         <p className={styles.pageSubtitle}>
           Start free and scale as your evaluation volume grows.
         </p>

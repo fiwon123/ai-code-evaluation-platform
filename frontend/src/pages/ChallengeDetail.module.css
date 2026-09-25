@@ -35,10 +35,9 @@
   justify-content: flex-end;
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
   margin: 0;
-  font-size: var(--font-size-3xl);
-  line-height: 1.2;
 }
 
 .layout {

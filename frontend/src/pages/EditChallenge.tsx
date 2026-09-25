@@ -5,6 +5,7 @@ import { challengesApi } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
+import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import {
   Field,
@@ -149,7 +150,7 @@ export default function EditChallenge() {
           <span aria-hidden="true">/</span>
           <span aria-current="page">Edit</span>
         </nav>
-        <h1>Edit challenge</h1>
+        <PageTitle>Edit challenge</PageTitle>
         <p className={styles.subtitle}>
           Update the task description, the prompt your LLM will see, or the
           tests used to grade the generated solution.

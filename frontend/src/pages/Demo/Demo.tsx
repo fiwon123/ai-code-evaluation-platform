@@ -9,6 +9,7 @@ import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
@@ -210,7 +211,7 @@ function Demo() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">Demo</span>
-        <h1 className={styles.pageTitle}>See how it works</h1>
+        <PageTitle size="lg" className={styles.pageTitle}>See how it works</PageTitle>
         <p className={styles.pageSubtitle}>
           A guided walkthrough of the evaluation pipeline, plus a live demo you
           can try right now.

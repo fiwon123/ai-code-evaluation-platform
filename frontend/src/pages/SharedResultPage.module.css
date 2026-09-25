@@ -19,9 +19,9 @@
   gap: var(--space-3);
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
   margin: 0;
-  font-size: var(--font-size-3xl);
 }
 
 .promptLabel {

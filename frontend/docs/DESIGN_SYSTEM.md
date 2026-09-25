@@ -47,6 +47,30 @@ inverse scheme (light text on dark surfaces). Code surfaces
 Text on colored/accent surfaces uses `--color-on-accent` (e.g. button labels,
 active pagination page, avatars) instead of hardcoded white.
 
+### Page titles
+
+Every page `<h1>` renders through the shared `PageTitle` component
+(`src/components/PageTitle/PageTitle.tsx`) — not a per-page class. It supplies
+the gradient, weight and tracking; pages pass only `size` (`sm` auth/admin
+headings, `md` app pages, `lg` landing pages), an optional `variant="hero"`
+(the animated home hero), and a `className` for **layout** only (margins,
+max-width, centering).
+
+The gradient comes from `--gradient-title`, which is composed from the
+per-theme primary tokens rather than fixed hex values:
+
+```css
+--gradient-title: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+```
+
+That composition is why titles need **no light-mode override**: light resolves
+to `#1d4ed8 → #1e40af` (5.9:1 and 7.8:1 on `--color-bg`) and dark to
+`#3b82f6 → #60a5fa` (5.2:1 and 7.5:1), so the gradient is legible in both
+themes. Do not "fix" a title that looks off in light mode by neutralizing the
+clip (`background: none; background-clip: initial`) — that reintroduces the
+per-page divergence the component exists to remove, and
+`src/styles/theme-contrast.test.ts` fails on both that and on a contrast drop.
+
 ## Color tokens
 
 ### Semantic palette (both themes)

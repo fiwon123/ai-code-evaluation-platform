@@ -5,6 +5,7 @@ import Card from "../components/Card/Card.tsx";
 import GithubOAuthButton from "../components/GithubOAuthButton.tsx";
 import { Field, TextInput, useFieldId } from "../components/Input/Input.tsx";
 import Logo from "../components/Logo/Logo.tsx";
+import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { extractError, extractFieldErrors } from "../utils/errors.ts";
 import styles from "./Login.module.css";
@@ -49,7 +50,7 @@ function Login() {
       <Card className={styles.card}>
         <div className={styles.header}>
           <Logo size="lg" />
-          <h1 className={styles.title}>Welcome back</h1>
+          <PageTitle size="sm" className={styles.title}>Welcome back</PageTitle>
           <p className={styles.subtitle}>Log in to your account</p>
         </div>
         <GithubOAuthButton onError={setError} />

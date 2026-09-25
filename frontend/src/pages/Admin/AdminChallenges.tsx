@@ -5,6 +5,7 @@ import Card from "../../components/Card/Card.tsx";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
 import { TextInput } from "../../components/Input/Input.tsx";
 import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
@@ -110,7 +111,7 @@ function AdminChallenges() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>Challenges</h1>
+        <PageTitle size="sm" className={styles.title}>Challenges</PageTitle>
         <p className={styles.subtitle}>Review and remove challenges.</p>
       </div>
 

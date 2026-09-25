@@ -18,6 +18,7 @@ import {
   languageGuide,
   languageLabel,
 } from "../utils/language.ts";
+import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import type { ChallengeDifficulty } from "../types.ts";
 
@@ -86,7 +87,7 @@ export default function CreateChallenge() {
           <span aria-hidden="true">/</span>
           <span aria-current="page">New challenge</span>
         </nav>
-        <h1>Create a challenge</h1>
+        <PageTitle>Create a challenge</PageTitle>
           <p className={styles.subtitle}>
             Define a coding task, the prompt your LLM will see, and the tests
             used to grade the generated solution.

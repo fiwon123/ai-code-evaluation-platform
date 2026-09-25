@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Card from "../../components/Card/Card.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { adminApi } from "../../services/api.ts";
@@ -76,7 +77,7 @@ function AdminSubmissions() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>Submissions</h1>
+        <PageTitle size="sm" className={styles.title}>Submissions</PageTitle>
         <p className={styles.subtitle}>Every evaluation run across the platform.</p>
       </div>
 

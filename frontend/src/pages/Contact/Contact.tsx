@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import {
   Field,
   TextAreaInput,
@@ -29,7 +30,7 @@ function Contact() {
     <div className={styles.page}>
       <div className={styles.header}>
         <span className="eyebrow">Contact</span>
-        <h1 className={styles.title}>Get in touch</h1>
+        <PageTitle size="lg" className={styles.title}>Get in touch</PageTitle>
         <p className={styles.subtitle}>
           Questions about the platform, enterprise pricing, or contributing?
           We'd love to hear from you.
