@@ -75,6 +75,17 @@ non-text contrast, and darkening `--color-primary` would also drag
 against the dark page. Flipping the text is the only option that satisfies both
 criteria. `e2e/contrast.spec.ts` measures all of this in both themes.
 
+#### Hover surfaces
+
+`--color-surface-hover` is the state a row or list item rests in under the pointer, and it **darkens in both palettes** — the light palette steps down from `#ffffff`, the dark palette from `#131d33`. That is against the usual dark-UI instinct to lighten, and the reason is measurable: the dark palette's `--color-text-muted` (`#7c8ca6`) is only 4.92:1 on the surface, so there is 0.48 of headroom above AA for 12px text, and the obvious hover (`#1c2846`) spends it — the muted cell in each admin row (the email under the username) drops to **4.27:1**. Stepping down instead keeps both palettes behaving identically and *improves* muted contrast to 5.43:1 while hovered:
+
+| Palette | Surface | Hover | Step | Muted text on hover |
+|---------|---------|-------|------|---------------------|
+| light | `#ffffff` | `#e3eaf7` | 1.21:1 | 6.27:1 |
+| dark | `#131d33` | `#0d1322` | 1.10:1 | 5.43:1 |
+
+Both hovers are also kept clear of `--color-surface-secondary` / `--color-surface-raised`, so "hovered" and "secondary" or "raised" never read as the same state. A hover only *slightly* different from its surface is worse than a missing one: it looks broken rather than absent, so the palette invariant in `design-tokens.test.ts` enforces a 1.05:1 minimum step (GitHub's light-theme row hover is 1.07:1).
+
 ### Page titles
 
 Every page `<h1>` renders through the shared `PageTitle` component
@@ -143,6 +154,7 @@ below.
 | `--color-surface` | Cards, panels, table rows |
 | `--color-surface-secondary` | Nested surfaces |
 | `--color-surface-raised` | Raised surfaces (menus, popovers) |
+| `--color-surface-hover` | Resting state for a hoverable surface (table rows, list items) |
 | `--color-divider` | Dividers and separators |
 | `--color-border` | Borders |
 | `--color-border-hover` | Border hover states |

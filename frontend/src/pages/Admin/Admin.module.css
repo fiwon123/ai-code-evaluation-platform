@@ -148,8 +148,12 @@
   border-bottom: none;
 }
 
-.table tbody tr:hover {
-  background: var(--color-surface);
+.table tbody tr:hover,
+/* Keyboard parity: the rows hold links and buttons, so focus lands INSIDE the
+   row rather than on it. Without this, tabbing through the table gives no
+   indication of which row you are on. */
+.table tbody tr:focus-within {
+  background: var(--color-surface-hover);
 }
 
 .cellStrong {
