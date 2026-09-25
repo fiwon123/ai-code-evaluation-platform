@@ -129,6 +129,14 @@ describe("code surface severity contrast", () => {
     const module = CODE_BLOCK_CSS;
     expect(module, "CodeBlock.module.css must be reachable through the glob").not.toBe("");
     const declarations = [...module.matchAll(/color:\s*([^;]+);/g)].map((m) => m[1]!.trim());
+    // Deliberately a regex rather than a plain prefix comparison. oxlint's
+    // prefer-string-starts-ends-with rule suggests rewriting this, but
+    // `design-tokens.test.ts` scans source text — comments included — for
+    // `var(--color-` references, so a quoted form of the prefix reads as a
+    // reference to a token that does not exist. The backslash is what keeps the
+    // pattern below invisible to that scan. The suggested rewrite fails it, and
+    // so does spelling the prefix out in prose, hence the description.
+    // oxlint-disable-next-line unicorn/prefer-string-starts-ends-with
     const severityColors = declarations.filter((value) => /^var\(--color-code-/.test(value));
     expect(severityColors.length).toBeGreaterThanOrEqual(CODE_SEVERITY_TOKENS.length);
     for (const value of severityColors) {

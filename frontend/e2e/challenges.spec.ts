@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHALLENGES, mockApi } from "./data";
+import { mockApi } from "./data";
 
 /**
  * Challenges list (public route) with mocked API responses.

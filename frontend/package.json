@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint src/",
-    "lint:fix": "oxlint src/ --fix",
+    "lint": "oxlint src/ e2e/ --deny-warnings",
+    "lint:fix": "oxlint src/ e2e/ --deny-warnings --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
