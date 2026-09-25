@@ -107,4 +107,21 @@ describe("landing pages", () => {
     expect(screen.getByText("✓ two_sum_basic")).toBeInTheDocument();
     expect(screen.getByText("✗ two_sum_unsorted")).toBeInTheDocument();
   });
+
+  it("renders the Home stats strip and guest teaser", () => {
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Sample figures for the prototype")).toBeInTheDocument();
+    expect(screen.getByText("Languages supported")).toBeInTheDocument();
+    expect(screen.getByText("LLM providers")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "See a sample evaluation — no account needed",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Try the live demo")).toBeInTheDocument();
+  });
 });
