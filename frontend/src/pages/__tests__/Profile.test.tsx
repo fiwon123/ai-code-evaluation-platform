@@ -132,6 +132,7 @@ describe("Profile", () => {
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
     });
     mockChallengesList.mockImplementation((params) => {
       const items = params?.owner_id

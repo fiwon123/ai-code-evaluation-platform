@@ -19,6 +19,7 @@ function mockAuth(overrides: Record<string, unknown> = {}) {
     login: vi.fn(),
     register: vi.fn().mockResolvedValue(undefined),
     logout: vi.fn(),
+    loginWithOAuth: vi.fn(),
     ...overrides,
   });
 }
@@ -143,5 +144,13 @@ describe("Register", () => {
       "href",
       "/login",
     );
+  });
+
+  it("offers GitHub OAuth sign-up alongside the password form", () => {
+    mockAuth();
+    renderRegister();
+    expect(
+      screen.getByRole("button", { name: "Continue with GitHub" }),
+    ).toBeInTheDocument();
   });
 });

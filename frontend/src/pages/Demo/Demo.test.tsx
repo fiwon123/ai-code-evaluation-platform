@@ -54,7 +54,8 @@ const loggedInAuth = () => ({
   initializing: false,
   login: vi.fn(),
   register: vi.fn(),
-  logout: vi.fn(),
+logout: vi.fn(),
+  loginWithOAuth: vi.fn(),
 });
 
 const pythonChallenge = {
@@ -126,6 +127,7 @@ describe("Demo page preview", () => {
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
     });
     mockUseSubmissionSocket.mockReturnValue({
       liveSubmission: null,

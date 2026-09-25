@@ -24,6 +24,7 @@ const Features = lazy(() => import("./pages/Features/Features.tsx"));
 const Home = lazy(() => import("./pages/Home/Home.tsx"));
 const Login = lazy(() => import("./pages/Login.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const OAuthCallback = lazy(() => import("./pages/OAuthCallback.tsx"));
 const Pricing = lazy(() => import("./pages/Pricing/Pricing.tsx"));
 const Profile = lazy(() => import("./pages/Profile/Profile.tsx"));
 const Register = lazy(() => import("./pages/Register.tsx"));
@@ -54,6 +55,7 @@ function App() {
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/auth/callback" element={<OAuthCallback />} />
                 <Route path="/challenges" element={<Challenges />} />
                 <Route
                   path="/challenges/:id"

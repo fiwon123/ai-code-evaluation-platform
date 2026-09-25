@@ -11,6 +11,13 @@ class TokenResponse(BaseModel):
     user: UserRead
 
 
+class OAuthAuthorizeResponse(BaseModel):
+    """OAuth authorize step — the provider URL the browser should be sent to."""
+
+    authorization_url: str
+    state: str
+
+
 class ChangePasswordRequest(BaseModel):
     """Payload for changing the current user's password."""
 

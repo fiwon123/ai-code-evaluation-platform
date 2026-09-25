@@ -105,6 +105,7 @@ describe("Challenges", () => {
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
     });
     mockServerSideList();
   });

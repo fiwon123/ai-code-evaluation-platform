@@ -30,6 +30,7 @@ vi.mock("../context/AuthContext.tsx", () => ({
     login: vi.fn(),
     register: vi.fn(),
     logout: vi.fn(),
+    loginWithOAuth: vi.fn(),
   }),
 }));
 

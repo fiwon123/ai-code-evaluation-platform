@@ -65,7 +65,8 @@ function mockOwnerUser() {
     initializing: false,
     login: vi.fn(),
     register: vi.fn(),
-    logout: vi.fn(),
+logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
   });
 }
 
@@ -129,7 +130,8 @@ describe("EditChallenge", () => {
       initializing: false,
       login: vi.fn(),
       register: vi.fn(),
-      logout: vi.fn(),
+logout: vi.fn(),
+    loginWithOAuth: vi.fn(),
     });
 
     renderPage();

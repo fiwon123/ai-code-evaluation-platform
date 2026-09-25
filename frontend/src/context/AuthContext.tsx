@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { authApi, clearToken, getToken, setToken } from "../services/api.ts";
-import type { User } from "../types.ts";
+import type { OAuthProvider, User } from "../types.ts";
 
 interface AuthContextValue {
   user: User | null;
@@ -16,6 +16,7 @@ interface AuthContextValue {
   initializing: boolean;
   login: (identifier: string, password: string) => Promise<void>;
   register: (email: string, username: string, password: string) => Promise<void>;
+  loginWithOAuth: (provider: OAuthProvider, code: string, state: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -77,6 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const loginWithOAuth = useCallback(
+    async (provider: OAuthProvider, code: string, state: string) => {
+      const res = await authApi.oauthCallback(provider, code, state);
+      setToken(res.access_token);
+      setTokenState(res.access_token);
+      setUser(res.user);
+    },
+    [],
+  );
+
   const logout = useCallback(() => {
     clearToken();
     setTokenState(null);
@@ -84,8 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, token, initializing, login, register, logout }),
-    [user, token, initializing, login, register, logout],
+    () => ({ user, token, initializing, login, register, loginWithOAuth, logout }),
+    [user, token, initializing, login, register, loginWithOAuth, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

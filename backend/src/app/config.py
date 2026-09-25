@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24  # 24 hours
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # OAuth2 (GitHub authorization-code flow)
+    #: OAuth state nonces are signed with the JWT secret; no extra secret needed.
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    #: Browser redirect destination after the provider authorizes — the
+    #: frontend OAuth callback route. Must match the provider app registration.
+    oauth_callback_url: str = "http://localhost:5173/auth/callback"
+    #: How long an OAuth state nonce stays valid (minutes).
+    oauth_state_expire_minutes: int = 10
+
     # Evaluation pipeline
     llm_provider: str = "demo"  # default provider: demo | openai | anthropic
     evaluation_timeout: int = 30  # seconds for test execution
