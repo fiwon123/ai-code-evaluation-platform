@@ -355,6 +355,184 @@ h4 { font-size: var(--font-size-xl); }
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
+/* ---- Ambient motion layer (issue #221) -------------------------------
+   The landing hero and the marketing pages share one set of ambient
+   decorations so a redesign of one page cannot leave the others feeling
+   flatter. Everything here is deliberately ambient: slow, looping, and
+   compositor-only (transform/opacity), so the browser never has to
+   re-layout or re-paint a frame.
+
+   No new color tokens were introduced. Tints come from `color-mix()` over
+   tokens that both palettes already define, which keeps the design-system
+   doc in sync by construction instead of by review. ---- */
+
+/* Easings. Kept as tokens (not literals) so the ambient layer and the
+   interaction layer can share a motion vocabulary. */
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-ambient: 24s;
+  --duration-float: 14s;
+}
+
+/* Slow counter-drift for the soft colour blobs behind the hero. Sized in
+   `em` so a blob scales with its own font-size. */
+@keyframes auroraDrift {
+  0%,
+  100% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, 4%, 0) scale(1.15);
+  }
+  66% {
+    transform: translate3d(-2%, 7%, 0) scale(0.92);
+  }
+}
+
+/* Pans the background grid so the page reads as a live canvas rather than a
+   static texture. Animating `background-position` repaints the grid but never
+   re-lays-out, and the pan distance is exactly one cell of `.codeGrid`'s
+   `background-size`, so the texture loops seamlessly. */
+@keyframes gridPan {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 48px 48px;
+  }
+}
+
+/* Vertical float for decorative code fragments. Each fragment gets a
+   different `animation-delay` in the markup, which is what keeps a dozen
+   fragments from moving in lockstep. */
+@keyframes floatCode {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.28;
+  }
+  50% {
+    transform: translate3d(0, -22px, 0);
+    opacity: 0.75;
+  }
+}
+
+/* Diagonal light pass for panel edges and primary buttons. Runs once on
+   hover/focus, so it costs nothing while the page is idle. */
+@keyframes sheenSweep {
+  from {
+    transform: translate3d(-120%, 0, 0);
+  }
+  to {
+    transform: translate3d(120%, 0, 0);
+  }
+}
+
+/* A single line travelling down the terminal, evoking a running test job. */
+@keyframes scanline {
+  0% {
+    transform: translate3d(0, -100%, 0);
+    opacity: 0;
+  }
+  12%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 400%, 0);
+    opacity: 0;
+  }
+}
+
+/* Sweeps a highlight across a section as it enters the viewport. Only
+   engaged inside the `@supports` block below, so browsers without
+   scroll-driven animations never see the element dimmed. */
+@keyframes viewReveal {
+  from {
+    opacity: 0.25;
+    transform: translate3d(0, 40px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Positioning context for ambient decoration. `aria-hidden` decoration
+   lives inside these, so they must never intercept a click. */
+.ambientLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Blueprint grid, faded out towards the edges so it never fights the copy
+   sitting on top of it. */
+.codeGrid {
+  position: absolute;
+  inset: -20%;
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--color-primary) 12%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-primary) 12%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 48px 48px;
+  mask-image: radial-gradient(
+    ellipse 70% 60% at 50% 40%,
+    #000 30%,
+    transparent 100%
+  );
+  animation: gridPan 30s linear infinite alternate;
+}
+
+/* Decorative monospace fragment. Colours are inherited from the layer it
+   sits in, so fragments inherit `--color-text-muted` from the page. */
+.codeFragment {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  opacity: 0.4;
+  user-select: none;
+  will-change: transform, opacity;
+  animation: floatCode var(--duration-float) ease-in-out infinite;
+}
+
+/* Every ambient class above must stop moving under reduced motion. Kept in
+   one block so a new decoration cannot forget the opt-out. (The hero's
+   colour blobs are declared in the Home module and opt out there.) */
+@media (prefers-reduced-motion: reduce) {
+  .codeGrid,
+  .codeFragment {
+    animation: none;
+    opacity: 0.3;
+  }
+}
+
+/* Scroll-driven reveals, opt-in per element and strictly additive: the
+   `from` state is only applied where the browser actually supports the
+   timeline, so a Firefox user still sees the static page. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .scrollReveal {
+      animation: viewReveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 26%;
+    }
+  }
+}
+
 /* Line clamp helper */
 .lineClamp2 {
   display: -webkit-box;
