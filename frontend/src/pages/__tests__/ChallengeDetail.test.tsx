@@ -300,17 +300,17 @@ describe("ChallengeDetail", () => {
     expect(screen.getByText("90%")).toBeInTheDocument();
     expect(screen.getAllByText("Best")).toHaveLength(1);
     expect(screen.getByText("avg over 2 runs")).toBeInTheDocument();
-    // Anthropic + gemini + ollama have no runs → placeholder cards.
-    expect(screen.getAllByText("No runs yet.")).toHaveLength(3);
+    // Anthropic + gemini + groq + ollama have no runs → placeholder cards.
+    expect(screen.getAllByText("No runs yet.")).toHaveLength(4);
   });
 
   it("shows placeholder cards when nothing has run", async () => {
     renderPage();
     await screen.findByRole("heading", { name: "Two Sum" });
     await screen.findByText("Compare providers");
-    // All five providers are listed with a run affordance.
-    expect(screen.getAllByText("No runs yet.")).toHaveLength(5);
-    expect(screen.getAllByRole("button", { name: "Run" })).toHaveLength(5);
+    // All six providers are listed with a run affordance.
+    expect(screen.getAllByText("No runs yet.")).toHaveLength(6);
+    expect(screen.getAllByRole("button", { name: "Run" })).toHaveLength(6);
   });
 
   it("runs the demo provider from the comparison panel", async () => {

@@ -4,7 +4,7 @@ import styles from "./Features.module.css";
 
 const PIPELINE = [
   { icon: "📝", label: "Write", desc: "Prompt + tests" },
-  { icon: "🤖", label: "Pick", desc: "5 providers · demo is free" },
+  { icon: "🤖", label: "Pick", desc: "6 providers · demo is free" },
   { icon: "⚙️", label: "Generate", desc: "LLM writes code" },
   { icon: "🧪", label: "Run", desc: "Your suite, sandboxed" },
   { icon: "📊", label: "Score", desc: "Pass/fail + report" },
@@ -14,7 +14,7 @@ const FEATURES = [
   {
     icon: "multi",
     title: "Multi-provider code generation",
-    text: "Run each challenge across OpenAI, Anthropic, Gemini, a local Ollama server, or the free demo provider — provider is chosen per submission.",
+    text: "Run each challenge across OpenAI, Anthropic, Gemini, Groq, a local Ollama server, or the free demo provider — provider is chosen per submission.",
     checkmarks: [
       "OpenAI, Anthropic + Gemini integrations",
       "Free demo provider and local Ollama — no API keys required",

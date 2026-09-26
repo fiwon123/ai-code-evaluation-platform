@@ -31,7 +31,7 @@ const STEPS = [
   {
     icon: "🤖",
     title: "Submit for evaluation",
-    text: "Pick a provider — OpenAI, Anthropic, Gemini, a local Ollama server, or the free demo model — and submit. The platform records your submission and kicks off generation.",
+    text: "Pick a provider — OpenAI, Anthropic, Gemini, Groq, a local Ollama server, or the free demo model — and submit. The platform records your submission and kicks off generation.",
   },
   {
     icon: "⚙️",

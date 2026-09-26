@@ -58,6 +58,21 @@ def mock_redis_client() -> AsyncMock:
     return redis
 
 
+def fake_provider(**attrs) -> object:
+    """Build a stand-in provider for the generation seam.
+
+    Subclasses the real :class:`LLMProvider` so the fakes satisfy the whole
+    interface the pipeline uses — the worker closes every provider it builds
+    (a repair chain makes one per attempt), and a bare object would fail on
+    ``close()`` for reasons that have nothing to do with the test.
+
+    ``generate_code`` must be supplied by the caller.
+    """
+    from app.services.llm_providers.base import LLMProvider
+
+    return type("FakeProvider", (LLMProvider,), attrs)()
+
+
 @pytest_asyncio.fixture
 async def client(
     mock_db_session: AsyncMock, mock_redis_client: AsyncMock

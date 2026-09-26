@@ -21,6 +21,7 @@ from app.models.submission import Submission
 from app.models.user import User
 from app.services.evaluation import EvaluationOutcome
 from app.tasks.evaluate import _run_submission_evaluation
+from tests.conftest import fake_provider as _fake_provider
 
 #: The seeded challenge's suite, used to assert it is not sent to the provider.
 TEST_SOURCE_MARKER = "test_no_solution"
@@ -115,7 +116,7 @@ class _Harness:
         for key, value in (settings_overrides or {}).items():
             monkeypatch.setattr(settings, key, value)
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
+            "app.services.llm_fallback.get_llm_provider",
             lambda name, api_key=None, model=None: self,
         )
         monkeypatch.setattr("app.tasks.evaluate.evaluate_code", self._evaluate)
@@ -127,6 +128,15 @@ class _Harness:
         return (
             f"# generated for attempt {len(self.calls)}\ndef two_sum(nums, target):\n    return []"
         )
+
+    def close(self):
+        """No-op — the harness holds no transport.
+
+        Still part of the provider interface: the worker closes every provider
+        it builds (a repair chain makes one per attempt), so the stand-in has to
+        answer it or the tests would fail on plumbing rather than behaviour.
+        """
+        self.closed = getattr(self, "closed", 0) + 1
 
     def _evaluate(self, **kwargs):
         return self.outcomes[min(len(self.calls) - 1, len(self.outcomes) - 1)]
@@ -434,8 +444,8 @@ class TestRepairFailures:
             raise RuntimeError(f"auth failed with {key}")
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type("P", (), {"generate_code": leak})(),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=leak),
         )
 
         _run_submission_evaluation(session, submission_id, api_key=key)
