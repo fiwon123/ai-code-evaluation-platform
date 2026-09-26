@@ -65,27 +65,60 @@ const PAGE_GROUP: Record<string, Rhythm> = {
   "Pricing/Pricing.module.css": "marketing",
   "Admin/Admin.module.css": "app",
   "Challenges.module.css": "app",
+  "CreateChallenge.module.css": "app",
+  "EditChallenge.module.css": "app",
+  "NotFound.module.css": "app",
   "Profile/Profile.module.css": "app",
   "ChallengeDetail.module.css": "detail",
   "SharedResultPage.module.css": "detail",
   "SubmissionDetail.module.css": "detail",
 };
 
+/**
+ * Pages that carry their rhythm in their own top-level sections.
+ *
+ * `Home` opens with a full-bleed hero — a gradient wash and two ambient blobs
+ * that are meant to run to the top of the viewport — so wrapping it in a
+ * `.page` shell with padding would push the artwork down and change the design.
+ * Its sections are therefore self-paced, and the gutter is checked on each of
+ * them rather than skipped.
+ *
+ * This is the third category, and it exists because the lock used to have only
+ * two: classified, or ignored. `Home` was in neither, so nothing checked it —
+ * which is how `.cta` ended up on an 8-unit gutter while the app was on 6.
+ */
+const SELF_PACED: Record<string, string[]> = {
+  "Home/Home.module.css": [".hero", ".section", ".cta"],
+};
+
+
 function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
-/** The `padding` shorthand of a page's `.page` rule, normalised to three sides. */
-function shellPadding(css: string): string[] | null {
-  const rule = /\.page\s*\{([^}]*)\}/.exec(stripComments(css));
-  const value = rule?.[1].match(/padding:\s*([^;]+);/)?.[1];
-  if (!value) return null;
+/** Normalise a `padding` shorthand to `[top, side, bottom]`, or null if the
+ *  value is not a shorthand this test understands. */
+function normalisePadding(value: string): string[] | null {
   const parts = value.trim().split(/\s+/).map((p) => p.replace(/^var\(|\)$/g, ""));
-  // `padding: X` is all four sides; `X Y Z` is top/side/bottom.
+  // `padding: X` is all four sides; `X Y` is top/bottom + sides;
+  // `X Y Z` is top/side/bottom; `X Y Z W` is top/side/bottom/side.
   if (parts.length === 1) return [parts[0], parts[0], parts[0]];
-  if (parts.length === 2 || parts.length === 3) return [parts[0], parts[1], parts[2] ?? parts[0]];
+  if (parts.length === 2) return [parts[0], parts[1], parts[0]];
+  if (parts.length === 3) return [parts[0], parts[1], parts[2]];
   if (parts.length === 4) return [parts[0], parts[1], parts[3]];
   return null;
+}
+
+/** The body of the first rule for `selector`, or null if it has none. */
+function ruleBody(css: string, selector: string): string | null {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(stripComments(css))?.[1] ?? null;
+}
+
+/** The `padding` shorthand of a page's `.page` rule, normalised to three sides. */
+function shellPadding(css: string): string[] | null {
+  const value = ruleBody(css, ".page")?.match(/(?:^|;)\s*padding:\s*([^;]+);/)?.[1];
+  return value ? normalisePadding(value) : null;
 }
 
 const SHELLS = Object.entries(MODULES).map(([path, css]) => ({
@@ -98,19 +131,52 @@ const SHELLS = Object.entries(MODULES).map(([path, css]) => ({
  *  is the shared `AuthLayout` and whose own `.page` is a loading placeholder. */
 const HANDED_OFF = ["Login.module.css", "OAuthCallback.module.css", "Register.module.css"];
 
+/** Whether a module is accounted for: classified, self-paced, or handed off. */
+function isAccountedFor(page: string): boolean {
+  return page in PAGE_GROUP || page in SELF_PACED || HANDED_OFF.includes(page);
+}
+
 describe("page shell rhythm", () => {
-  it("classifies every page shell, and nothing unclassified", () => {
+  it("accounts for every page shell, and nothing unaccounted for", () => {
     // A new page must be placed in a group. If it is missing here, the loop
     // below would skip it and the page would ship on whatever rhythm its author
     // typed — which is how the drift started.
-    const unclassified = SHELLS.filter(
-      (s) => s.padding && !HANDED_OFF.includes(s.page) && !(s.page in PAGE_GROUP),
-    );
+    //
+    // The previous version of this test filtered on `s.padding`, so a `.page`
+    // rule with *no* `padding` was invisible to it — which is precisely the
+    // case the comment above describes. `CreateChallenge` and `EditChallenge`
+    // shipped with no gutter at all and the test stayed green. Nothing is
+    // filtered now: a module is either accounted for or it fails.
+    const unaccounted = SHELLS.filter((s) => !isAccountedFor(s.page));
     expect(
-      unclassified.map((s) => s.page),
-      "page shell(s) with padding but no declared rhythm",
+      unaccounted.map((s) => s.page),
+      "page shell(s) with no declared rhythm — classify in PAGE_GROUP or SELF_PACED, or add to HANDED_OFF",
     ).toEqual([]);
-    expect(SHELLS.filter((s) => s.padding).length).toBeGreaterThan(10);
+  });
+
+  it("checks every shell it claims to, so pages cannot fall out of the set", () => {
+    // `expect(SHELLS.filter((s) => s.padding).length).toBeGreaterThan(10)` was a
+    // count floor: a page whose padding stopped being readable simply left the
+    // set, and the floor still passed. Coverage is now an exact partition.
+    const classified = SHELLS.filter((s) => s.page in PAGE_GROUP);
+    const selfPaced = SHELLS.filter((s) => s.page in SELF_PACED);
+    const handedOff = SHELLS.filter((s) => HANDED_OFF.includes(s.page));
+    expect(classified.length).toBe(Object.keys(PAGE_GROUP).length);
+    expect(selfPaced.length).toBe(Object.keys(SELF_PACED).length);
+    expect(handedOff.length).toBe(HANDED_OFF.length);
+    expect(classified.length + selfPaced.length + handedOff.length).toBe(SHELLS.length);
+  });
+
+  it("gives every page a readable .page padding, not an absent one", () => {
+    // The distinction the old test blurred: "no padding" is not a page that
+    // opted out of the rhythm, it is a page with no rhythm.
+    for (const { page, padding } of SHELLS) {
+      if (!(page in PAGE_GROUP)) continue;
+      expect(
+        padding,
+        `${page} has no readable .page padding — it will render with no gutter`,
+      ).not.toBeNull();
+    }
   });
 
   it("gives every page the rhythm of its group", () => {
@@ -131,6 +197,25 @@ describe("page shell rhythm", () => {
     for (const { page, padding } of SHELLS) {
       if (!padding) continue;
       expect(padding[1], `${page} uses a ${padding[1]} gutter`).toBe("--space-6");
+    }
+  });
+
+  it("gates the self-paced pages section by section, rather than not at all", () => {
+    // `Home` is not skipped for having no `.page` shell; each of its top-level
+    // sections is held to the same gutter as every other page in the app.
+    // The padding is parsed with the same normaliser as `.page`, so a section
+    // cannot be judged by a second, laxer set of rules.
+    for (const [page, sections] of Object.entries(SELF_PACED)) {
+      const css = stripComments(MODULES[`./${page}`] ?? "");
+      expect(css, `${page} is in SELF_PACED but has no stylesheet`).not.toBe("");
+      for (const section of sections) {
+        const body = ruleBody(css, section);
+        expect(body, `${page} has no \`${section}\` rule`).not.toBeNull();
+        const value = body?.match(/(?:^|;)\s*padding:\s*([^;]+);/)?.[1];
+        expect(value, `${page} \`${section}\` declares no padding shorthand`).toBeDefined();
+        const padding = value ? normalisePadding(value) : null;
+        expect(padding?.[1], `${page} \`${section}\` gutter`).toBe("--space-6");
+      }
     }
   });
 
