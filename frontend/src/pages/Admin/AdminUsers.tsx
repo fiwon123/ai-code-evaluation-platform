@@ -175,6 +175,8 @@ function AdminUsers() {
 
       <div className={styles.toolbar}>
         <TextInput
+          id="admin-user-search"
+          name="user_search"
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

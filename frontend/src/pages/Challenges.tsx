@@ -157,6 +157,8 @@ function Challenges() {
         <div className={styles.searchWrap}>
           <TextInput
             ref={searchRef}
+            id="challenge-search"
+            name="challenge_search"
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -169,6 +171,8 @@ function Challenges() {
           </kbd>
         </div>
         <SelectInput
+          id="challenge-filter-difficulty"
+          name="difficulty"
           value={difficulty}
           onChange={(e) => setDifficulty(e.target.value)}
           aria-label="Filter by difficulty"
@@ -182,6 +186,8 @@ function Challenges() {
           ))}
         </SelectInput>
         <SelectInput
+          id="challenge-filter-language"
+          name="language"
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           aria-label="Filter by language"
@@ -195,6 +201,8 @@ function Challenges() {
           ))}
         </SelectInput>
         <SelectInput
+          id="challenge-sort"
+          name="sort"
           value={sort}
           onChange={(e) => setSort(e.target.value)}
           aria-label="Sort challenges"

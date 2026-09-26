@@ -18,6 +18,8 @@ function ShareResult({ submissionId }: { submissionId: string }) {
           </p>
           <div className={styles.row}>
             <input
+              id="share-result-url"
+              name="share_url"
               readOnly
               value={url ?? ""}
               aria-label="Shareable result URL"

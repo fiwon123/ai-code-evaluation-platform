@@ -264,6 +264,8 @@ function Demo() {
 
               <div className={styles.runnerRow}>
                 <SelectInput
+                  id="demo-challenge"
+                  name="challenge"
                   value={selectedId}
                   onChange={(e) => setSelectedId(e.target.value)}
                   aria-label="Demo challenge"

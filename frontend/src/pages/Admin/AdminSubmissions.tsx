@@ -83,6 +83,8 @@ function AdminSubmissions() {
 
       <div className={styles.toolbar}>
         <SelectInput
+          id="admin-submission-status"
+          name="status"
           value={status}
           onChange={(e) => setStatus(e.target.value as SubmissionStatus | "all")}
           aria-label="Filter by status"

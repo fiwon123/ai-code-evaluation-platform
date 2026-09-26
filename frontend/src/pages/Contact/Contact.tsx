@@ -194,6 +194,8 @@ function Contact() {
               </p>
               {copyUnavailable && (
                 <textarea
+                  id="contact-message-fallback"
+                  name="message"
                   className={styles.fallback}
                   aria-label="Your message, ready to copy"
                   readOnly
