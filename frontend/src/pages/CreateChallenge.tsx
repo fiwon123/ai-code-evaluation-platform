@@ -6,6 +6,7 @@ import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import {
   Field,
+  FieldGroup,
   TextInput,
   SelectInput,
   TextAreaInput,
@@ -150,7 +151,7 @@ export default function CreateChallenge() {
             />
           </Field>
 
-          <Field id={exampleId} label="Start from an example">
+          <FieldGroup id={exampleId} label="Start from an example">
             <div className={styles.examples}>
               {examples.map((example, index) => (
                 <Button
@@ -164,7 +165,7 @@ export default function CreateChallenge() {
                 </Button>
               ))}
             </div>
-          </Field>
+          </FieldGroup>
 
           <Field
             id={promptId}

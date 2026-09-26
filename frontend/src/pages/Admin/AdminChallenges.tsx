@@ -117,6 +117,8 @@ function AdminChallenges() {
 
       <div className={styles.toolbar}>
         <TextInput
+          id="admin-challenge-search"
+          name="challenge_search"
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
