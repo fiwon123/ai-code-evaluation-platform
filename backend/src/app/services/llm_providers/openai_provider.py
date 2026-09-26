@@ -4,6 +4,7 @@ import httpx
 
 from app.services.llm_providers.base import (
     LLMProvider,
+    build_user_message,
     get_system_prompt,
     strip_code_fences,
 )
@@ -30,7 +31,9 @@ class OpenAIProvider(LLMProvider):
             headers={"Authorization": f"Bearer {api_key}"},
         )
 
-    def generate_code(self, prompt: str, language: str = "python") -> str:
+    def generate_code(
+        self, prompt: str, language: str = "python", feedback: str | None = None
+    ) -> str:
         self.validate_language(language)
         response = self._client.post(
             "/chat/completions",
@@ -38,7 +41,7 @@ class OpenAIProvider(LLMProvider):
                 "model": self._model,
                 "messages": [
                     {"role": "system", "content": get_system_prompt(language)},
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": build_user_message(prompt, feedback)},
                 ],
                 "temperature": 0.2,
             },

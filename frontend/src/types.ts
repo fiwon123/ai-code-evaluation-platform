@@ -84,7 +84,14 @@ export type ChallengeUpdatePayload = Partial<ChallengeCreatePayload>;
 export type SubmissionStatus = "pending" | "processing" | "completed" | "failed";
 
 /** Pipeline phase while a submission is processing. */
-export type SubmissionPhase = "generating" | "testing";
+export type SubmissionPhase = "generating" | "testing" | "repairing";
+
+/** One test-case outcome inside a result or an attempt. */
+export interface TestCaseResult {
+  name: string;
+  passed: boolean;
+  message?: string | null;
+}
 
 export interface EvaluationResult {
   id: string;
@@ -92,16 +99,34 @@ export interface EvaluationResult {
   total_tests: number;
   score: number;
   logs: string;
+  /** Readable summary derived from the run; absent on rows written before
+   *  v0.14 (and on shares served from an older payload). */
+  logs_summary?: string | null;
   metrics: Record<string, unknown>;
   /** Per-test-case breakdown: `[{name, passed, message}]`; absent for
    *  runners/results that carry no per-test detail. */
-  test_results?: Array<{
-    name: string;
-    passed: boolean;
-    message?: string | null;
-  }> | null;
+  test_results?: TestCaseResult[] | null;
   /** Public share token — set when the owner shared this report. */
   share_token?: string | null;
+  created_at: string;
+}
+
+/** One generate-and-test attempt in a submission's repair history.
+ *
+ *  Attempt 1 is the initial generation. Later attempts exist because a
+ *  previous one failed; every attempt is kept, including ones a later repair
+ *  fixed, so the timeline can show what was actually tried. */
+export interface EvaluationAttempt {
+  id: string;
+  attempt_number: number;
+  code: string;
+  passed_tests: number;
+  total_tests: number;
+  score: number;
+  logs: string;
+  logs_summary: string;
+  metrics: Record<string, unknown>;
+  test_results?: TestCaseResult[] | null;
   created_at: string;
 }
 
@@ -110,8 +135,8 @@ export interface Submission {
   user_id: string;
   challenge_id: string;
   status: SubmissionStatus;
-  /** Pipeline phase while processing: "generating" | "testing"; null when
-   *  pending or terminal. Absent on older cached responses. */
+  /** Pipeline phase while processing: "generating" | "testing" | "repairing";
+   *  null when pending or terminal. Absent on older cached responses. */
   phase?: SubmissionPhase | null;
   /** When evaluation began (status → processing); null while queued. */
   started_at?: string | null;
@@ -123,6 +148,13 @@ export interface Submission {
   code: string | null;
   score: number | null;
   evaluation_result: EvaluationResult | null;
+  /** Per-attempt repair history. Present only on detail responses (and socket
+   *  records) — the list endpoint omits it so attempt rows cannot multiply
+   *  the dashboard payload. */
+  attempts?: EvaluationAttempt[];
+  /** Repair budget the run was given, for "attempt 2 of 3" labels. Detail
+   *  responses and socket records only. */
+  max_attempts?: number;
   created_at: string;
   updated_at: string;
 }
@@ -205,6 +237,7 @@ export interface SharedResult {
   passed_tests: number;
   total_tests: number;
   logs: string;
+  logs_summary?: string | null;
   metrics: Record<string, unknown>;
   test_results?: Array<{
     name: string;

@@ -1591,8 +1591,17 @@ class MockProvider(LLMProvider):
 
     name = "demo"
 
-    def generate_code(self, prompt: str, language: str = "python") -> str:
+    def generate_code(
+        self, prompt: str, language: str = "python", feedback: str | None = None
+    ) -> str:
         self.validate_language(language)
+        # `feedback` is accepted for interface parity and intentionally not
+        # consulted: this provider is a deterministic keyword lookup, so a
+        # repair attempt returns the same canned solution as attempt 1. That is
+        # the honest demo behaviour — a repair loop against it exhausts its
+        # budget and records each identical attempt, rather than pretending to
+        # fix code. Matching also stays on the original prompt, which never
+        # contains the appended failure output.
         solutions = SOLUTIONS_BY_LANGUAGE[language]
         normalized = normalize_prompt(prompt)
         # Match natural wording ("two sum" → "twosum"), camelCase,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import AttemptTimeline from "../components/AttemptTimeline/AttemptTimeline.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
@@ -117,16 +118,24 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
       : submission?.created_at ?? "";
 
   // Human-readable phase label while processing ("generating" = LLM call in
-  // flight, "testing" = code generated, tests running). Rows without a phase
-  // (legacy data / PATCHed states) fall back to the generic wording.
+  // flight, "testing" = code generated, tests running, "repairing" = a failed
+  // run is being fed back to the provider). Rows without a phase (legacy data /
+  // PATCHed states) fall back to the generic wording.
   const phaseLabel =
     submission?.status === "processing"
       ? submission.phase === "generating"
         ? "Generating code…"
         : submission.phase === "testing"
           ? "Running tests…"
-          : "Running your evaluation…"
+          : submission.phase === "repairing"
+            ? "Repairing the failed run…"
+            : "Running your evaluation…"
       : null;
+
+  // Repair history, oldest first. The last attempt is the one the report shows
+  // its score from, so it is the row worth marking as current.
+  const attempts = submission?.attempts ?? [];
+  const currentAttempt = attempts.length > 0 ? attempts[attempts.length - 1].attempt_number : null;
 
   if (loading) {
     return (
@@ -202,9 +211,38 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
               ` · started at ${new Date(submission.started_at).toLocaleTimeString()}`}
             {" · "}provider: <code>{submission.provider ?? "demo"}</code>
           </p>
+          {attempts.length > 0 ? (
+            <div className={styles.attempts}>
+              <h2 className={styles.attemptsTitle}>Attempts so far</h2>
+              <AttemptTimeline
+                attempts={attempts}
+                maxAttempts={submission.max_attempts}
+                language={submission.language}
+                currentAttempt={currentAttempt}
+              />
+            </div>
+          ) : null}
         </Card>
       ) : result ? (
         <div className={styles.report}>
+          {attempts.length > 0 ? (
+            <div className={styles.attempts}>
+              <h2 className={styles.attemptsTitle}>
+                {attempts.length > 1
+                  ? `Repaired after ${attempts.length - 1} failed ${
+                      attempts.length - 1 === 1 ? "attempt" : "attempts"
+                    }`
+                  : "Attempt history"}
+              </h2>
+              <AttemptTimeline
+                attempts={attempts}
+                maxAttempts={submission.max_attempts}
+                language={submission.language}
+                currentAttempt={currentAttempt}
+              />
+            </div>
+          ) : null}
+
           <ResultReport
             result={result}
             code={submission.code}

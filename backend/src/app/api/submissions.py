@@ -24,6 +24,7 @@ from app.schemas.submission import (
     ProviderComparisonRead,
     ShareResultRead,
     SubmissionCreate,
+    SubmissionDetailRead,
     SubmissionRead,
     SubmissionStatsRead,
     SubmissionUpdate,
@@ -60,11 +61,21 @@ async def _get_own_submission(
     db: AsyncSession,
     submission_id: UUID,
     user: User,
+    *,
+    with_attempts: bool = False,
 ) -> Submission:
-    """Fetch a submission by id and user, with its evaluation result."""
+    """Fetch a submission by id and user, with its evaluation result.
+
+    ``with_attempts`` eager-loads the repair history for the detail view.
+    It is opt-in because the share and PATCH routes do not read it, and an
+    AsyncSession cannot lazy-load a relationship on access.
+    """
+    options = [selectinload(Submission.evaluation_result)]
+    if with_attempts:
+        options.append(selectinload(Submission.attempts))
     result = await db.execute(
         select(Submission)
-        .options(selectinload(Submission.evaluation_result))
+        .options(*options)
         .where(Submission.id == submission_id, Submission.user_id == user.id)
     )
     submission = result.scalar_one_or_none()
@@ -287,14 +298,17 @@ async def get_submission_stats(
     return SubmissionStatsRead(items=items)
 
 
-@router.get("/{submission_id}", response_model=SubmissionRead)
+@router.get("/{submission_id}", response_model=SubmissionDetailRead)
 async def get_submission(
     submission_id: UUID,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> Submission:
-    """Get a single submission (owner only)."""
-    return await _get_own_submission(db, submission_id, current_user)
+) -> SubmissionDetailRead:
+    """Get a single submission with its attempt history (owner only)."""
+    submission = await _get_own_submission(
+        db, submission_id, current_user, with_attempts=True
+    )
+    return SubmissionDetailRead.from_submission(submission)
 
 
 @router.post("/{submission_id}/share", response_model=ShareResultRead)

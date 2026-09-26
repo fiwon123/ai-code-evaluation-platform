@@ -7,6 +7,9 @@ import {
   mockSubmissionSocket,
   processingSubmission,
   recordlessTerminalMessage,
+  repairedSubmission,
+  repairingMessage,
+  repairingSubmission,
   snapshotMessage,
   statusMessage,
   terminalMessage,
@@ -35,6 +38,8 @@ import {
 const SUBMISSION_ID = "e2e-submission-ws";
 const processing = (): WireSubmission => processingSubmission(SUBMISSION_ID);
 const completed = (): WireSubmission => completedSubmission(SUBMISSION_ID);
+const repairing = (): WireSubmission => repairingSubmission(SUBMISSION_ID);
+const repaired = (): WireSubmission => repairedSubmission(SUBMISSION_ID);
 
 /**
  * The status badge in the page header. The word "completed" also shows up in the
@@ -236,5 +241,74 @@ test.describe("Evaluation WebSocket", () => {
     await expect(page.getByText("Generating code")).toHaveCount(0);
     await expect(page.getByText(/Running tests/)).toBeVisible();
     await expect(page.getByText(/no result was produced/)).toHaveCount(0);
+  });
+
+  test("a repair update shows the failed attempt while the run continues", async ({
+    page,
+  }) => {
+    // The complaint #217 was filed for: a failed run used to end at an
+    // unreadable log dump. During a repair the page has to say what failed and
+    // why, while still showing that the evaluation is running.
+    await mockAuthenticatedSubmission(page, processing());
+    const socket = await mockSubmissionSocket(page, (ws) => {
+      ws.send(snapshotMessage(processing()));
+    });
+
+    await page.goto(`/submissions/${SUBMISSION_ID}`);
+    await socket.waitForConnections(1);
+    await expect(page.getByText(/Running tests/)).toBeVisible();
+
+    socket.send(repairingMessage(repairing()));
+
+    await expect(page.getByText(/Repairing the failed run/)).toBeVisible();
+    // The failed attempt is legible without opening anything...
+    await expect(page.getByText("Attempt 1 of 3")).toBeVisible();
+    await expect(page.getByText(/1 of 2 tests passed/)).toBeVisible();
+    // ...and still collapsed, so the timeline does not bury the phase banner.
+    await expect(page.getByText(/code, tests and raw logs/i)).toHaveCount(1);
+    // No report yet: the run has not finished.
+    await expect(page.getByLabel("Score 100 percent")).toHaveCount(0);
+  });
+
+  test("a repaired run shows the full attempt history on the report", async ({ page }) => {
+    await mockAuthenticatedSubmission(page, repairing());
+    const socket = await mockSubmissionSocket(page, (ws) => {
+      ws.send(snapshotMessage(repairing()));
+    });
+
+    await page.goto(`/submissions/${SUBMISSION_ID}`);
+    await socket.waitForConnections(1);
+    await expect(page.getByText("Attempt 1 of 3")).toBeVisible();
+
+    socket.send(terminalMessage(repaired()));
+
+    // Both attempts survive the terminal record, and the report is the one from
+    // the attempt that passed.
+    await expect(page.getByText("Attempt 1 of 3")).toBeVisible();
+    await expect(page.getByText("Attempt 2 of 3")).toBeVisible();
+    await expect(page.getByText("Final")).toBeVisible();
+    await expect(page.getByLabel("Score 100 percent")).toBeVisible();
+    // The summary leads the report; the raw dump is one click away. Scoped to
+    // the Outcome card because the same text also appears on attempt 2's row.
+    const outcome = page.getByRole("heading", { name: "Outcome" }).locator("..");
+    await expect(outcome).toContainText("2 of 2 tests passed (score 100.0%)");
+    await expect(page.getByText(/show raw output/i)).toBeVisible();
+  });
+
+  test("a run that passed first try shows no repair history", async ({ page }) => {
+    // Repairs are opt-in by budget, but the default UI must look unchanged for
+    // the common case: no empty timeline, no stray heading.
+    await mockAuthenticatedSubmission(page, processing());
+    const socket = await mockSubmissionSocket(page, (ws) => {
+      ws.send(snapshotMessage(processing()));
+    });
+
+    await page.goto(`/submissions/${SUBMISSION_ID}`);
+    await socket.waitForConnections(1);
+    socket.send(terminalMessage(completed()));
+
+    await expect(page.getByLabel("Score 100 percent")).toBeVisible();
+    await expect(page.getByText(/attempt history/i)).toHaveCount(0);
+    await expect(page.getByText(/^Attempt \d/)).toHaveCount(0);
   });
 });

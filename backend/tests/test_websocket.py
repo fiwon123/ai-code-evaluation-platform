@@ -386,9 +386,7 @@ def test_terminal_event_before_the_result_is_committed_still_sends_the_row(ws_en
     happen.
     """
     pubsub = ws_env["pubsub"]
-    pubsub.get_message = AsyncMock(
-        side_effect=[_event(ws_env, "completed"), WebSocketDisconnect()]
-    )
+    pubsub.get_message = AsyncMock(side_effect=[_event(ws_env, "completed"), WebSocketDisconnect()])
 
     with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
         ws.receive_json()
@@ -397,3 +395,84 @@ def test_terminal_event_before_the_result_is_committed_still_sends_the_row(ws_en
     record = update["submission"]
     assert update["status"] == "completed"
     assert record["evaluation_result"] is None  # → the page refetches over REST
+
+
+def _record_attempt(ws_env: dict, attempt_number: int = 1) -> None:
+    """Commit an attempt row the way the worker would before publishing."""
+    from app.models.evaluation_attempt import EvaluationAttempt
+
+    async def seed() -> None:
+        async with ws_env["session_factory"]() as session:
+            submission = await session.get(Submission, UUID(ws_env["submission_id"]))
+            submission.status = "processing"
+            submission.phase = "repairing"
+            session.add(
+                EvaluationAttempt(
+                    submission_id=submission.id,
+                    attempt_number=attempt_number,
+                    code="def two_sum(nums, target):\n    return []",
+                    passed_tests=1,
+                    total_tests=2,
+                    score=50.0,
+                    logs="FAILED test_basic - assert None == [0, 1]",
+                    logs_summary="1 of 2 tests passed (score 50.0%)",
+                    metrics={"returncode": 1},
+                    test_results=[
+                        {"name": "test_basic", "passed": False, "message": "assert None"},
+                    ],
+                )
+            )
+            await session.commit()
+
+    asyncio.run(seed())
+
+
+def test_repairing_event_maps_to_the_repairing_phase(ws_env: dict) -> None:
+    """The phase has to be distinguishable from a first attempt."""
+    pubsub = ws_env["pubsub"]
+    pubsub.get_message = AsyncMock(
+        side_effect=[_event(ws_env, "repairing", attempt=1, next_attempt=2), WebSocketDisconnect()]
+    )
+
+    with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()
+        update = ws.receive_json()
+
+    assert update["status"] == "processing"
+    assert update["phase"] == "repairing"
+
+
+def test_repairing_event_carries_the_failed_attempt(ws_env: dict) -> None:
+    """A repair adds an attempt row, so the client needs the record — otherwise
+    the timeline only fills in when the run finally terminates."""
+    _record_attempt(ws_env)
+    pubsub = ws_env["pubsub"]
+    pubsub.get_message = AsyncMock(
+        side_effect=[_event(ws_env, "repairing", attempt=1), WebSocketDisconnect()]
+    )
+
+    with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        ws.receive_json()
+        update = ws.receive_json()
+
+    record = update["submission"]
+    assert len(record["attempts"]) == 1
+    assert record["attempts"][0]["attempt_number"] == 1
+    assert record["attempts"][0]["score"] == 50.0
+    assert "1 of 2 tests passed" in record["attempts"][0]["logs_summary"]
+    assert record["max_attempts"] >= 1
+
+
+def test_snapshot_includes_attempts_for_a_mid_repair_page_load(ws_env: dict) -> None:
+    """A page opened between attempts must not render an empty timeline."""
+    _record_attempt(ws_env)
+    pubsub = ws_env["pubsub"]
+    pubsub.get_message = AsyncMock(side_effect=[WebSocketDisconnect()])
+
+    with connect_ws(ws_env["app"], ws_env["submission_id"], token_for(ws_env["owner_id"])) as ws:
+        snapshot = ws.receive_json()
+
+    record = snapshot["submission"]
+    assert len(record["attempts"]) == 1
+    assert record["attempts"][0]["logs_summary"]
+    assert "max_attempts" in record

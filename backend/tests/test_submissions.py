@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
@@ -919,3 +920,105 @@ async def test_submission_stats_groups_by_challenge(
     titles = {item["challenge_title"]: item for item in items}
     assert titles["First"]["avg_score"] == 80.0
     assert titles["Second"]["best_score"] == 40.0
+
+
+async def _seed_attempt(db_sessionmaker, submission_id: str, n: int = 1) -> None:
+    """Insert an attempt row the way the worker would.
+
+    Raw inserts keep these tests on the HTTP contract: the worker owns attempt
+    creation in production, and driving it here would test the worker instead
+    of the serializer.
+    """
+    from app.models.evaluation_attempt import EvaluationAttempt
+
+    async with db_sessionmaker() as session:
+        session.add(
+            EvaluationAttempt(
+                submission_id=UUID(submission_id),
+                attempt_number=n,
+                code="def two_sum(): pass",
+                passed_tests=1,
+                total_tests=2,
+                score=50.0,
+                logs="FAILED test_basic",
+                logs_summary="1 of 2 tests passed",
+                metrics={},
+                test_results=[],
+            )
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_submission_detail_includes_attempt_history(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    submission = await create_submission(db_client, token, challenge["id"])
+    await _seed_attempt(db_sessionmaker, submission["id"], n=1)
+
+    response = await db_client.get(
+        f"{SUBMISSIONS_URL}/{submission['id']}", headers=auth(token)
+    )
+    assert response.status_code == 200
+    body = response.json()
+
+    assert len(body["attempts"]) == 1
+    attempt = body["attempts"][0]
+    assert attempt["attempt_number"] == 1
+    assert attempt["score"] == 50.0
+    assert attempt["logs_summary"] == "1 of 2 tests passed"
+    assert attempt["passed_tests"] == 1
+    assert body["max_attempts"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_list_submissions_does_not_carry_attempt_history(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    """The list backs the dashboard; per-attempt rows must not multiply it."""
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    submission = await create_submission(db_client, token, challenge["id"])
+    await _seed_attempt(db_sessionmaker, submission["id"], n=1)
+
+    response = await db_client.get(SUBMISSIONS_URL, headers=auth(token))
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+
+    assert "attempts" not in item
+    assert "max_attempts" not in item
+
+
+@pytest.mark.asyncio
+async def test_submission_detail_exposes_logs_summary_on_the_result(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    from app.models.evaluation_result import EvaluationResult
+
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    submission = await create_submission(db_client, token, challenge["id"])
+    async with db_sessionmaker() as session:
+        session.add(
+            EvaluationResult(
+                submission_id=UUID(submission["id"]),
+                passed_tests=1,
+                total_tests=2,
+                score=50.0,
+                logs="raw dump",
+                logs_summary="1 of 2 tests passed (score 50.0%)",
+                metrics={},
+                test_results=[],
+            )
+        )
+        await session.commit()
+
+    response = await db_client.get(
+        f"{SUBMISSIONS_URL}/{submission['id']}", headers=auth(token)
+    )
+    assert response.status_code == 200
+    result = response.json()["evaluation_result"]
+    assert result["logs_summary"] == "1 of 2 tests passed (score 50.0%)"
+    assert result["logs"] == "raw dump"

@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     llm_provider: str = "demo"  # default provider: demo | openai | anthropic
     evaluation_timeout: int = 30  # seconds for test execution
     evaluation_dir: str = "/tmp/evaluations"
+    #: Total generate-and-test attempts per submission. Attempt 1 is the
+    #: initial generation; a failing attempt is fed back to the provider and
+    #: re-tested until the code passes or the budget runs out. ``1`` disables
+    #: the repair loop and reproduces the single-attempt behaviour.
+    evaluation_max_attempts: int = 3
+    #: How much of the raw runner output to include in a repair prompt, in
+    #: characters (tail of the log). Bounds prompt growth across attempts.
+    repair_log_tail_chars: int = 4000
 
     # Docker sandbox (isolated code execution)
     docker_enabled: bool = True  # master switch; falls back to subprocess when off/unavailable

@@ -68,12 +68,35 @@ class EvaluationResultRead(BaseModel):
     total_tests: int
     score: float
     logs: str
+    #: Readable digest of ``logs`` — which tests failed and why. Empty on rows
+    #: written before summaries existed.
+    logs_summary: str = ""
     metrics: dict[str, Any]
     #: Per-test-case breakdown returned when the runner produced one.
     test_results: list[dict[str, Any]] | None = None
     #: Public share token — visible only to the owner (submission reads are
     #: owner-scoped) so the dashboard can show shared state.
     share_token: str | None = None
+    created_at: datetime
+
+
+class EvaluationAttemptRead(BaseModel):
+    """One generate-and-test attempt within a submission's history."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    #: 1-based; attempt 1 is the initial generation.
+    attempt_number: int
+    #: The code this attempt ran — the timeline needs it to show what changed.
+    code: str
+    passed_tests: int
+    total_tests: int
+    score: float
+    logs: str
+    logs_summary: str
+    metrics: dict[str, Any]
+    test_results: list[dict[str, Any]] | None = None
     created_at: datetime
 
 
@@ -122,6 +145,9 @@ class SharedResultRead(BaseModel):
     passed_tests: int
     total_tests: int
     logs: str
+    #: Readable rendering of the run, so a shared link is as legible as the
+    #: owner's view. Null for reports written before v0.14.
+    logs_summary: str | None = None
     metrics: dict[str, Any]
     test_results: list[dict[str, Any]] | None = None
 
@@ -147,7 +173,13 @@ class SubmissionStatsRead(BaseModel):
 
 
 class SubmissionRead(BaseModel):
-    """Submission representation with optional nested evaluation result."""
+    """Submission representation with optional nested evaluation result.
+
+    Deliberately excludes attempt history: this schema also backs the list,
+    comparison and admin endpoints, where per-attempt rows would multiply the
+    payload for no reader. :class:`SubmissionDetailRead` adds them for the
+    single-submission view.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -155,8 +187,8 @@ class SubmissionRead(BaseModel):
     user_id: UUID
     challenge_id: UUID
     status: str
-    #: Pipeline phase while processing: ``"generating"`` or ``"testing"``;
-    #: None when pending or terminal.
+    #: Pipeline phase while processing: ``"generating"``, ``"testing"`` or
+    #: ``"repairing"``; None when pending or terminal.
     phase: str | None = None
     #: When evaluation began (status → processing); None while queued.
     started_at: datetime | None = None
@@ -168,6 +200,35 @@ class SubmissionRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     evaluation_result: EvaluationResultRead | None = None
+
+
+class SubmissionDetailRead(SubmissionRead):
+    """Single-submission view: adds the attempt history and the repair budget.
+
+    ``max_attempts`` comes from worker configuration so the UI can say
+    "attempt 2 of 3" instead of guessing a denominator.
+    """
+
+    #: Oldest first. One entry per generate-and-test attempt; the last entry
+    #: mirrors ``evaluation_result``.
+    attempts: list[EvaluationAttemptRead] = Field(default_factory=list)
+    max_attempts: int = 1
+
+    @classmethod
+    def from_submission(cls, submission) -> SubmissionDetailRead:
+        """Build the detail payload from an ORM row.
+
+        Validates the ORM object directly — routing through ``SubmissionRead``
+        would drop ``attempts``, since that schema has no such field, and the
+        history would silently come back empty.
+
+        ``max_attempts`` is not a column: it is the worker's repair budget,
+        which the UI needs to render "attempt 2 of 3". Shared by the detail
+        route and the WebSocket's snapshot/terminal payloads so both agree.
+        """
+        return cls.model_validate(submission).model_copy(
+            update={"max_attempts": max(1, settings.evaluation_max_attempts)}
+        )
 
 
 class AdminSubmissionRead(SubmissionRead):

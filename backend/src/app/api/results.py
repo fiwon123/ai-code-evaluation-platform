@@ -51,6 +51,7 @@ async def get_shared_result(
         passed_tests=evaluation.passed_tests,
         total_tests=evaluation.total_tests,
         logs=evaluation.logs,
+        logs_summary=evaluation.logs_summary,
         metrics=evaluation.metrics,
         test_results=evaluation.test_results,
     )
