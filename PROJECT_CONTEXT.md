@@ -105,6 +105,7 @@ devspace.yaml     # Kubernetes inner dev loop
 - **Migrations**: `cd backend && uv run alembic upgrade head`
 - **Format**: `cd backend && uv run ruff format src/`
 - **All checks**: `make check`
+- **Browser tests**: `make test-e2e` (Playwright, 6 specs in `frontend/e2e/`, desktop + Pixel 7 profiles; needs a real rendered browser so it is not in `make check`; Chromium is baked into the dev image, so run it inside the sandbox)
 - **Dev sandbox**: `make dev-up` (isolated stack: uvicorn + vite + celery + postgres + redis + sandbox) / `make dev-down` / `make dev-log` / `scripts/open-in-sandbox.sh` (shell with the sandboxed opencode agent)
 - **Host infra only**: `make infra-up` / `make infra-down` (for the host-native loop)
 - **Host toolchain**: `scripts/setup-host-tools.sh` (gh auth + `mise install` from mise.toml)
@@ -120,6 +121,7 @@ devspace.yaml     # Kubernetes inner dev loop
 - LLM provider is configurable per challenge/submission
 - Generated code is stored temporarily in `/tmp/evaluations/` during execution
 - Security: executed code runs in sandboxed Docker containers with resource limits
+- The e2e suite's browser lives in the dev image (`/ms-playwright`, baked above the non-root `USER`), never in the bind-mounted workspace; `PLAYWRIGHT_VERSION` is pinned to the lockfile's `@playwright/test` because browsers are revision-locked
 
 ## Kubernetes Workflow
 

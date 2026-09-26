@@ -121,6 +121,7 @@ make dev-log                # tail dev + celery logs
 docker compose run --rm --entrypoint zsh dev   # interactive shell inside the sandbox (zsh default)
 scripts/open-in-sandbox.sh  # shell in the sandbox with opencode (sandboxed agent)
 make check                  # full local gate (host toolchain)
+make test-e2e               # Playwright e2e (Chromium is baked into the dev image)
 ```
 
 ### Sandboxed AI agent (opencode inside the dev sandbox)
@@ -248,6 +249,14 @@ Backend reads from `.env` (gitignored):
 
 - Linting: Ruff for backend, Oxlint for frontend
 - Testing: pytest for backend, Vitest for frontend
+- Browser tests: Playwright in `frontend/e2e/` via `make test-e2e` — needs a
+  real rendered browser, so it is **not** part of `make check`. Chromium is baked
+  into the dev image (above `USER devuser`, `/ms-playwright`, since apt needs
+  root), so the target works inside the sandbox and `make dev-build` is required
+  only after an image that predates the bake. Locked by
+  `backend/tests/test_dev_sandbox_playwright.py` (version sync, layer order, a
+  real launch as the runtime user, Makefile wiring). See DEVELOPMENT.md →
+  "Browser tests".
 - CI: GitHub Actions runs lint + build + test on `dev` → `main` PRs only — never on feature branch PRs or push to `dev`
 - Local testing: run `make check` before pushing feature branches
 - Auth: JWT tokens (OAuth2 planned for future)

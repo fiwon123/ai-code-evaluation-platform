@@ -1,11 +1,14 @@
 .PHONY: help setup host-tools infra-up infra-down preflight dev-up dev-build dev-down dev-restart \
         dev-log dev-exec dev-agent opencode shell sandbox reset \
-        test test-backend test-frontend lint lint-fix format typecheck build check \
+        test test-backend test-frontend test-e2e lint lint-fix format typecheck build check \
         install run dev-backend dev-frontend dev-celery dev-all seed-examples clean \
         tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+	@# The character class needs 0-9: without it every target with a digit in its
+	@# name is silently absent from the help (that is why all seven k8s-* targets
+	@# and test-e2e were invisible), and `make help` is how anyone finds a target.
+	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 # Compose command (override-friendly; e.g. COMPOSE="docker-compose")
 COMPOSE ?= docker compose
@@ -211,6 +214,24 @@ test-backend: ## Run backend tests (pytest)
 
 test-frontend: ## Run frontend tests (vitest)
 	cd $(FRONTEND_DIR) && npm test
+
+# Playwright e2e — deliberately NOT part of `make check`: it needs a real
+# rendered browser (contrast is measured from pixels), which costs an image
+# rebuild and a slower gate than the rest of the suite justifies. Run it before
+# shipping UI changes, not on every save.
+#
+# The browser is baked into the dev image (see Dockerfile), so inside the
+# sandbox this just works. On a host-native checkout install it once. Specs mock
+# /api via route interception, so no backend is required; Playwright reuses the
+# Vite server on :5173 when one is already up and starts its own otherwise.
+test-e2e: ## Run the Playwright e2e suite in a real Chromium (baked into the dev image)
+	@if [ ! -d "$${PLAYWRIGHT_BROWSERS_PATH:-/nonexistent}" ] && [ ! -d "$${HOME:-/nonexistent}/.cache/ms-playwright" ]; then \
+		echo "No Playwright browser found — the e2e suite cannot start."; \
+		echo "  in the dev sandbox : rebuild the image (make dev-build), Chromium is baked in"; \
+		echo "  on the host        : cd $(FRONTEND_DIR) && npx playwright install chromium"; \
+		exit 1; \
+	fi
+	cd $(FRONTEND_DIR) && npm run test:e2e
 
 # --- Lint / format ------------------------------------------------------------
 lint: ## Lint backend (ruff) + frontend (oxlint)
