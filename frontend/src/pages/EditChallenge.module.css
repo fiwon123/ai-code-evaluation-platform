@@ -2,6 +2,8 @@
   max-width: var(--max-width);
   margin: 0 auto;
   width: 100%;
+  /* The `app` rhythm — see the note in `CreateChallenge.module.css`. */
+  padding: var(--space-12) var(--space-6) var(--space-16);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);

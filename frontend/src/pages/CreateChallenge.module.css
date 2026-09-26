@@ -2,6 +2,11 @@
   max-width: var(--max-width);
   margin: 0 auto;
   width: 100%;
+  /* The `app` rhythm. This shell had no `padding` at all, so the form ran
+   * flush to the viewport edge while every sibling page had a 6-unit gutter —
+   * and the page-rhythm lock could not see it, because a `.page` rule with no
+   * `padding` is exactly the case it used to skip. */
+  padding: var(--space-12) var(--space-6) var(--space-16);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
