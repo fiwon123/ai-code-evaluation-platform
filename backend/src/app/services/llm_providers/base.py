@@ -151,6 +151,17 @@ class LLMProvider(ABC):
                 f"Language '{language}' is not supported — supported: {sorted(SUPPORTED_LANGUAGES)}"
             )
 
+    def close(self) -> None:
+        """Release any transport the provider holds.
+
+        Part of the interface (rather than an optional extra) because the
+        evaluation pipeline closes every provider it builds: a submission's
+        repair chain constructs a fresh provider per attempt, and the HTTP
+        providers each own an ``httpx.Client``. Keyless, in-process providers
+        like the demo one have nothing to release.
+        """
+        return None
+
 
 def strip_code_fences(code: str) -> str:
     """Remove markdown code fences and surrounding prose from LLM output."""

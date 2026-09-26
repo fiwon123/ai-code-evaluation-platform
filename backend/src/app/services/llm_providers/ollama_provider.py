@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import httpx
 
+from app.config import settings
 from app.services.llm_providers.base import (
     LLMProvider,
     build_user_message,
@@ -18,11 +19,15 @@ class OllamaProvider(LLMProvider):
     def __init__(
         self,
         model: str = "qwen2.5-coder:7b",
-        base_url: str = "http://localhost:11434",
+        base_url: str | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._model = model
-        self._client = httpx.Client(base_url=base_url, transport=transport, timeout=60)
+        # Resolved per construction rather than as a default argument: the
+        # worker reads it from the environment at call time, and a containerized
+        # worker needs `host.docker.internal`, not its own localhost.
+        self._base_url = base_url or settings.ollama_base_url
+        self._client = httpx.Client(base_url=self._base_url, transport=transport, timeout=60)
 
     def generate_code(
         self, prompt: str, language: str = "python", feedback: str | None = None

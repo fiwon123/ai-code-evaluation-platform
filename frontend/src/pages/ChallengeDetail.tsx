@@ -58,6 +58,12 @@ const PROVIDERS = [
     requiresKey: true,
   },
   {
+    value: "groq",
+    name: "Groq",
+    description: "llama-3.1-8b-instant",
+    requiresKey: true,
+  },
+  {
     value: "ollama",
     name: "Ollama (local)",
     description: "qwen2.5-coder · no API key",

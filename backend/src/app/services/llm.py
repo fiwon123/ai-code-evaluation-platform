@@ -7,6 +7,7 @@ from app.services.llm_providers import (
 )
 from app.services.llm_providers.anthropic_provider import AnthropicProvider
 from app.services.llm_providers.gemini_provider import GeminiProvider
+from app.services.llm_providers.groq_provider import GroqProvider
 from app.services.llm_providers.ollama_provider import OllamaProvider
 from app.services.llm_providers.openai_provider import OpenAIProvider
 
@@ -17,6 +18,7 @@ _PROVIDERS: dict[str, type[LLMProvider]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
+    "groq": GroqProvider,
     "ollama": OllamaProvider,
 }
 
@@ -29,6 +31,7 @@ KEYED_PROVIDERS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "gemini": "GEMINI_API_KEY",
+    "groq": "GROQ_API_KEY",
 }
 
 
@@ -41,8 +44,8 @@ def get_llm_provider(
 
     ``demo`` is the free, network-independent provider; ``ollama`` targets a
     local Ollama server and needs no key. The keyed providers (``openai``,
-    ``anthropic``, ``gemini``) require an API key — provided per-call via
-    ``api_key`` or via the matching environment variable — and raise
+    ``anthropic``, ``gemini``, ``groq``) require an API key — provided per-call
+    via ``api_key`` or via the matching environment variable — and raise
     ``ValueError`` when the key is missing so callers can surface a clear
     failure.
 

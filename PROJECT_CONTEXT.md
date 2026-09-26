@@ -29,7 +29,7 @@ Build a platform where users can:
 - **Queue/Cache**: Redis
 - **Background jobs**: Celery (with Redis broker)
 - **Auth**: JWT tokens (OAuth2 planned for future)
-- **AI/LLM**: Multiple providers (OpenAI, Anthropic, local models)
+- **AI/LLM**: Multiple providers (OpenAI, Anthropic, Gemini, Groq, local Ollama models) with an opt-in generation fallback
 - **Dev environment**: Docker Compose dev sandbox + host-native loop (mise toolchain)
 - **Kubernetes (optional)**: Kind + Kustomize (default) + Helm (expansion) + DevSpace (dev loop)
 

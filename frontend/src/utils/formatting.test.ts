@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fallbackInfo,
   formatDurationMs,
   formatElapsed,
   formatElapsedMs,
@@ -146,5 +147,43 @@ describe("humanizeMetricKey", () => {
 
   it("handles empty keys", () => {
     expect(humanizeMetricKey("")).toBe("");
+  });
+});
+describe("fallbackInfo", () => {
+  it("is null for a normal run (the keys are absent, not falsy)", () => {
+    expect(fallbackInfo({})).toBeNull();
+    expect(fallbackInfo({ duration_ms: 1200, language: "python" })).toBeNull();
+  });
+
+  it("requires a boolean true — a string 'false' is not a fallback", () => {
+    expect(fallbackInfo({ fallback_used: "false" })).toBeNull();
+    expect(fallbackInfo({ fallback_used: 1 })).toBeNull();
+    expect(fallbackInfo({ fallback_used: null })).toBeNull();
+  });
+
+  it("reads the provider, model and primary error", () => {
+    const info = fallbackInfo({
+      fallback_used: true,
+      fallback_provider: "ollama",
+      fallback_model: "tinyllama",
+      primary_error: "HTTPStatusError: 429",
+    });
+    expect(info).toEqual({
+      provider: "ollama",
+      model: "tinyllama",
+      primaryError: "HTTPStatusError: 429",
+    });
+  });
+
+  it("tolerates missing or wrongly typed fields", () => {
+    // A hand-edited or older payload must not break the report.
+    expect(fallbackInfo({ fallback_used: true })).toEqual({
+      provider: "a fallback provider",
+      model: null,
+      primaryError: null,
+    });
+    expect(
+      fallbackInfo({ fallback_used: true, fallback_provider: 7, fallback_model: [] }),
+    ).toEqual({ provider: "a fallback provider", model: null, primaryError: null });
   });
 });

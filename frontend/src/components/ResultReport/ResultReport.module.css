@@ -162,6 +162,21 @@
   font-size: var(--font-size-sm);
 }
 
+/* Shown when the requested provider failed and the fallback produced the code:
+   the score on this page is then another model's work, and the reason has to
+   stay legible. `overflow-wrap` because a provider error can be one long
+   unbroken line. */
+.fallbackNote {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-warning);
+  background: var(--color-warning-light);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 /* The summary preserves its own line breaks: the failed-test list is one
    entry per line, and collapsing it into a paragraph would defeat the point
    of having a summary at all. `pre-line` alone is not enough — it keeps

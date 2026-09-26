@@ -135,7 +135,34 @@ const METRIC_LABELS: Record<string, string> = {
   language: "Language",
   returncode: "Return code",
   error: "Error",
+  fallback_used: "Fallback used",
+  fallback_provider: "Fallback provider",
+  fallback_model: "Fallback model",
+  primary_error: "Primary provider error",
 };
+
+/**
+ * Provenance of a run whose code came from the fallback provider instead of the
+ * requested one (see backend `services/llm_fallback.py`). Null for a normal run
+ * — the metrics are absent, not falsy — so a report only calls attention to
+ * itself when the user would otherwise be misled about which model was used.
+ */
+export interface FallbackInfo {
+  provider: string;
+  model: string | null;
+  primaryError: string | null;
+}
+
+export function fallbackInfo(metrics: Record<string, unknown>): FallbackInfo | null {
+  if (!metrics || metrics.fallback_used !== true) {
+    return null;
+  }
+  const provider = typeof metrics.fallback_provider === "string" ? metrics.fallback_provider : null;
+  const model = typeof metrics.fallback_model === "string" ? metrics.fallback_model : null;
+  const primaryError =
+    typeof metrics.primary_error === "string" ? metrics.primary_error : null;
+  return { provider: provider ?? "a fallback provider", model, primaryError };
+}
 
 /**
  * Turn a raw metric key into a readable label: known keys get a curated

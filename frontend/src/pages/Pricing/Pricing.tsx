@@ -54,7 +54,7 @@ const TIERS = [
 
 const COMPARISON: { label: string; values: [string, string, string] }[] = [
   { label: "Evaluations / month", values: ["50", "Unlimited", "Unlimited"] },
-  { label: "LLM providers", values: ["Demo", "OpenAI, Anthropic, Gemini", "Everything in Pro"] },
+  { label: "LLM providers", values: ["Demo", "OpenAI, Anthropic, Gemini, Groq", "Everything in Pro"] },
   { label: "Private challenges", values: ["—", "✓", "✓"] },
   { label: "Metrics & history", values: ["7 days", "Unlimited", "Unlimited"] },
   { label: "Support", values: ["Community", "Priority", "Dedicated"] },

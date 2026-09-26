@@ -14,7 +14,7 @@ const FEATURES = [
   {
     icon: "🤖",
     title: "Multi-provider LLM",
-    text: "Generate solutions with OpenAI, Anthropic, Gemini, a local Ollama server, or a free built-in demo model — no API keys required for the demo provider.",
+    text: "Generate solutions with OpenAI, Anthropic, Gemini, Groq, a local Ollama server, or a free built-in demo model — no API keys required for the demo provider.",
   },
   {
     icon: "🧪",
@@ -35,7 +35,7 @@ const STEPS = [
   },
   {
     title: "Pick a provider",
-    text: "Choose OpenAI, Anthropic, Gemini, a local Ollama server, or the free demo model to generate the solution.",
+    text: "Choose OpenAI, Anthropic, Gemini, Groq, a local Ollama server, or the free demo model to generate the solution.",
   },
   {
     title: "Generate & evaluate",
@@ -49,7 +49,7 @@ const STEPS = [
 
 const PIPELINE = [
   { icon: "📝", label: "Write challenge", desc: "Prompt + tests" },
-  { icon: "🤖", label: "Pick provider", desc: "5 providers · demo is free" },
+  { icon: "🤖", label: "Pick provider", desc: "6 providers · demo is free" },
   { icon: "⚙️", label: "AI generates code", desc: "Sandboxed" },
   { icon: "🧪", label: "Tests run", desc: "Your suite, isolated" },
   { icon: "📊", label: "Get score", desc: "Pass/fail + metrics" },
@@ -84,7 +84,7 @@ const STATS: Array<{
   { value: 13, suffix: "", label: "Languages supported" },
   { value: 3, suffix: "s", label: "Avg. evaluation time", decimals: 0 },
   { value: 3, suffix: "", label: "Repair attempts" },
-  { value: 5, suffix: "", label: "LLM providers" },
+  { value: 6, suffix: "", label: "LLM providers" },
 ];
 
 /**
@@ -235,7 +235,7 @@ function Home() {
               is the fastest way to make the offer concrete above the fold. */}
           <Reveal delayMs={300}>
             {/* Named as examples, not an exhaustive list: six chips standing in
-                for thirteen languages and five providers. The chips are real
+                for thirteen languages and six providers. The chips are real
                 information rather than decoration, so unlike the code fragments
                 above they stay in the accessibility tree. */}
             <ul className={styles.chipRow} aria-label="Example integrations and test runners">

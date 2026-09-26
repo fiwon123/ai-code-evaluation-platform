@@ -29,6 +29,7 @@ PROVIDER_DEFAULTS: dict[str, str] = {
     "openai": "gpt-4o-mini",
     "anthropic": "claude-3-5-haiku-latest",
     "gemini": "gemini-2.0-flash",
+    "groq": "llama-3.1-8b-instant",
     "ollama": "qwen2.5-coder:7b",
 }
 
@@ -131,6 +132,26 @@ MODELS_BY_PROVIDER: dict[str, list[LLMModel]] = {
             description="Previous-gen pro model — reliable and widely available.",
         ),
     ],
+    "groq": [
+        LLMModel(
+            id="llama-3.1-8b-instant",
+            provider="groq",
+            label="Llama 3.1 8B Instant",
+            description="Fastest Groq model — a strong default on the free tier.",
+        ),
+        LLMModel(
+            id="llama-3.3-70b-versatile",
+            provider="groq",
+            label="Llama 3.3 70B Versatile",
+            description="Much stronger reasoning; a tighter free-tier daily quota.",
+        ),
+        LLMModel(
+            id="qwen/qwen3-32b",
+            provider="groq",
+            label="Qwen3 32B",
+            description="Recent open-weight model with solid coding ability.",
+        ),
+    ],
     "ollama": [
         LLMModel(
             id="qwen2.5-coder:7b",
@@ -168,6 +189,13 @@ MODELS_BY_PROVIDER: dict[str, list[LLMModel]] = {
             label="Llama 3.1",
             description="General-purpose local model that codes well.",
         ),
+        LLMModel(
+            id="tinyllama",
+            provider="ollama",
+            label="TinyLlama 1.1B",
+            description="~630 MB download — small enough for a CPU-only box, weak enough "
+            "to be a fallback rather than a primary.",
+        ),
     ],
 }
 
@@ -184,9 +212,7 @@ def is_known_model(model_id: str) -> bool:
 
 def model_belongs_to_provider(model_id: str, provider: str) -> bool:
     """Return True when ``model_id`` is one of ``provider``'s catalog entries."""
-    return any(
-        model.id == model_id and model.provider == provider for model in all_models()
-    )
+    return any(model.id == model_id and model.provider == provider for model in all_models())
 
 
 def model_default(provider: str) -> str | None:
