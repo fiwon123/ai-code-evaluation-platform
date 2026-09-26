@@ -70,14 +70,12 @@
 }
 
 .handoffTitle {
+  composes: focusRing from "../../styles/focus.css";
   font-size: var(--font-size-xl);
   max-width: 24ch;
 }
 
-.handoffTitle:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 4px;
-}
+
 
 .handoffText {
   color: var(--color-text-secondary);

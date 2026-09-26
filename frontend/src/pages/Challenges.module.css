@@ -38,17 +38,14 @@
 }
 
 .searchInput {
+  /* Was the one hand-rolled ring that already had the right shape. Now it is
+   * the shared one, so it cannot drift from the fields on every other page. */
+  composes: focusRingField from "../styles/focus.css";
   width: 100%;
   background: var(--color-surface-raised);
   border-color: var(--color-border);
   box-shadow: var(--shadow-card);
   padding-right: 2.5rem;
-}
-
-.searchInput:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .searchHint {

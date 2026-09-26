@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
@@ -216,20 +215,21 @@ function Home() {
 
           <Reveal delayMs={240}>
             <div className={styles.heroActions}>
-              <Link to="/demo">
-                <Button size="lg" className={styles.ctaPrimary}>
-                  See the demo
-                </Button>
-              </Link>
-              <Link to="/register">
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  className={styles.ctaSecondary}
-                >
-                  Get started free
-                </Button>
-              </Link>
+              <Button
+                to="/demo"
+                size="lg"
+                className={styles.ctaPrimary}
+              >
+                See the demo
+              </Button>
+              <Button
+                to="/register"
+                variant="secondary"
+                size="lg"
+                className={styles.ctaSecondary}
+              >
+                Get started free
+              </Button>
             </div>
           </Reveal>
 
@@ -401,13 +401,9 @@ function Home() {
             </p>
             <div className={styles.heroActions}>
               {user ? (
-                <Link to="/challenges/new">
-                  <Button size="lg">Create a challenge</Button>
-                </Link>
+                <Button to="/challenges/new" size="lg">Create a challenge</Button>
               ) : (
-                <Link to="/demo">
-                  <Button size="lg">Try the live demo</Button>
-                </Link>
+                <Button to="/demo" size="lg">Try the live demo</Button>
               )}
             </div>
           </div>
@@ -423,14 +419,14 @@ function Home() {
               platform generate and evaluate a solution in seconds.
             </p>
             <div className={styles.heroActions}>
-              <Link to="/register">
-                <Button size="lg">Create free account</Button>
-              </Link>
-              <Link to="/features">
-                <Button variant="secondary" size="lg">
-                  Explore features
-                </Button>
-              </Link>
+              <Button to="/register" size="lg">Create free account</Button>
+              <Button
+                to="/features"
+                variant="secondary"
+                size="lg"
+              >
+                Explore features
+              </Button>
             </div>
           </div>
         </Reveal>

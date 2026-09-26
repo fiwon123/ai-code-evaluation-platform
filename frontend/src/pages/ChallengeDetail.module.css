@@ -161,6 +161,10 @@
 }
 
 .apiKeyInput {
+  /* `outline: none` plus a 1px border-colour change is not a focus indicator —
+   * a 1px colour change with no area change fails WCAG 2.4.11, and this is the
+   * field a user most needs to be certain they are typing into. */
+  composes: focusRingField from "../styles/focus.css";
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -171,10 +175,7 @@
   transition: border-color var(--transition-fast);
 }
 
-.apiKeyInput:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
+
 
 .apiKeyInput::placeholder {
   color: var(--color-text-muted);
@@ -336,6 +337,7 @@
 }
 
 .runnerKeyInput {
+  composes: focusRingField from "../styles/focus.css";
   width: 100%;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
@@ -345,10 +347,7 @@
   font-size: var(--font-size-sm);
 }
 
-.runnerKeyInput:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
+
 
 /* A provider card with no history yet is a *slot*, not an empty page, so it
    takes the shared empty state's dashed edge at a fraction of the padding.

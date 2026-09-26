@@ -12,6 +12,11 @@
 }
 
 .input {
+  /* The app's one focus ring, rather than a fourth local opinion about it.
+   * This rule used to out-specify the global `:focus-visible` and paint
+   * `--color-primary-light`, so `--color-focus-ring` never reached the most-used
+   * control in the app. */
+  composes: focusRingField from "../../styles/focus.css";
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-base);
   font-family: var(--font-sans);
@@ -21,12 +26,6 @@
   border-radius: var(--radius-md);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   width: 100%;
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .input::placeholder {
@@ -50,6 +49,11 @@
   border-color: var(--color-danger);
 }
 
+/* An errored field already carries `.input`, and therefore the shared ring.
+ * Only the colour changes — same geometry, so the shape still reads as
+ * "focused" rather than as a second, unfamiliar indicator. This deliberately
+ * does not `composes`: the element holds both classes, and two composed
+ * `:focus` rules at equal specificity would be settled by stylesheet order. */
 .error:focus {
   border-color: var(--color-danger);
   box-shadow: 0 0 0 3px var(--color-danger-light);

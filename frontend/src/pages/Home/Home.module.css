@@ -114,20 +114,35 @@
   box-shadow: 0 8px 28px -8px color-mix(in srgb, var(--color-primary) 65%, transparent);
 }
 
-.ctaPrimary:hover,
-.ctaPrimary:focus-visible {
+.ctaPrimary:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 40px -10px color-mix(in srgb, var(--color-primary) 75%, transparent);
+}
+
+/* Focus used to share the `:hover` rule wholesale, so tabbing to the CTA looked
+ * exactly like pointing at it — no focus-specific change at all. The elevation
+ * is kept and the shared ring is layered on top of it, so a keyboard user gets
+ * the button *and* the focus. */
+.ctaPrimary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  box-shadow: 0 14px 40px -10px color-mix(in srgb, var(--color-primary) 75%, transparent),
+    0 0 0 3px var(--color-focus-ring);
 }
 
 .ctaSecondary {
   box-shadow: var(--shadow-card);
 }
 
-.ctaSecondary:hover,
-.ctaSecondary:focus-visible {
+.ctaSecondary:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-elevated);
+}
+
+.ctaSecondary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-elevated), 0 0 0 3px var(--color-focus-ring);
 }
 
 /* Toolchain chips. Monospace, low-contrast, and deliberately quiet — they
