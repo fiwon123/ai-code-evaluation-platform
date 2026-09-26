@@ -18,6 +18,9 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-lg);
   max-width: 600px;
+  /* The box is narrower than .page, so it needs explicit auto margins to
+     center under the heading — text-align alone only centers the glyphs. */
+  margin: 0 auto;
 }
 
 .grid {
