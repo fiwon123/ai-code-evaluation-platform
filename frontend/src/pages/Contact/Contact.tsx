@@ -111,14 +111,14 @@ function Contact() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}>
+      <header className={styles.header}>
         <span className="eyebrow">Contact</span>
         <PageTitle size="lg" className={styles.title}>Get in touch</PageTitle>
         <p className={styles.subtitle}>
           Questions about the platform, enterprise pricing, or contributing?
           We'd love to hear from you.
         </p>
-      </div>
+      </header>
 
       <div className={styles.columns}>
         <Card className={styles.formCard}>
