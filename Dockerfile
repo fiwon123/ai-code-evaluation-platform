@@ -88,6 +88,46 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/backend-venv
 COPY backend/ /sandbox/ai-code-evaluation-platform/backend/
 RUN cd /sandbox/ai-code-evaluation-platform/backend && uv sync
 
+# --- Playwright Chromium (the e2e suite's browser) -----------------------------
+# frontend/e2e/ is a 6-spec Playwright suite that can only be exercised against
+# a real rendered browser (contrast is computed from pixels, the WebSocket spec
+# needs a real page). It has to be baked here because there is no way to install
+# it later: the runtime user below is non-root with no sudo, and Chromium's
+# system libraries come from apt.
+#
+# This layer MUST stay above `USER devuser` — that is the whole reason it is a
+# build step rather than a container-startup step. The smoke check inside it runs
+# as root, hence --no-sandbox (Chromium refuses to enable its setuid sandbox
+# for uid 0); the second check below the USER directive repeats the launch as the
+# non-root user the suite really uses.
+#
+# PLAYWRIGHT_VERSION must equal the resolved `@playwright/test` in
+# frontend/package-lock.json: browsers are revision-locked, so a mismatched
+# ARG yields "Executable doesn't exist" at runtime instead of a launch failure
+# you can read. backend/tests/test_dev_sandbox_playwright.py enforces it.
+#
+# Browsers land in /ms-playwright, NOT in the workspace: /sandbox/
+# ai-code-evaluation-platform is bind-mounted over at runtime, so anything
+# downloaded there would be shadowed (and would dirty the host checkout).
+ARG PLAYWRIGHT_VERSION=1.63.0
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npm install --global --no-fund --no-audit "playwright@${PLAYWRIGHT_VERSION}" \
+    && npx --yes playwright install --with-deps chromium \
+    # Download-only verification is worthless: the failure this guards against
+    # is a browser that is present but cannot start (missing shared library),
+    # which `playwright install` reports as success. So actually launch it.
+    # NODE_PATH is what makes the globally installed module resolvable from the
+    # workspace cwd; without it `require('playwright')` throws MODULE_NOT_FOUND.
+    && NODE_PATH="$(npm root --global)" node -e "require('playwright').chromium.launch({args:['--no-sandbox']}).then(b => b.close()).then(() => console.log('chromium build-time launch OK')).catch(e => { console.error(e); process.exit(1); })" \
+    # The CLI is only needed to fetch the browser; the suite resolves its own
+    # copy from the bind-mounted frontend/node_modules. Dropping it keeps a
+    # second, drift-prone playwright out of the image.
+    && npm uninstall --global playwright \
+    && rm -rf /root/.npm \
+    # Readable by any runtime UID: a container may run as a different user than
+    # the build args, and the browser is useless if it cannot be executed.
+    && chmod -R a+rX /ms-playwright
+
 # --- Runtime (non-root) user -------------------------------------------------
 # The workspace is bind-mounted from the host, so anything the containers write
 # lands on the host with the container's UID. Running as root therefore leaves
@@ -178,6 +218,27 @@ RUN SANDBOX_RC='\n# Load dev sandbox configuration\n[ -f /etc/profile.d/00-dev-s
 # Compose still pins the exact UID/GID via `user:`; root remains available for
 # debugging with `docker compose exec -u root`.
 USER devuser
+
+# The Chromium install above is verified as root; verify it again as the user the
+# e2e suite actually runs as. --no-sandbox here is deliberate and matches the
+# `chromiumSandbox: false` default in frontend/playwright.config.ts (inside
+# `use.launchOptions` — it is a launch option, not a `use` option) — see the long
+# note there for why the suite runs unsandboxed. Keeping the two in step is what
+# makes this check meaningful: a build that verified a *sandboxed* launch would
+# pass on a host whose Docker seccomp allows user namespaces and fail on one that
+# does not, so the image would not be reproducible.
+#
+# What this second check does add, and why it is worth its own layer: it proves
+# the runtime uid can EXECUTE the browser and resolve every shared library. That
+# is the failure that actually happens (exit 127 on a missing libglib), it is
+# uid-sensitive, and it is exactly what the `a+rX /ms-playwright` above and this
+# image's filesystem layout are responsible for. A download-only check, or a
+# check run as root, would pass on an image whose browser cannot start.
+RUN CHROME="$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome | head -1)" \
+    && test -n "$CHROME" \
+    && { [ "${CHROMIUM_SANDBOX:-0}" = "1" ] || printf '%s\n' '--no-sandbox'; } > /tmp/pw-args \
+    && "$CHROME" --headless --no-first-run --disable-gpu "$(cat /tmp/pw-args)" --dump-dom about:blank > /dev/null \
+    && echo "chromium runtime-user launch OK"
 
 # Keep the container alive when started without an explicit command; the dev
 # and celery compose services override this with their real entrypoints.

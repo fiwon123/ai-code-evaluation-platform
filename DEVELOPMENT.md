@@ -160,9 +160,49 @@ npm run dev                                # (dev-entrypoint already does this)
 npm run lint                               # oxlint
 npm run build                              # type check + production build
 
+# Playwright e2e (real Chromium — see "Browser tests" below)
+make test-e2e                              # 6 specs, desktop + Pixel 7 profiles
+
 # Full gate
 make check                                 # backend lint+tests, frontend lint+build+tests
 ```
+
+## Browser tests (`make test-e2e`)
+
+`frontend/e2e/` is a 6-spec Playwright suite that needs a **rendered** browser:
+the contrast spec measures WCAG ratios from painted pixels and the WebSocket
+spec drives a live page. Everything is mocked at the network layer
+(`e2e/data.ts`), so no backend is needed — Playwright reuses the Vite server on
+:5173 if one is up and starts its own otherwise.
+
+Chromium is **baked into the dev image** (`Dockerfile`, above `USER devuser`,
+because its system libraries come from apt and the runtime user has no sudo).
+That is the only place it can be installed: a container started from an older
+image has no browser and cannot get one.
+
+```bash
+make dev-build                             # only needed after an image that predates the bake
+make test-e2e                              # inside the sandbox: browser already there
+```
+
+Three things about it are deliberate, and each has a test in
+`backend/tests/test_dev_sandbox_playwright.py`:
+
+- **The image launches Chromium at build time, twice** — once as root, once as
+  the runtime user. `playwright install` reports success for a download that
+  cannot start (a missing shared library looks exactly like a good install), so
+  the only real check is starting it.
+- **`PLAYWRIGHT_VERSION` must equal the resolved `@playwright/test`** in
+  `frontend/package-lock.json`. Browsers are revision-locked, so drift shows up
+  only at runtime, as "Executable doesn't exist".
+- **The suite runs Chromium unsandboxed** (`chromiumSandbox: false`): Docker's
+  default seccomp profile blocks the user namespace its sandbox needs, and the
+  alternative — `seccomp: unconfined` on the `dev` service — would strip
+  filtering from uvicorn, vite, the worker and the sandboxed agent. Set
+  `CHROMIUM_SANDBOX=1` to opt back in on a host that allows user namespaces.
+
+It is deliberately **not** part of `make check`: the gate stays lint + vitest +
+build so it stays fast. Run it before shipping UI changes.
 
 ## Troubleshooting
 
@@ -178,6 +218,8 @@ make check                                 # backend lint+tests, frontend lint+b
 | `dev` container logs "UID … has no passwd entry" | The image was built for a different UID than the one you're running as — `make dev-build` to rebuild it for your UID |
 | Evaluations fall back to unsandboxed execution / `celery` logs a Docker socket permission error | The host Docker socket group wasn't passed through — start the stack via the Makefile so `DOCKER_GID` is picked up (`make -n dev-up`). On macOS/rootless/remote daemons set it explicitly: `make dev-up DOCKER_GID=$(stat -f %g /var/run/docker.sock)` |
 | Docker unavailable | Backend falls back to subprocess execution (`DOCKER_ENABLED=false`) |
+| `make test-e2e` says "No Playwright browser found" | The image predates the Chromium bake — `make dev-build` (then `make dev-restart` if the stack is already up). On a host-native checkout, `cd frontend && npx playwright install chromium` |
+| e2e fails with "Execution context was destroyed" or a form stuck on its own page | The Vite dev server pushed a full page reload into the run — `make dev-log` shows `[vite] (client) page reload` at the failure time. It only kills whichever tests were mid-navigation, so re-run; editing `frontend/src` while the suite runs causes it deliberately |
 | Submissions stuck "pending" for hours | The recovery sweep (Celery beat) must be running: `docker compose ps` should show `beat` healthy. Stale `pending` rows are re-dispatched after 10 min and **abandoned (failed) 60 min after creation** (`PENDING_MAX_MINUTES` in `backend/src/app/tasks/recover.py`). The Profile/SubmissionDetail UI shows "stuck"/"waiting over 10 minutes" in the meantime. |
 
 ## Recovery sweep (Celery beat)
