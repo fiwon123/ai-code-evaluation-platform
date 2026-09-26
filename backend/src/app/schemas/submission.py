@@ -145,6 +145,9 @@ class SharedResultRead(BaseModel):
     passed_tests: int
     total_tests: int
     logs: str
+    #: Readable rendering of the run, so a shared link is as legible as the
+    #: owner's view. Null for reports written before v0.14.
+    logs_summary: str | None = None
     metrics: dict[str, Any]
     test_results: list[dict[str, Any]] | None = None
 

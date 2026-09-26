@@ -254,6 +254,52 @@ it("merges status updates into the live submission", () => {
     expect(result.current.liveSubmission).toEqual(finished);
   });
 
+  it("carries attempt history through a repair update", () => {
+    // The repair event ships the record, not just a status: a page open during
+    // a repair has to be able to render the failed attempt that triggered it
+    // without a REST round-trip. If this hook ever drops `attempts`, the
+    // timeline would sit empty until the run terminates.
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "snapshot",
+        submission: submissionFixture({ status: "processing", phase: "testing" }),
+      }),
+    );
+
+    const failedAttempt = {
+      id: "a1",
+      attempt_number: 1,
+      code: "def two_sum():\n    return []",
+      passed_tests: 1,
+      total_tests: 2,
+      score: 50,
+      logs: "FAILED test_sub",
+      logs_summary: "1 of 2 tests passed (score 50.0%)",
+      metrics: {},
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "update",
+        status: "processing",
+        phase: "repairing",
+        submission: submissionFixture({
+          status: "processing",
+          phase: "repairing",
+          attempts: [failedAttempt],
+          max_attempts: 3,
+        }),
+      }),
+    );
+
+    expect(result.current.liveSubmission?.phase).toBe("repairing");
+    expect(result.current.liveSubmission?.attempts).toEqual([failedAttempt]);
+    expect(result.current.liveSubmission?.max_attempts).toBe(3);
+  });
+
   it("lets a later record win over an earlier status patch (no stale reorder)", () => {
     const { result } = renderHook(() => useSubmissionSocket("s1"));
 

@@ -32,7 +32,7 @@ describe("ResultReport log rendering", () => {
       <ResultReport result={result()} code={null} language="python" />,
     );
 
-    expect(screen.getByText("logs")).toBeInTheDocument();
+    expect(screen.getByText(/raw output/i)).toBeInTheDocument();
     const numbers = [...container.querySelectorAll(`.${codeBlockStyles.lineNumber}`)].map(
       (el) => el.textContent,
     );
@@ -59,5 +59,53 @@ describe("ResultReport log rendering", () => {
     const codeGutter = [...container.querySelectorAll(`.${codeBlockStyles.lineNumber}`)];
     expect(codeGutter).toHaveLength(2); // the two log lines only
     expect(container.querySelectorAll(`.${codeBlockStyles.lineError}`)).toHaveLength(1);
+  });
+});
+
+/**
+ * The complaint that motivated v0.14: the runner dump was the only failure
+ * output on the page, and it is unreadable. The summary leads; the dump is one
+ * click away. These pin that split, including the legacy case where a report
+ * predates summaries and has nothing to lead with.
+ */
+describe("ResultReport readable summary", () => {
+  it("leads with the summary instead of the raw dump", () => {
+    render(
+      <ResultReport
+        result={result({
+          logs_summary: "1 of 2 tests passed (score 50.0%)\nFailed tests (1):\n- test_sub",
+        })}
+        code={null}
+        language="python"
+      />,
+    );
+
+    expect(
+      screen.getByText(/1 of 2 tests passed/),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the raw dump collapsed behind a disclosure", () => {
+    render(
+      <ResultReport
+        result={result({ logs_summary: "1 of 2 tests passed (score 50.0%)" })}
+        code={null}
+        language="python"
+      />,
+    );
+
+    const disclosure = screen.getByText(/show raw output/i).closest("details");
+    expect(disclosure).not.toBeNull();
+    // Closed by default: the log body must not be visible without a click.
+    expect(disclosure).not.toHaveAttribute("open");
+  });
+
+  it("still renders a report whose summary is missing", () => {
+    // Results written before v0.14 have no summary column value. The card has
+    // to degrade to a pointer at the raw logs, not render an empty heading.
+    render(<ResultReport result={result()} code={null} language="python" />);
+
+    expect(screen.getByText(/no summary was recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/show raw output/i)).toBeInTheDocument();
   });
 });

@@ -57,6 +57,12 @@ function ResultReport({ result, code, language, status }: ResultReportProps) {
   const durationMs =
     "duration_ms" in result.metrics ? result.metrics.duration_ms : undefined;
   const testResults = Array.isArray(result.test_results) ? result.test_results : [];
+  // The summary is what makes a failure readable; the raw dump stays behind a
+  // disclosure. Older results (and shares served from an older payload) have
+  // no summary, so both the card and the disclosure have to tolerate its
+  // absence rather than render an empty box.
+  const summary = "logs_summary" in result ? (result.logs_summary ?? "") : "";
+  const rawLogLines = result.logs ? result.logs.split("\n").length : 0;
 
   return (
     <div className={styles.report}>
@@ -84,6 +90,18 @@ function ResultReport({ result, code, language, status }: ResultReportProps) {
           </p>
         </Card>
       </div>
+
+      <Card>
+        <h2 className={styles.sectionTitle}>Outcome</h2>
+        {summary ? (
+          <p className={styles.summary}>{summary}</p>
+        ) : (
+          <p className={styles.muted}>
+            No summary was recorded for this run — the raw logs below are the
+            only record of what happened.
+          </p>
+        )}
+      </Card>
 
       <Card>
         <h2 className={styles.sectionTitle}>Test results</h2>
@@ -125,9 +143,12 @@ function ResultReport({ result, code, language, status }: ResultReportProps) {
       </Card>
 
       <Card>
-        <h2 className={styles.sectionTitle}>Execution logs</h2>
+        <h2 className={styles.sectionTitle}>Raw execution logs</h2>
         {result.logs ? (
-          <CodeBlock code={result.logs} log />
+          <details className={styles.disclosure}>
+            <summary>Show raw output ({rawLogLines} lines)</summary>
+            <CodeBlock code={result.logs} log />
+          </details>
         ) : (
           <p className={styles.muted}>No logs recorded.</p>
         )}

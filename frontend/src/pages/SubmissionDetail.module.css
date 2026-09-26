@@ -48,6 +48,18 @@
   gap: var(--space-4);
 }
 
+.attempts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.attemptsTitle {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
+}
+
 .errorText {
   color: var(--color-danger);
   margin: 0;

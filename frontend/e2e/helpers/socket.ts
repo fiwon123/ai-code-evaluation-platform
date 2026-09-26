@@ -23,6 +23,22 @@ export interface WireResult {
   total_tests: number;
   score: number;
   logs: string;
+  logs_summary?: string | null;
+  metrics: Record<string, unknown>;
+  test_results: Array<{ name: string; passed: boolean; message?: string | null }> | null;
+  created_at: string;
+}
+
+/** One row of a submission's repair history. */
+export interface WireAttempt {
+  id: string;
+  attempt_number: number;
+  code: string;
+  passed_tests: number;
+  total_tests: number;
+  score: number;
+  logs: string;
+  logs_summary: string;
   metrics: Record<string, unknown>;
   test_results: Array<{ name: string; passed: boolean; message?: string | null }> | null;
   created_at: string;
@@ -33,7 +49,7 @@ export interface WireSubmission {
   user_id: string;
   challenge_id: string;
   status: "pending" | "processing" | "completed" | "failed";
-  phase: "generating" | "testing" | null;
+  phase: "generating" | "testing" | "repairing" | null;
   started_at: string | null;
   provider: string | null;
   model?: string | null;
@@ -41,6 +57,8 @@ export interface WireSubmission {
   code: string | null;
   score: number | null;
   evaluation_result: WireResult | null;
+  attempts?: WireAttempt[];
+  max_attempts?: number;
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +107,7 @@ export function completedSubmission(id: string): WireSubmission {
       total_tests: 2,
       score: 100,
       logs: LOGS,
+      logs_summary: "2 of 2 tests passed (score 100.0%)",
       metrics: { duration_ms: 412 },
       test_results: [
         { name: "test_add", passed: true },
@@ -97,6 +116,69 @@ export function completedSubmission(id: string): WireSubmission {
       created_at: isoAgo(1),
     },
     updated_at: isoAgo(1),
+  };
+}
+
+/** The first attempt: generated, tested, and one test short. */
+export function failedAttempt(): WireAttempt {
+  return {
+    id: "a-e2e-1",
+    attempt_number: 1,
+    code: "def two_sum(nums, target):\n    return []\n",
+    passed_tests: 1,
+    total_tests: 2,
+    score: 50,
+    logs: "tests/test_math.py::test_add PASSED\ntests/test_math.py::test_sub FAILED",
+    logs_summary: "1 of 2 tests passed (score 50.0%)\nFailed tests (1):\n- test_sub: assert [] == [0, 1]",
+    metrics: { returncode: 1 },
+    test_results: [
+      { name: "test_add", passed: true },
+      { name: "test_sub", passed: false, message: "assert [] == [0, 1]" },
+    ],
+    created_at: isoAgo(5),
+  };
+}
+
+/**
+ * A repair in flight: attempt 1 failed and has been handed back to the
+ * provider. The worker publishes this with the record attached, so the page can
+ * show the failed attempt while attempt 2 is still generating.
+ */
+export function repairingSubmission(id: string): WireSubmission {
+  return {
+    ...processingSubmission(id),
+    phase: "repairing",
+    code: null,
+    score: null,
+    attempts: [failedAttempt()],
+    max_attempts: 3,
+  };
+}
+
+/** A run that failed, was repaired, and then passed on attempt 2. */
+export function repairedSubmission(id: string): WireSubmission {
+  return {
+    ...completedSubmission(id),
+    attempts: [
+      failedAttempt(),
+      {
+        id: "a-e2e-2",
+        attempt_number: 2,
+        code: SOLUTION_CODE,
+        passed_tests: 2,
+        total_tests: 2,
+        score: 100,
+        logs: LOGS,
+        logs_summary: "2 of 2 tests passed (score 100.0%)",
+        metrics: { returncode: 0 },
+        test_results: [
+          { name: "test_add", passed: true },
+          { name: "test_sub", passed: true },
+        ],
+        created_at: isoAgo(2),
+      },
+    ],
+    max_attempts: 3,
   };
 }
 
@@ -129,6 +211,14 @@ export const statusMessage = (
 /** Terminal update carrying the whole persisted record — the #190 wire shape. */
 export const terminalMessage = (submission: WireSubmission): string =>
   JSON.stringify({ type: "update", status: submission.status, phase: null, submission });
+
+/** A repair update carrying the record — the v0.14 wire shape.
+ *
+ *  Not terminal: the run is still processing, so the phase must survive
+ *  alongside the record rather than be forced to null the way a terminal
+ *  message does. */
+export const repairingMessage = (submission: WireSubmission): string =>
+  JSON.stringify({ type: "update", status: submission.status, phase: "repairing", submission });
 
 /** A terminal update with the record *dropped* — the partial-sequence fallback. */
 export const recordlessTerminalMessage = (
