@@ -68,6 +68,12 @@
 .navRight {
   display: flex;
   align-items: center;
+  /* #232: the theme toggle is the first child here and `.navRight` had no gap,
+     so it sat flush against the avatar chip / auth buttons. The right-hand side
+     comes from this gap; the left-hand side from `.nav`'s gap plus a little
+     extra, so the toggle reads as its own control rather than a spacer. */
+  gap: var(--space-3);
+  margin-left: var(--space-2);
 }
 
 /* Auth actions (logged out) */
