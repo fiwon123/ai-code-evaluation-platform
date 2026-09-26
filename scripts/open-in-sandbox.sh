@@ -43,6 +43,18 @@ if [[ -z "${DOCKER_GID:-}" ]]; then
     export DOCKER_GID
 fi
 
+# GitHub auth for the agent, resolved the same way the Makefile resolves it
+# (keep the two in sync). `gh auth login` stores the token in the gh credential
+# store rather than the environment, and a stale GH_TOKEN already exported in
+# the operator's shell would shadow that fresh token — so pick a token that is
+# actually verified against the API, and forward nothing when there is none,
+# letting gh fall back to the read-only ~/.config/gh mount.
+GH_TOKEN_RESOLVED="$("$SCRIPT_DIR/resolve-gh-token.sh" 2>/dev/null || true)"
+if [[ -n "$GH_TOKEN_RESOLVED" ]]; then
+    export GH_TOKEN="$GH_TOKEN_RESOLVED"
+    export GITHUB_TOKEN="$GH_TOKEN_RESOLVED"
+fi
+
 # Ensure the stack is running (idempotent; keeps postgres_data volume).
 if ! docker compose ps -q dev >/dev/null 2>&1; then
     echo "[sandbox] Starting dev stack (docker compose up -d dev)..."
