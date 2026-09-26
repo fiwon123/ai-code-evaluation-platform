@@ -684,6 +684,8 @@
 }
 
 .statItem {
+  --stat-accent: var(--color-primary);
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -695,16 +697,42 @@
     transform var(--transition-base) var(--ease-out-expo);
 }
 
+/* One identity per stat, so the strip reads as four different facts rather
+   than one number four times. Purely decorative: the value itself is never
+   tinted to imply a verdict, and the label stays on --color-text-secondary so
+   it is unaffected by the accent. */
+.statItem[data-accent="teal"] { --stat-accent: var(--color-accent-teal); }
+.statItem[data-accent="violet"] { --stat-accent: var(--color-accent-violet); }
+.statItem[data-accent="rose"] { --stat-accent: var(--color-accent-rose); }
+
+/* A rule under the number gives each stat a colour anchor that survives at any
+   width, where a coloured background alone would fight the strip's own
+   surface. It also gives the hover something to deepen. */
+.statItem::after {
+  content: "";
+  width: 28px;
+  height: 2px;
+  margin-top: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--stat-accent);
+  opacity: 0.55;
+  transition: opacity var(--transition-base);
+}
+
 .statItem:hover {
-  background: var(--color-primary-light);
+  background: color-mix(in srgb, var(--stat-accent) 10%, transparent);
   transform: translateY(-2px);
+}
+
+.statItem:hover::after {
+  opacity: 1;
 }
 
 .statValue {
   font-size: 2rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--color-text);
+  color: var(--stat-accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -715,10 +743,16 @@
   letter-spacing: 0.05em;
 }
 
+/* The caption is the sample-figures disclaimer, so it has to read as a note
+   *under* the figures rather than as a fifth stat. Tracking it out and
+   muting it does that; centring it matches the strip above. */
 .statsCaption {
   margin-top: var(--space-3);
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
+  text-align: center;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* ---- Sections ---- */
@@ -743,6 +777,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  /* `text-align: center` on the parent centres inline content, but an
+     inline-flex box is centred by that same mechanism, so stating it here
+     keeps the label over the title if the header's alignment ever changes. */
+  align-self: center;
   margin: 0 0 var(--space-3);
   padding: 4px var(--space-3);
   border: 1px solid var(--color-border);

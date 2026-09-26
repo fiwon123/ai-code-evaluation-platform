@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
+import EmptyState from "../components/EmptyState/EmptyState.tsx";
 import CodeBlock from "../components/CodeBlock/CodeBlock.tsx";
 import ConfirmDialog from "../components/ConfirmDialog/ConfirmDialog.tsx";
 import LanguageBadge from "../components/LanguageBadge/LanguageBadge.tsx";
@@ -372,6 +373,7 @@ function ChallengeDetail() {
           </Badge>
         </div>
       </div>
+      <hr className="dividerRule" />
 
       <div className={styles.layout}>
         <div className={styles.mainCol}>
@@ -634,7 +636,11 @@ function ChallengeDetail() {
                         </span>
                       </div>
                     ) : (
-                      <p className={styles.muted}>No runs yet.</p>
+                      <EmptyState
+                        as="p"
+                        title="No runs yet."
+                        className={styles.emptySlot}
+                      />
                     )}
 
                     {running && runningElapsed && (

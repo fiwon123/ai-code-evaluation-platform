@@ -78,13 +78,15 @@ const STATS: Array<{
   suffix: string;
   label: string;
   decimals?: number;
+  /** Which identity hue this stat wears. See `accentClass` below. */
+  accent: "primary" | "teal" | "violet" | "rose";
 }> = [
   // The two counts are read off the registries rather than eyeballed:
   // services/languages.py EXECUTABLE_LANGUAGES and services/llm.py _PROVIDERS.
-  { value: 13, suffix: "", label: "Languages supported" },
-  { value: 3, suffix: "s", label: "Avg. evaluation time", decimals: 0 },
-  { value: 3, suffix: "", label: "Repair attempts" },
-  { value: 6, suffix: "", label: "LLM providers" },
+  { value: 13, suffix: "", label: "Languages supported", accent: "primary" },
+  { value: 3, suffix: "s", label: "Avg. evaluation time", decimals: 0, accent: "teal" },
+  { value: 3, suffix: "", label: "Repair attempts", accent: "violet" },
+  { value: 6, suffix: "", label: "LLM providers", accent: "rose" },
 ];
 
 /**
@@ -469,7 +471,10 @@ function StatItem({ stat }: { stat: (typeof STATS)[number] }) {
   const display = useCountUp(stat.value, 900, 200);
   const shown = stat.decimals ? display.toFixed(stat.decimals) : String(display);
   return (
-    <div className={styles.statItem}>
+    // The accent is carried by a custom property rather than a class per hue,
+    // so `.statItem`'s hover/tint rules are written once. The data attribute
+    // also means the colour survives if this is ever server-rendered.
+    <div className={styles.statItem} data-accent={stat.accent}>
       <span className={styles.statValue}>
         {shown}
         {stat.suffix}

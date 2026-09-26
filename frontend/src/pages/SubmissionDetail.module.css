@@ -68,3 +68,14 @@
 .retry {
   margin-top: var(--space-4);
 }
+/* The not-found branch is a full page, so it gets the page rhythm rather than
+   sitting flush against the header. */
+.notFound {
+  padding: var(--space-12) var(--space-6) var(--space-16);
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.notFoundLink {
+  font-weight: 600;
+}

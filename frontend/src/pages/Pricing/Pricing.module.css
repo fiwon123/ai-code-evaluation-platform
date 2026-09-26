@@ -1,5 +1,5 @@
 .page {
-  padding: var(--space-6) var(--space-4) var(--space-20);
+  padding: var(--space-16) var(--space-6) var(--space-20);
   max-width: var(--max-width);
   margin: 0 auto;
 }
@@ -20,7 +20,7 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-lg);
   max-width: 600px;
-  margin: 0 auto; 
+  margin: 0 auto;
 }
 
 .tiers {

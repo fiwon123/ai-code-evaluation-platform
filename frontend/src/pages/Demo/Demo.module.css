@@ -200,9 +200,16 @@
   color: var(--color-text-secondary);
 }
 
+/* An inline note inside the runner panel, so it stays inline — but it borrows
+   the dashed edge the shared EmptyState uses, so "nothing to run yet" reads as
+   the same kind of moment as every other empty slot in the app. */
 .runnerEmpty {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
 }
 
 .loginNote {

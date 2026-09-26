@@ -1,0 +1,42 @@
+/* Shared empty state (issue #236). One treatment for every "nothing here yet"
+   moment, replacing four hand-rolled variants.
+
+   The dashed edge is the load-bearing part: it is the only thing that says
+   "this is a slot waiting to be filled" rather than "this is a section". A
+   solid border made the challenges-list empty state read as a card with no
+   content in it. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 46ch;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Comfortable on a phone, where a full-width block of vertical padding pushes
+   the call to action below the fold. */
+@media (max-width: 640px) {
+  .empty {
+    padding: var(--space-8) var(--space-4);
+  }
+}

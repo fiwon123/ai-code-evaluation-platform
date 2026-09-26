@@ -1,16 +1,7 @@
+/* Only used while the auth context is still resolving, where the page renders
+   this placeholder instead of the layout. */
 .page {
   min-height: 60vh;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: var(--space-16) var(--space-6) var(--space-20);
-  background: var(--color-bg-gradient);
-}
-
-.card {
-  width: 100%;
-  max-width: 420px;
-  box-shadow: var(--shadow-lg);
 }
 
 .body {

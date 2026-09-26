@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import Card from "../components/Card/Card.tsx";
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import AuthLayout from "../components/AuthLayout/AuthLayout.tsx";
 import Spinner from "../components/Spinner/Spinner.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { extractError } from "../utils/errors.ts";
@@ -52,28 +51,34 @@ function OAuthCallback() {
   }
 
   return (
-    <div className={styles.page}>
-      <Card className={styles.card}>
-        <div className={styles.body}>
-          {error ? (
-            <>
-              <PageTitle size="sm">Couldn’t log you in</PageTitle>
-              <p role="alert" className={styles.error}>
-                {error}
-              </p>
-              <Link to="/login" className={styles.link}>
-                Back to login
-              </Link>
-            </>
-          ) : (
-            <>
-              <Spinner label="Signing you in" />
-              <p className={styles.status}>Signing you in…</p>
-            </>
-          )}
-        </div>
-      </Card>
-    </div>
+    <AuthLayout
+      title={error ? "Couldn’t log you in" : "Signing you in"}
+      subtitle={
+        error
+          ? "The GitHub authorization did not complete."
+          : "Finishing up with GitHub — this only takes a moment."
+      }
+    >
+      <div className={styles.body}>
+        {error ? (
+          <>
+            {/* The reason stays announced: `role="alert"` is what a screen
+                reader interrupts on, and the heading above is not one. */}
+            <p role="alert" className={styles.error}>
+              {error}
+            </p>
+            <Link to="/login" className={styles.link}>
+              Back to login
+            </Link>
+          </>
+        ) : (
+          <>
+            <Spinner label="Signing you in" />
+            <p className={styles.status}>Signing you in…</p>
+          </>
+        )}
+      </div>
+    </AuthLayout>
   );
 }
 

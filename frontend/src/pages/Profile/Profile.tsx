@@ -8,6 +8,7 @@ import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
+import StatCard from "../../components/StatCard/StatCard.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
@@ -36,6 +37,7 @@ const PAGE_SIZE = 10;
 // interval so rows flip to their terminal state (e.g. the recovery sweep fails
 // an abandoned pending row) without a manual page reload.
 const SUBMISSIONS_POLL_INTERVAL_MS = 5_000;
+
 
 function Profile() {
   const { user } = useAuth();
@@ -374,22 +376,30 @@ function Profile() {
       </Card>
 
       <div className={styles.statsRow}>
-        <Card className={styles.statCard}>
-          <span className={styles.statValue}>{stats.totalChallenges}</span>
-          <span className={styles.statLabel}>Challenges created</span>
-        </Card>
-        <Card className={styles.statCard}>
-          <span className={styles.statValue}>{stats.totalSubmissions}</span>
-          <span className={styles.statLabel}>Evaluations run</span>
-        </Card>
-        <Card className={styles.statCard}>
-          <span className={styles.statValue}>{stats.avgScore}%</span>
-          <span className={styles.statLabel}>Average score</span>
-        </Card>
-        <Card className={styles.statCard}>
-          <span className={styles.statValue}>{stats.completionRate}%</span>
-          <span className={styles.statLabel}>Completion rate</span>
-        </Card>
+        <StatCard
+          label="Challenges created"
+          value={stats.totalChallenges}
+          accent="primary"
+        />
+        <StatCard
+          label="Evaluations run"
+          value={stats.totalSubmissions}
+          accent="teal"
+        />
+        {/* Score and completion rate are judgements, not identities, so their
+            colour comes from the value the same way the per-challenge chips
+            below already do — one reader learns the scale once and reads it in
+            both places. `scoreVariant` is the single source of that scale. */}
+        <StatCard
+          label="Average score"
+          value={`${stats.avgScore}%`}
+          accent={scoreVariant(stats.avgScore)}
+        />
+        <StatCard
+          label="Completion rate"
+          value={`${stats.completionRate}%`}
+          accent={scoreVariant(stats.completionRate)}
+        />
       </div>
 
       <section className={styles.section}>

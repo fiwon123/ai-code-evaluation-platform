@@ -38,3 +38,14 @@
     transform: translateX(100%);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The sweep is decoration, not the loading signal: the grey block itself is
+     what says "not here yet", and it stays on screen either way. Sweeping a
+     highlight across every skeleton on the page is also the most motion on
+     offer while a list is loading, which is exactly when a reader who has
+     asked for less of it is most likely to be looking. */
+  .skeleton::after {
+    animation: none;
+  }
+}
