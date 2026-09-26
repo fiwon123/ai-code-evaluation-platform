@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
@@ -123,14 +122,13 @@ function Pricing() {
                 </li>
               ))}
             </ul>
-            <Link to={tier.to} className={styles.tierButton}>
-              <Button
-                variant={tier.featured ? "primary" : "secondary"}
-                className={styles.tierButton}
-              >
-                {tier.cta}
-              </Button>
-            </Link>
+            <Button
+              to={tier.to}
+              variant={tier.featured ? "primary" : "secondary"}
+              className={styles.tierButton}
+            >
+              {tier.cta}
+            </Button>
           </Card>
         ))}
       </div>

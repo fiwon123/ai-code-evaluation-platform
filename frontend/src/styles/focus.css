@@ -1,0 +1,40 @@
+/*
+ * The one focus treatment for the app (issue #244).
+ *
+ * Focus was previously expressed five different ways, all of them at a higher
+ * specificity than the global `:focus-visible` rule, so all of them won against
+ * it and `--color-focus-ring` was dead for the most-used control in the app:
+ *
+ *   Input                 outline: none + 0 0 0 3px --color-primary-light
+ *   ThemeToggle           outline: none + 0 0 0 3px --color-primary-light
+ *   Challenges search     outline: none + 0 0 0 3px --color-focus-ring
+ *   ChallengeDetail keys  outline: none + border-color   <- no ring at all
+ *   Contact handoffTitle  outline-offset: 4px, not 2px
+ *
+ * The API-key inputs were the outright failure: `outline: none` plus a 1px
+ * border-colour change is not a focus indicator, and it was on the field a user
+ * most needs to be sure they are typing into.
+ *
+ * Two shapes, one geometry. `focusRing` is for controls that are not text
+ * fields and keeps the outline. `focusRingField` is for text fields, where an
+ * outline *and* a ring around the same box is visual noise, so the outline is
+ * dropped and the ring carries it. The ring itself — 3px of
+ * `--color-focus-ring` — is identical in both, so a keyboard user learns it once.
+ *
+ * A module opts in with `composes`; it does not write its own. `focus-ring.test.ts`
+ * fails if one does.
+ */
+
+/** The canonical ring, for buttons, links, toggles and anything not a field. */
+.focusRing:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+/** The same ring for text fields, where the outline would double up. */
+.focusRingField:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}

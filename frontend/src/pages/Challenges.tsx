@@ -149,9 +149,7 @@ function Challenges() {
             Submit a challenge and let an LLM generate and evaluate a solution.
           </p>
         </div>
-        <Link to="/challenges/new">
-          <Button>+ New challenge</Button>
-        </Link>
+        <Button to="/challenges/new">+ New challenge</Button>
       </div>
 
       <div className={styles.toolbar}>
@@ -218,9 +216,7 @@ function Challenges() {
         total === 0 && !debouncedSearch && language === "all" && difficulty === "all" ? (
           <EmptyState title="No challenges yet">
             <p>Create the first challenge and let AI solve it.</p>
-            <Link to="/challenges/new">
-              <Button>Create the first challenge</Button>
-            </Link>
+            <Button to="/challenges/new">Create the first challenge</Button>
           </EmptyState>
         ) : (
           <EmptyState title="No matching challenges">

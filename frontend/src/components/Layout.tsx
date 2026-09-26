@@ -91,9 +91,13 @@ function Layout() {
                     <NavLink to="/login" className={navLinkClass} onClick={closeMenus}>
                       Log in
                     </NavLink>
-                    <Link to="/register" onClick={closeMenus}>
-                      <Button size="sm">Sign up</Button>
-                    </Link>
+                    <Button
+                      to="/register"
+                      onClick={closeMenus}
+                      size="sm"
+                    >
+                      Sign up
+                    </Button>
                   </>
                 )}
               </li>
@@ -173,13 +177,9 @@ function Layout() {
             ) : (
               <div className={styles.authActions}>
                 <NavLink to="/login" className={navLinkClass}>
-                  <Button variant="ghost" size="sm">
-                    Log in
-                  </Button>
+                  Log in
                 </NavLink>
-                <Link to="/register">
-                  <Button size="sm">Sign up</Button>
-                </Link>
+                <Button to="/register" size="sm">Sign up</Button>
               </div>
             )}
           </div>

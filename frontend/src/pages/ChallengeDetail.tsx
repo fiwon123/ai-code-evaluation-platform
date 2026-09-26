@@ -530,24 +530,25 @@ function ChallengeDetail() {
                 <p className={styles.muted}>
                   Log in to submit this challenge for evaluation.
                 </p>
-                <Link to="/login">
-                  <Button variant="secondary" className={styles.submitButton}>
-                    Log in
-                  </Button>
-                </Link>
+                <Button
+                  to="/login"
+                  variant="secondary"
+                  className={styles.submitButton}
+                >
+                  Log in
+                </Button>
               </div>
             )}
 
             {isOwner && (
               <div className={styles.ownerActions}>
-                <Link
+                <Button
                   to={`/challenges/${challenge.id}/edit`}
-                  className={styles.editLink}
+                  variant="secondary"
+                  className={`${styles.editLink} ${styles.submitButton}`}
                 >
-                  <Button variant="secondary" className={styles.submitButton}>
-                    Edit challenge
-                  </Button>
-                </Link>
+                  Edit challenge
+                </Button>
                 <Button
                   type="button"
                   variant="danger"

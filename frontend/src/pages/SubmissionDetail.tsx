@@ -258,13 +258,12 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
 
           <ShareResult submissionId={submission.id} />
 
-          <Link to={`/challenges/${submission.challenge_id}`}>
-            <Button
-              variant={submission.status === "failed" ? "primary" : "secondary"}
-            >
-              {submission.status === "failed" ? "Try again" : "Back to challenge"}
-            </Button>
-          </Link>
+          <Button
+            to={`/challenges/${submission.challenge_id}`}
+            variant={submission.status === "failed" ? "primary" : "secondary"}
+          >
+            {submission.status === "failed" ? "Try again" : "Back to challenge"}
+          </Button>
         </div>
       ) : (
         <Card>
@@ -272,9 +271,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
             Evaluation failed — no result was produced.
           </p>
           <div className={styles.retry}>
-            <Link to={`/challenges/${submission.challenge_id}`}>
-              <Button>Try again</Button>
-            </Link>
+            <Button to={`/challenges/${submission.challenge_id}`}>Try again</Button>
           </div>
         </Card>
       )}

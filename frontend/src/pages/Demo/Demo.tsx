@@ -385,11 +385,13 @@ function Demo() {
                     · provider: <code>demo</code> · runs with{" "}
                     <code>{runnerForLanguage(resultLanguage)?.runner}</code>
                   </p>
-                  <Link to={`/submissions/${result.id}`}>
-                    <Button variant="secondary" size="sm">
-                      View full report
-                    </Button>
-                  </Link>
+                  <Button
+                    to={`/submissions/${result.id}`}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    View full report
+                  </Button>
                 </Card>
               )}
 
@@ -466,19 +468,21 @@ function Demo() {
       </section>
 
       <div className={styles.liveActions}>
-        <Link to="/register">
-          <Button size="lg">Create account</Button>
-        </Link>
-        <Link to="/challenges">
-          <Button variant="secondary" size="lg">
-            Browse challenges
-          </Button>
-        </Link>
-        <Link to="/challenges/new">
-          <Button variant="ghost" size="lg">
-            Create a challenge
-          </Button>
-        </Link>
+        <Button to="/register" size="lg">Create account</Button>
+        <Button
+          to="/challenges"
+          variant="secondary"
+          size="lg"
+        >
+          Browse challenges
+        </Button>
+        <Button
+          to="/challenges/new"
+          variant="ghost"
+          size="lg"
+        >
+          Create a challenge
+        </Button>
       </div>
       <p className={styles.liveHint}>
         Tip: challenges whose prompt contains a keyword like{" "}
