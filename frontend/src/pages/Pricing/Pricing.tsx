@@ -26,7 +26,7 @@ const TIERS = [
     description: "For teams that evaluate code daily.",
     features: [
       "Unlimited evaluations",
-      "OpenAI + Anthropic providers",
+      "OpenAI, Anthropic + Gemini providers",
       "Private challenges",
       "Detailed metrics & history",
       "Priority support",
@@ -54,7 +54,7 @@ const TIERS = [
 
 const COMPARISON: { label: string; values: [string, string, string] }[] = [
   { label: "Evaluations / month", values: ["50", "Unlimited", "Unlimited"] },
-  { label: "LLM providers", values: ["Demo", "OpenAI + Anthropic", "Everything in Pro"] },
+  { label: "LLM providers", values: ["Demo", "OpenAI, Anthropic, Gemini", "Everything in Pro"] },
   { label: "Private challenges", values: ["—", "✓", "✓"] },
   { label: "Metrics & history", values: ["7 days", "Unlimited", "Unlimited"] },
   { label: "Support", values: ["Community", "Priority", "Dedicated"] },
@@ -71,12 +71,12 @@ const FAQ = [
   {
     question: "Which LLM providers are supported?",
     answer:
-      "OpenAI and Anthropic are integrated as providers, plus a free Demo provider that needs no API key — perfect for trying the platform.",
+      "OpenAI, Anthropic and Gemini are integrated, plus a local Ollama server and a free Demo provider that needs no API key — perfect for trying the platform.",
   },
   {
     question: "How is generated code executed safely?",
     answer:
-      "Each evaluation runs in an isolated, resource-limited Docker container with a strict timeout and no network access, so runaway code can't harm the host.",
+      "Each evaluation runs in a short-lived, resource-limited Docker container with CPU, memory and wall-clock limits and no network access, so a runaway solution is contained rather than trusted.",
   },
   {
     question: "Can I self-host the platform?",

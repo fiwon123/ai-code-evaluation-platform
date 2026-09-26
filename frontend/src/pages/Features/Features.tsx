@@ -4,9 +4,9 @@ import styles from "./Features.module.css";
 
 const PIPELINE = [
   { icon: "📝", label: "Write", desc: "Prompt + tests" },
-  { icon: "🤖", label: "Pick", desc: "OpenAI · Anthropic · Demo" },
+  { icon: "🤖", label: "Pick", desc: "5 providers · demo is free" },
   { icon: "⚙️", label: "Generate", desc: "LLM writes code" },
-  { icon: "🧪", label: "Run", desc: "pytest in sandbox" },
+  { icon: "🧪", label: "Run", desc: "Your suite, sandboxed" },
   { icon: "📊", label: "Score", desc: "Pass/fail + report" },
 ];
 
@@ -14,30 +14,30 @@ const FEATURES = [
   {
     icon: "multi",
     title: "Multi-provider code generation",
-    text: "Run each challenge across OpenAI, Anthropic, or the free demo provider — provider is chosen per submission.",
+    text: "Run each challenge across OpenAI, Anthropic, Gemini, a local Ollama server, or the free demo provider — provider is chosen per submission.",
     checkmarks: [
-      "OpenAI + Anthropic integrations",
-      "Free demo provider — no API keys required",
+      "OpenAI, Anthropic + Gemini integrations",
+      "Free demo provider and local Ollama — no API keys required",
       "Provider picked at submission time",
     ],
   },
   {
     icon: "pytest",
-    title: "pytest test suites defined per challenge",
-    text: "Every challenge ships its own pytest suite that runs against the generated solution in an isolated subprocess.",
+    title: "Test suites defined per challenge",
+    text: "Every challenge ships its own suite, written in the language you are evaluating, and run against the generated solution with a per-run timeout.",
     checkmarks: [
-      "Test suites defined per challenge",
-      "Subprocess runner with per-run timeout",
+      "13 languages: Python, JS/TS, Java, Go, C, C++, Rust, PHP, Ruby, Perl, Kotlin, Lua",
+      "Dedicated runner per language (pytest, node --test, JUnit, go test)",
       "Isolated temp workspace per evaluation",
     ],
   },
   {
     icon: "sandbox",
     title: "Sandboxed execution",
-    text: "Generated code runs isolated from the host with strict timeouts, so a runaway solution can never harm the server.",
+    text: "Generated code runs in a short-lived, resource-limited container with no network access, so a runaway solution is contained rather than trusted.",
     checkmarks: [
-      "Isolated execution environment",
-      "Strict per-run timeout",
+      "CPU, memory and wall-clock limits per run",
+      "No network access while the tests run",
       "stdout/stderr captured per run",
     ],
   },
