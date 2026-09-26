@@ -36,34 +36,6 @@
   gap: var(--space-4);
 }
 
-.statLink {
-  text-decoration: none;
-}
-
-.statCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-6) var(--space-4);
-  text-align: center;
-  height: 100%;
-}
-
-.statValue {
-  font-size: var(--font-size-3xl);
-  font-weight: 700;
-  color: var(--color-text);
-  line-height: 1.2;
-}
-
-.statLabel {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 .section {
   margin-top: var(--space-8);
 }

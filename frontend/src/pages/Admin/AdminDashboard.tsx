@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import Card from "../../components/Card/Card.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
+import StatCard, { type StatAccent } from "../../components/StatCard/StatCard.tsx";
 import { adminApi } from "../../services/api.ts";
 import type { PlatformStats } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
+import { scoreVariant } from "../../utils/formatting.ts";
 import styles from "./Admin.module.css";
 
 function AdminDashboard() {
@@ -37,11 +38,16 @@ function AdminDashboard() {
   if (loading) {
     return (
       <div className={styles.grid} role="status" aria-label="Loading stats">
-        {Array.from({ length: 6 }, (_, i) => (
-          <Card key={i} className={styles.statCard}>
-            <Skeleton variant="text" width="40%" height="1.75rem" />
-            <Skeleton variant="text" width="70%" height="0.75rem" />
-          </Card>
+        {/* Skeletons are the real StatCard with placeholder content, so the
+            grid does not resize when the data lands and the accent rule is
+            already in the right place. */}
+        {Array.from({ length: 7 }, (_, i) => (
+          <StatCard
+            key={i}
+            label="Loading"
+            value={<Skeleton variant="text" width="40%" height="1.75rem" />}
+            accent="primary"
+          />
         ))}
       </div>
     );
@@ -59,19 +65,49 @@ function AdminDashboard() {
     return null;
   }
 
-  const cards = [
-    { label: "Users", value: stats.total_users, to: "/admin/users" },
-    { label: "Challenges", value: stats.total_challenges, to: "/admin/challenges" },
-    { label: "Submissions", value: stats.total_submissions, to: "/admin/submissions" },
-    { label: "Completed", value: stats.completed_submissions },
-    { label: "Failed", value: stats.failed_submissions },
-    { label: "Pending / processing", value: stats.pending_submissions },
+  // The three totals are identities — a count has no opinion about being good.
+  // The three statuses are judgements, and the average score is a score: both
+  // take the app-wide scale (`scoreVariant`), so an operator reads the same
+  // colours here as everywhere else. `to` is present only where the stat
+  // actually drills down.
+  const cards: Array<{
+    label: string;
+    value: string | number;
+    accent: StatAccent;
+    to?: string;
+  }> = [
+    { label: "Users", value: stats.total_users, accent: "primary", to: "/admin/users" },
+    {
+      label: "Challenges",
+      value: stats.total_challenges,
+      accent: "teal",
+      to: "/admin/challenges",
+    },
+    {
+      label: "Submissions",
+      value: stats.total_submissions,
+      accent: "violet",
+      to: "/admin/submissions",
+    },
+    { label: "Completed", value: stats.completed_submissions, accent: "success" },
+    { label: "Failed", value: stats.failed_submissions, accent: "danger" },
+    {
+      label: "Pending / processing",
+      value: stats.pending_submissions,
+      // An empty queue is not a warning, so a zero wears the calm identity
+      // rather than an alarm colour that would cry wolf every morning.
+      accent: stats.pending_submissions > 0 ? "warning" : "primary",
+    },
     {
       label: "Average score",
       value:
         stats.average_score !== null && stats.average_score !== undefined
           ? `${Math.round(stats.average_score)} / 100`
           : "—",
+      accent:
+        stats.average_score !== null && stats.average_score !== undefined
+          ? scoreVariant(stats.average_score)
+          : "primary",
     },
   ];
 
@@ -83,21 +119,15 @@ function AdminDashboard() {
       </div>
 
       <div className={styles.grid}>
-        {cards.map((card) => {
-          const content = (
-            <Card className={styles.statCard}>
-              <span className={styles.statValue}>{card.value}</span>
-              <span className={styles.statLabel}>{card.label}</span>
-            </Card>
-          );
-          return card.to ? (
-            <Link key={card.label} to={card.to} className={styles.statLink}>
-              {content}
-            </Link>
-          ) : (
-            <div key={card.label}>{content}</div>
-          );
-        })}
+        {cards.map((card) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            accent={card.accent}
+            to={card.to}
+          />
+        ))}
       </div>
 
       <div className={styles.section}>

@@ -1,7 +1,7 @@
 .page {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4) var(--space-8);
+  padding: var(--space-16) var(--space-6) var(--space-20);
 }
 
 .header {
@@ -15,10 +15,12 @@
 }
 
 .subtitle {
-  max-width: 48rem;
+  /* The same measure the other marketing pages use: 600px keeps the line length
+     readable, and 48rem here was 768px. */
+  max-width: 600px;
   margin: 0 auto;
   color: var(--color-text-muted);
-  font-size: 1.05rem;
+  font-size: var(--font-size-lg);
   line-height: 1.6;
 }
 
@@ -460,6 +462,16 @@
   }
   50% {
     transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The pipeline icons bob on a 3s loop forever. That is decoration, not
+     feedback: it carries no information a static icon lacks, so a reader who
+     has asked for less motion gets none of it. The icons stay, fully
+     visible, at their resting position. */
+  .pipelineIcon {
+    animation: none;
   }
 }
 

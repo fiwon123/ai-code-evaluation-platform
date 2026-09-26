@@ -17,7 +17,9 @@
 .subtitle {
   color: var(--color-text-muted);
   font-size: var(--font-size-lg);
-  max-width: 560px;
+  /* The same measure as every other marketing hero, so the line breaks in the
+     same place and the paragraph reads as one kind of text. */
+  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -29,7 +31,7 @@
 }
 
 .formCard {
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-elevated);
 }
 
 .form {

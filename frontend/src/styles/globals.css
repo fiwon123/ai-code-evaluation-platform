@@ -60,6 +60,24 @@
      from 5.15 to 3.67. */
   --color-on-solid: #ffffff;
 
+  /* Accent hues for stat identities (#236). Neither palette has a second and
+     third hue beyond the primary, and the status colours (success/warning/
+     danger) are *semantic* — painting a count green because it is "good" would
+     be a lie the colour cannot qualify. These are pure identity: four stat
+     cards read as four things rather than one number repeated.
+     Measured against BOTH light surfaces (--color-surface #ffffff and
+     --color-surface-secondary #f4f7fb), where they are used:
+       teal   5.47:1 / 5.09:1
+       violet 7.10:1 / 6.61:1
+       rose   6.29:1 / 5.85:1
+     They only ever paint large bold text (>=1.875rem/700) and icon strokes, so
+     the 3:1 large-text bar (WCAG 1.4.3) is the one they must clear — which
+     they do with room to spare. `stat-identity.test.ts` enforces both numbers
+     so a retune cannot quietly drop below it. */
+  --color-accent-teal: #0f766e;
+  --color-accent-violet: #6d28d9;
+  --color-accent-rose: #be123c;
+
   /* Code surfaces (stay dark in both themes for readability) */
   --color-code-bg: #0f172a;
   --color-code-header: #1e293b;
@@ -122,6 +140,17 @@
   /* Dark ink, because the dark theme's solid surfaces are bright. The
      measurements and the rejected alternative are in the light block above. */
   --color-on-solid: #0b1220;
+
+  /* Accent hues — see the light block for why they exist. Re-picked for the
+     dark palette rather than reused: the light values are dark inks that would
+     sink into a #131d33 card. Measured against both dark surfaces
+     (--color-surface #131d33, --color-surface-secondary #0d1526):
+       teal   9.02:1 / 9.79:1
+       violet 6.17:1 / 6.70:1
+       rose   6.24:1 / 6.77:1 */
+  --color-accent-teal: #2dd4bf;
+  --color-accent-violet: #a78bfa;
+  --color-accent-rose: #fb7185;
 
   /* Code surfaces (stay dark in both themes for readability) */
   --color-code-bg: #0b1220;
@@ -593,4 +622,44 @@ h4 { font-size: var(--font-size-xl); }
   border-radius: var(--radius-md);
   background: var(--color-surface);
   padding: var(--space-5);
+}
+
+/* ---- Page backdrop (issue #236) --------------------------------------
+   The dark palette was two flat fills, so every dark page read as a slab.
+   This adds one fixed, non-interactive wash behind the content: two wide,
+   very low-opacity tints from tokens both palettes already define, so the
+   light theme is untouched (it is scoped to `dark` deliberately — the pale
+   background has no headroom for a tint before the text contrast moves).
+
+   Three constraints, all load-bearing:
+     * `pointer-events: none` — it sits over the whole viewport, so without
+       this it would swallow every click on the page behind it.
+     * `z-index: -1` — it must paint *under* `#root`. The header and footer
+       keep their own opaque surfaces and so cover it, which is correct:
+       chrome is not part of the page wash.
+     * No animation. A drifting backdrop would need a reduced-motion opt-out
+       to satisfy the same rule every other ambient layer obeys; a static
+       wash is free of that obligation and looks identical when it is still. */
+[data-theme="dark"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      60rem 40rem at 12% -10%,
+      color-mix(in srgb, var(--color-primary) 16%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      50rem 36rem at 88% 8%,
+      color-mix(in srgb, var(--color-accent-teal) 11%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      70rem 44rem at 50% 108%,
+      color-mix(in srgb, var(--color-accent-violet) 12%, transparent),
+      transparent 65%
+    );
 }

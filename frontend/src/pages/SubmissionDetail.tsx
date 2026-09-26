@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AttemptTimeline from "../components/AttemptTimeline/AttemptTimeline.tsx";
 import Badge from "../components/Badge/Badge.tsx";
+import EmptyState from "../components/EmptyState/EmptyState.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import PageTitle from "../components/PageTitle/PageTitle.tsx";
@@ -148,13 +149,17 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
 
   if (error || !submission) {
     return (
-      <div>
-        <p role="alert" className={styles.errorText}>
-          {error ?? "Submission not found."}
-        </p>
-        <p>
-          <Link to="/challenges">Back to challenges</Link>
-        </p>
+      <div className={styles.notFound}>
+        <EmptyState title="Submission not found">
+          {/* A real error message (not a 404) is the reason here, so it is
+              announced rather than folded into the empty state's copy. */}
+          <p role="alert" className={styles.errorText}>
+            {error ?? "This submission does not exist, or it has expired."}
+          </p>
+          <Link to="/challenges" className={styles.notFoundLink}>
+            Back to challenges
+          </Link>
+        </EmptyState>
       </div>
     );
   }
@@ -171,6 +176,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
         <PageTitle className={styles.title}>Evaluation report</PageTitle>
         <Badge variant={statusVariant(submission.status)}>{submission.status}</Badge>
       </div>
+      <hr className="dividerRule" />
 
       {inProgress ? (
         <Card>

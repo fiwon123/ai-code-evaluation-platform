@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
+import EmptyState from "../components/EmptyState/EmptyState.tsx";
 import LanguageBadge from "../components/LanguageBadge/LanguageBadge.tsx";
 import { SelectInput, TextInput } from "../components/Input/Input.tsx";
 import PageTitle from "../components/PageTitle/PageTitle.tsx";
@@ -215,24 +216,16 @@ function Challenges() {
 
       {challenges.length === 0 ? (
         total === 0 && !debouncedSearch && language === "all" && difficulty === "all" ? (
-          <div className={styles.empty}>
-            <div className={styles.emptyIcon}>🧩</div>
-            <h2 className={styles.emptyTitle}>No challenges yet</h2>
-            <p className={styles.emptyText}>
-              Create the first challenge and let AI solve it.
-            </p>
+          <EmptyState title="No challenges yet">
+            <p>Create the first challenge and let AI solve it.</p>
             <Link to="/challenges/new">
               <Button>Create the first challenge</Button>
             </Link>
-          </div>
+          </EmptyState>
         ) : (
-          <div className={styles.empty}>
-            <div className={styles.emptyIcon}>🔍</div>
-            <h2 className={styles.emptyTitle}>No matching challenges</h2>
-            <p className={styles.emptyText}>
-              Try a different search term or clear a filter.
-            </p>
-          </div>
+          <EmptyState title="No matching challenges">
+            <p>Try a different search term or clear a filter.</p>
+          </EmptyState>
         )
       ) : (
         <>

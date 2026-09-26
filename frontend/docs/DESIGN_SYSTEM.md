@@ -143,6 +143,9 @@ below.
 | `--color-danger` | Errors, destructive actions |
 | `--color-danger-hover` | Destructive button hover |
 | `--color-danger-light` | Error-tinted surfaces |
+| `--color-accent-teal` | Second stat identity — pure identity, never meaning "good"; pair with a status token when the value is a score |
+| `--color-accent-violet` | Third stat identity — same rule as `--color-accent-teal` |
+| `--color-accent-rose` | Fourth stat identity — same rule as `--color-accent-teal` |
 
 ### Surfaces and text
 

@@ -1,0 +1,221 @@
+/* Shared shell for the unauthenticated pages (issue #236).
+ *
+ * Before this, Login / Register / OAuthCallback each carried their own copy of
+ * a centered card on a gradient, and the brand lived only in a small logo at
+ * the top of the card. The landing page sells the product in its first screen;
+ * the sign-in page is where a sceptical reader usually arrives, and it was
+ * selling nothing. The aside carries the three claims, so both routes now make
+ * the same argument in the same visual language. */
+
+.page {
+  position: relative;
+  min-height: calc(100vh - var(--header-height));
+  display: flex;
+  align-items: center;
+  padding: var(--space-12) var(--space-6) var(--space-16);
+  background: var(--color-bg-gradient);
+  overflow: hidden;
+}
+
+/* Two columns once there is room for both; one below that, where the form is
+   the only thing that matters. `grid` rather than flex so the aside's height
+   never forces the card to stretch. */
+.grid {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: var(--space-16);
+  align-items: center;
+}
+
+/* Hidden by default and revealed at 1024px. The aside is the first thing to go
+   when space is tight: below that the grid collapses to one column, and since
+   the form is first in the source, a phone or a narrow window lands on the
+   inputs. The columns are then re-ordered visually — see the 1024px block. */
+.aside {
+  /* The brand column is second in the source — so the form is what a screen
+     reader and a phone reach first — and first on screen, which is why the
+     columns are ordered by hand rather than by their position in the markup. */
+  order: 1;
+  display: none;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.asideTitle {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  line-height: 1.25;
+  max-width: 20ch;
+  color: var(--color-text);
+}
+
+.promises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.promise {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* A hairline in the accent hue instead of a bullet glyph: the guardrail for
+     this issue is no new emoji, and a list bullet is the same problem in
+     quieter form. */
+  padding-left: var(--space-4);
+  border-left: 2px solid
+    color-mix(in srgb, var(--color-accent-teal) 45%, transparent);
+}
+
+.promiseTitle {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.promiseText {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.main {
+  order: 2;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  box-shadow: var(--shadow-elevated);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Layout only — size and the gradient come from the shared PageTitle. */
+.title {
+  margin-top: var(--space-1);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.footer {
+  text-align: center;
+  margin-top: var(--space-6);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* ---- Ambient backdrop -------------------------------------------------
+   The landing hero's `auroraDrift` blobs, re-declared rather than imported:
+   CSS modules scope class names, and the point of this layer is that the
+   sign-in page carries the same decoration as the landing page. Colours are
+   `color-mix` over tokens both palettes define — no new token, so
+   `design-tokens.test.ts` stays green by construction. */
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.blobPrimary,
+.blobAccent,
+.blobViolet {
+  position: absolute;
+  border-radius: var(--radius-full);
+  filter: blur(80px);
+  will-change: transform;
+  animation: auroraDrift var(--duration-ambient) ease-in-out infinite;
+}
+
+.blobPrimary {
+  width: 480px;
+  height: 480px;
+  top: -200px;
+  left: -140px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-primary) 34%, transparent),
+    transparent 70%
+  );
+}
+
+.blobAccent {
+  width: 400px;
+  height: 400px;
+  top: 26%;
+  right: -170px;
+  animation-duration: 32s;
+  animation-delay: -8s;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent-teal) 26%, transparent),
+    transparent 70%
+  );
+}
+
+.blobViolet {
+  width: 420px;
+  height: 420px;
+  bottom: -240px;
+  left: 26%;
+  animation-duration: 40s;
+  animation-delay: -16s;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent-violet) 24%, transparent),
+    transparent 70%
+  );
+}
+
+@media (min-width: 1024px) {
+  .aside {
+    display: flex;
+  }
+}
+
+@media (max-width: 1023px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: var(--space-8) var(--space-4) var(--space-12);
+  }
+}
+
+/* Every ambient animation must stop for a reader who asked for that. Without
+   this the sign-in page drifts forever — the exact defect the hero opt-out
+   was added for. The `transform` reset matters too: the drift is the only
+   thing that moves these, so removing the animation is sufficient. */
+@media (prefers-reduced-motion: reduce) {
+  .blobPrimary,
+  .blobAccent,
+  .blobViolet {
+    animation: none;
+  }
+}

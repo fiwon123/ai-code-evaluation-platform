@@ -1,0 +1,129 @@
+/* Shared stat card (issue #236).
+ *
+ * The profile and admin dashboards both show a row of headline numbers, and
+ * both were doing it in flat grey: a value, a label, a card. A row of grey
+ * numbers reads as a table row that lost its way, and nothing on the card told
+ * a reader which number mattered.
+ *
+ * Three layers carry the identity, and all three come from one custom property
+ * so they cannot drift apart:
+ *   1. a 3px rule along the top edge,
+ *   2. a very light wash of the same hue fading into the surface,
+ *   3. the value's own colour.
+ *
+ * The wash is a `color-mix` of the accent with the surface rather than a token,
+ * which is why it stays correct in both themes with no second palette entry —
+ * the same rule the ambient layer follows. `stat-identity.test.ts` measures the
+ * accents themselves, so a retune cannot quietly drop one below contrast. */
+
+.statLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  height: 100%;
+}
+
+.statLink:hover {
+  text-decoration: none;
+}
+
+.statCard {
+  --stat-accent: var(--color-primary);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  height: 100%;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--stat-accent) 28%, var(--color-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--stat-accent) 7%, var(--color-surface)) 0%,
+      var(--color-surface) 60%
+    );
+  transition:
+    box-shadow var(--transition-base),
+    transform var(--transition-base) var(--ease-out-expo),
+    border-color var(--transition-base);
+  animation: statRise var(--duration-slow) var(--ease-out-expo) both;
+}
+
+/* A link-wrapped card must not lift twice (the inner card and the anchor both
+   responding to hover reads as a jitter), so the lift belongs to the card. */
+.statLink:hover .statCard,
+.statLink:focus-visible .statCard {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-elevated);
+  border-color: color-mix(in srgb, var(--stat-accent) 55%, var(--color-border));
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-elevated);
+  border-color: color-mix(in srgb, var(--stat-accent) 55%, var(--color-border));
+}
+
+.statCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--stat-accent);
+}
+
+/* Identity, not meaning — for counts. */
+.accentPrimary { --stat-accent: var(--color-primary); }
+.accentTeal { --stat-accent: var(--color-accent-teal); }
+.accentViolet { --stat-accent: var(--color-accent-violet); }
+.accentRose { --stat-accent: var(--color-accent-rose); }
+
+/* Judgement — for a value that is a score or a rate. `warning` uses the
+   strong token because the plain one is 2.1:1 on the light surface. */
+.accentSuccess { --stat-accent: var(--color-success); }
+.accentWarning { --stat-accent: var(--color-warning-strong); }
+.accentDanger { --stat-accent: var(--color-danger); }
+
+.statValue {
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  color: var(--stat-accent);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.statLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Entrance. Opacity + transform only, so it stays on the compositor, and the
+   opt-out below leaves the cards in their final state rather than hiding
+   them — a reduced-motion reader must still see their numbers. */
+@keyframes statRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statCard {
+    animation: none;
+  }
+
+  .statCard:hover,
+  .statLink:hover .statCard,
+  .statLink:focus-visible .statCard {
+    transform: none;
+  }
+}

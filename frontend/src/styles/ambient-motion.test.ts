@@ -216,3 +216,132 @@ describe("Home hero decoration", () => {
     expect(homeCss).toMatch(/\.heroBackdrop\s*\{[^}]*pointer-events:\s*none/);
   });
 });
+
+/**
+ * The invariant this file had been missing: it checked the ambient layer in
+ * `globals.css` and the Home module by name, so every *other* module could
+ * grow an animation without an opt-out and stay green. Two did, unremarked:
+ * `Features` grew a 3s infinite `bob` on its pipeline icons, and every
+ * `Skeleton` in the app swept a highlight across itself forever.
+ *
+ * So the rule is now stated once, generally: an animation that loops forever is
+ * decoration, and decoration stops when a reader has asked it to.
+ */
+describe("looping motion across modules", () => {
+  const ALL_MODULES = import.meta.glob("../**/*.module.css", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+
+  /**
+   * Selectors exempted from the rule, each with the reason it is not
+   * decoration. Listed rather than left silent, so "we decided to skip this
+   * one" is reviewable instead of being an oversight.
+   */
+  const FUNCTIONAL_FEEDBACK: Record<string, string> = {
+    // A spinner's rotation *is* the message — it is what distinguishes "still
+    // working" from "finished". Stopping it would leave a static ring that
+    // reads as broken, which is worse for this reader than the motion is. The
+    // alternatives (an opacity pulse, a determinate bar) are a redesign, not
+    // an opt-out.
+    ".spinner": "rotation is the loading signal, not decoration",
+  };
+
+  /** Selector lists inside a block, flattened: `a,\n b {` yields `a` and `b`. */
+  function selectorsOf(block: string): string[] {
+    return block
+      .split(",")
+      .map((s) => s.trim().replace(/^:global\((.+)\)$/, "$1"))
+      .filter(Boolean);
+  }
+
+  /**
+   * Selectors in `css` whose `animation` shorthand names a looping keyframe.
+   *
+   * A keyframe is treated as a loop when its declaration carries `infinite`.
+   * That is the signal that matters: the same keyframe is an entrance on one
+   * selector and a loop on another.
+   */
+  function loopingSelectors(css: string): string[] {
+    const keyframes = [
+      ...css.matchAll(/@keyframes\s+([A-Za-z0-9_]+)/g),
+    ].map(([, name]) => name);
+
+    const out: string[] = [];
+    // `matchAll` yields exec arrays, which have no `.group()` — destructure.
+    for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (!/\banimation\s*:/.test(body) || !/\binfinite\b/.test(body)) continue;
+      if (!keyframes.some((k) => body.includes(k))) continue;
+      // A single rule can carry several selectors, and every one of them loops.
+      out.push(...selectorsOf(selectors));
+    }
+    return [...new Set(out)];
+  }
+
+  /** Selectors that a module neutralises under `prefers-reduced-motion`. */
+  function optedOut(css: string): Set<string> {
+    const out = new Set<string>();
+    for (const m of css.matchAll(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/g,
+    )) {
+      for (const [, selectors, body] of m[1].matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+        if (/animation:\s*none/.test(body)) {
+          for (const sel of selectorsOf(selectors)) out.add(sel);
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Every module that loops something it has not already handled. */
+  function audit(): Array<{ file: string; selector: string }> {
+    const findings: Array<{ file: string; selector: string }> = [];
+    for (const [file, raw] of Object.entries(ALL_MODULES)) {
+      const css = stripComments(raw);
+      const handled = optedOut(css);
+      for (const selector of loopingSelectors(css)) {
+        if (handled.has(selector) || selector in FUNCTIONAL_FEEDBACK) continue;
+        findings.push({ file, selector });
+      }
+    }
+    return findings;
+  }
+
+  it("finds the loops it is meant to police", () => {
+    // Guard on the guard. An earlier version of this scan matched a selector
+    // with `sel\s*\{`, which silently missed every selector that was one item
+    // in a comma-separated list — including all fifteen in Home — so the
+    // assertion below would have passed while protecting nothing.
+    const all = Object.values(ALL_MODULES).flatMap((css) =>
+      loopingSelectors(stripComments(css)),
+    );
+    expect(all.length, "the looping-motion scan found nothing to check").toBeGreaterThan(0);
+
+    // A comma-separated list inside one rule has to be flattened, not
+    // truncated to its first item.
+    const stepped = all.filter((s) => s.startsWith(".step"));
+    expect(stepped.length, "Home's per-step loops were not all detected").toBe(5);
+
+    // The pseudo-element case: the loop lives on `::after`, not the element.
+    const skeleton = all.find((s) => s.startsWith(".skeleton"));
+    expect(skeleton, "the skeleton shimmer was not detected").toMatch(/::after$/);
+  });
+
+  it("stops every looping animation when reduced motion is requested", () => {
+    expect(
+      audit(),
+      "looping animation(s) with no prefers-reduced-motion opt-out",
+    ).toEqual([]);
+  });
+
+  it("keeps the exemption list small and justified", () => {
+    // An exemption is a decision. If most of the app ends up here, the rule is
+    // being worked around rather than satisfied.
+    const exempt = Object.keys(FUNCTIONAL_FEEDBACK);
+    expect(exempt.length, "unexpectedly large exemption list").toBeLessThanOrEqual(2);
+    for (const [selector, reason] of Object.entries(FUNCTIONAL_FEEDBACK)) {
+      expect(reason.length, `${selector} has no reason recorded`).toBeGreaterThan(20);
+    }
+  });
+});

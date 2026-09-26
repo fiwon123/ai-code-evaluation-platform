@@ -235,6 +235,7 @@ function Demo() {
           </div>
         ))}
       </div>
+      <hr className="dividerRule" />
 
       <section className={styles.liveSection}>
         <Badge variant="primary">Live demo</Badge>

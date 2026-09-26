@@ -1,0 +1,58 @@
+/* Section dividers (issue #236).
+ *
+ * A `border-top` on a full-width block reads as the top edge of a table. This
+ * hairline fades toward both ends instead, which separates two sections
+ * without cutting the page in two, and it is built from `--color-divider` so it
+ * follows the theme rather than leaving a flat grey line on a dark page.
+ *
+ * Apply as an extra class: `<div className={`${styles.block} dividerRule`}>`
+ * or add the class to any element that separates sections. Kept in
+ * `styles/` (not a component) because it styles an element the page already
+ * has, rather than adding one.
+ */
+.dividerRule {
+  height: 1px;
+  border: none;
+  margin: var(--space-8) 0;
+  background: var(--color-divider);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-divider) 12%,
+    var(--color-divider) 88%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-divider) 12%,
+    var(--color-divider) 88%,
+    transparent
+  );
+}
+
+/* Same hairline, vertical, for separating columns on wide screens only —
+ * below the breakpoint the columns stack and a vertical rule would be noise. */
+@media (min-width: 768px) {
+  .dividerVertical {
+    width: 1px;
+    height: auto;
+    align-self: stretch;
+    margin: 0 var(--space-6);
+    background: var(--color-divider);
+    -webkit-mask-image: linear-gradient(
+      180deg,
+      transparent,
+      var(--color-divider) 12%,
+      var(--color-divider) 88%,
+      transparent
+    );
+    mask-image: linear-gradient(
+      180deg,
+      transparent,
+      var(--color-divider) 12%,
+      var(--color-divider) 88%,
+      transparent
+    );
+  }
+}

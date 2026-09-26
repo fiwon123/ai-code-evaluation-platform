@@ -126,42 +126,50 @@ function renderPage(node: React.ReactNode) {
   );
 }
 
+/**
+ * The platform stats the dashboard is rendered from.
+ *
+ * Hoisted out of `beforeEach` so a test can vary a single field — the accent
+ * rules turn on exactly those fields — without restating the other twenty.
+ */
+const BASE_STATS = {
+  total_users: 2,
+  total_challenges: 1,
+  total_submissions: 3,
+  completed_submissions: 1,
+  failed_submissions: 1,
+  pending_submissions: 1,
+  average_score: 100,
+  submissions_by_status: [
+    { status: "pending", count: 1 },
+    { status: "processing", count: 0 },
+    { status: "completed", count: 1 },
+    { status: "failed", count: 1 },
+  ],
+  submissions_by_language: [
+    { language: "python", count: 2, avg_score: 88 },
+    { language: "javascript", count: 1, avg_score: 90 },
+  ],
+  submissions_by_provider: [
+    { provider: "openai", count: 2, avg_score: 80, pass_rate: 1 },
+    { provider: "ollama", count: 1, avg_score: 50, pass_rate: 0 },
+  ],
+  submissions_by_error_type: [
+    { error_type: "timeout", count: 1 },
+    { error_type: "auth failure", count: 1 },
+  ],
+  top_challenges: [
+    { challenge_id: "c1", title: "Two Sum", runs: 3, avg_score: 86 },
+  ],
+  submissions_last_14_days: Array.from({ length: 14 }, (_, i) => ({
+    date: `2026-09-${String(i + 1).padStart(2, "0")}`,
+    count: i + 1,
+  })),
+  };
+
 describe("AdminDashboard", () => {
   beforeEach(() => {
-    mockStats.mockResolvedValue({
-      total_users: 2,
-      total_challenges: 1,
-      total_submissions: 3,
-      completed_submissions: 1,
-      failed_submissions: 1,
-      pending_submissions: 1,
-      average_score: 100,
-      submissions_by_status: [
-        { status: "pending", count: 1 },
-        { status: "processing", count: 0 },
-        { status: "completed", count: 1 },
-        { status: "failed", count: 1 },
-      ],
-      submissions_by_language: [
-        { language: "python", count: 2, avg_score: 88 },
-        { language: "javascript", count: 1, avg_score: 90 },
-      ],
-      submissions_by_provider: [
-        { provider: "openai", count: 2, avg_score: 80, pass_rate: 1 },
-        { provider: "ollama", count: 1, avg_score: 50, pass_rate: 0 },
-      ],
-      submissions_by_error_type: [
-        { error_type: "timeout", count: 1 },
-        { error_type: "auth failure", count: 1 },
-      ],
-      top_challenges: [
-        { challenge_id: "c1", title: "Two Sum", runs: 3, avg_score: 86 },
-      ],
-      submissions_last_14_days: Array.from({ length: 14 }, (_, i) => ({
-        date: `2026-09-${String(i + 1).padStart(2, "0")}`,
-        count: i + 1,
-      })),
-    } as never);
+    mockStats.mockResolvedValue(BASE_STATS as never);
   });
 
   it("renders platform statistics", async () => {
@@ -171,6 +179,80 @@ describe("AdminDashboard", () => {
     expect(screen.getByText("Challenges")).toBeInTheDocument();
     expect(screen.getByText("Submissions")).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
+  });
+
+  /**
+   * The stat card carrying `label`, found among the stat cards specifically.
+   *
+   * "Users", "Submissions" and "Average score" each appear more than once on
+   * this page — the status list, the language breakdown and the top-challenges
+   * table all repeat them — so an unscoped query is ambiguous. Restricting to
+   * the stat label is what makes this assert about the stat grid.
+   */
+  const statCard = async (label: string): Promise<HTMLElement> => {
+    const found = await screen.findAllByText(label, {
+      selector: '[class*="statLabel"]',
+    });
+    expect(found, `expected exactly one stat card labelled "${label}"`).toHaveLength(1);
+    const card = found[0].closest('[class*="statCard"]');
+    expect(card, `"${label}" is not inside a stat card`).not.toBeNull();
+    return card as HTMLElement;
+  };
+
+  // The CSS module hashes its class names (`accentPrimary_dc56c0`), and `_` is
+  // a word character, so the name has to stop at the letter before the hash.
+  const accentOf = async (label: string): Promise<string> =>
+    (await statCard(label)).className.match(/accent([A-Za-z]+)/)?.[1] ?? "";
+
+  it("gives every stat card an accent, and a count never gets a verdict", async () => {
+    renderPage(<AdminDashboard />);
+    await screen.findByText("Admin dashboard");
+
+    // The three totals are identities: a number has no opinion about being
+    // good, so its hue only distinguishes it. The three statuses are
+    // judgements and do get one. This is the distinction the whole stat
+    // system rests on, so it is pinned here rather than left to review.
+    expect(await accentOf("Users")).toBe("Primary");
+    expect(await accentOf("Challenges")).toBe("Teal");
+    expect(await accentOf("Submissions")).toBe("Violet");
+
+    expect(await accentOf("Completed")).toBe("Success");
+    expect(await accentOf("Failed")).toBe("Danger");
+    // A queue with work in it is worth flagging.
+    expect(await accentOf("Pending / processing")).toBe("Warning");
+  });
+
+  it("does not cry wolf over an empty queue", async () => {
+    // `pending_submissions: 1` above wears the warning accent. At zero there is
+    // nothing pending, and a warning-coloured zero would greet every operator
+    // every morning with an alarm that means nothing.
+    mockStats.mockResolvedValue({ ...BASE_STATS, pending_submissions: 0 } as never);
+    renderPage(<AdminDashboard />);
+    expect(await accentOf("Pending / processing")).toBe("Primary");
+  });
+
+  it("falls back to a neutral accent when there is no average score yet", async () => {
+    // A brand-new platform has nothing to average. Showing an em dash in the
+    // colour of a verdict would imply a judgement that was never made.
+    mockStats.mockResolvedValue({ ...BASE_STATS, average_score: null } as never);
+    renderPage(<AdminDashboard />);
+    expect((await statCard("Average score")).textContent).toContain("\u2014");
+    expect(await accentOf("Average score")).toBe("Primary");
+  });
+
+  it("lets the average score take the app-wide scale", async () => {
+    // The same score means the same colour here as it does on a challenge chip
+    // and on the profile dashboard, so a reader learns the scale once.
+    for (const [score, accent] of [
+      [95, "Success"],
+      [65, "Warning"],
+      [12, "Danger"],
+    ] as const) {
+      mockStats.mockResolvedValue({ ...BASE_STATS, average_score: score } as never);
+      const { unmount } = renderPage(<AdminDashboard />);
+      expect(await accentOf("Average score"), `score ${score}`).toBe(accent);
+      unmount();
+    }
   });
 
   it("shows an error message when stats fail to load", async () => {
