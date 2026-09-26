@@ -13,7 +13,7 @@ whole persisted ``submission`` record, so the client renders code, logs and the
 evaluation result from the socket instead of waiting for a second round-trip.
 The record is re-read from the database rather than taken from the event: the
 worker publishes only after committing, and re-serializing keeps this endpoint
-the single place that produces a client-safe ``SubmissionRead``.
+the single place that produces a client-safe submission payload.
 
 The snapshot read uses a *fresh* short-lived database session rather than a
 session spanning the whole socket lifetime: long-lived transactions can pin
@@ -36,7 +36,7 @@ from app.core import database
 from app.core.redis import get_redis
 from app.core.security import decode_access_token
 from app.models.submission import Submission
-from app.schemas.submission import SubmissionRead
+from app.schemas.submission import SubmissionDetailRead
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +49,21 @@ CLOSE_NOT_AUTHENTICATED = 4401
 CLOSE_FORBIDDEN = 4403
 
 #: Events the worker publishes mid-pipeline mapped to the phase they imply.
-PHASE_BY_EVENT = {"processing": "generating", "code_generated": "testing"}
+PHASE_BY_EVENT = {
+    "processing": "generating",
+    "code_generated": "testing",
+    # A failed attempt that is being fed back to the provider. Distinct from
+    # "generating" so the UI can say *repairing* rather than implying a first
+    # attempt, and so the phase is meaningful while the next message waits in
+    # the broker.
+    "repairing": "repairing",
+}
 #: Terminal events — forwarded with the phase cleared.
 TERMINAL_STATUSES = frozenset({"completed", "failed"})
+#: Events that leave the persisted record materially changed, so the client is
+#: sent that record: terminal ones finish it, and ``repairing`` adds an attempt
+#: row (the failure a client needs to render the timeline).
+RECORD_CARRYING_EVENTS = TERMINAL_STATUSES | {"repairing"}
 #: Status events that can arrive from the PATCH endpoint directly.
 STATUS_EVENTS = frozenset({"pending", "processing", "completed", "failed"})
 
@@ -74,17 +86,22 @@ def _map_event_to_update(payload: dict) -> dict | None:
 
 
 async def _load_submission_snapshot(submission_id: UUID, user_id: UUID) -> dict | None:
-    """Serialize a user's submission (or None if it does not exist)."""
+    """Serialize a user's submission with its attempt history (or None)."""
     async with database.async_session() as session:
         result = await session.execute(
             select(Submission)
-            .options(selectinload(Submission.evaluation_result))
+            .options(
+                selectinload(Submission.evaluation_result),
+                selectinload(Submission.attempts),
+            )
             .where(Submission.id == submission_id, Submission.user_id == user_id)
         )
         submission = result.scalar_one_or_none()
         if submission is None:
             return None
-        return SubmissionRead.model_validate(submission).model_dump(mode="json")
+        # The detail schema, not the list one: a page opened mid-repair needs
+        # the attempts already recorded or its timeline starts empty.
+        return SubmissionDetailRead.from_submission(submission).model_dump(mode="json")
 
 
 @router.websocket("/ws/submissions/{submission_id}")
@@ -155,13 +172,13 @@ async def submission_updates(
             #
             # Re-serializing here rather than having the worker stuff the
             # payload into the event keeps ONE place that produces a
-            # client-safe ``SubmissionRead`` (the snapshot already uses it), so
+            # client-safe record (the snapshot already uses it), so
             # the two cannot drift, and the worker stays ignorant of the wire
             # format. It also makes the message idempotent: it is a complete
             # record rather than a patch, so a duplicate after a reconnect — or
             # an update that races the snapshot — cannot leave a client with
             # half-merged output.
-            if mapped["status"] in TERMINAL_STATUSES:
+            if payload.get("type", "") in RECORD_CARRYING_EVENTS:
                 record = await _load_submission_snapshot(submission_id, user_id)
                 if record is not None:
                     outgoing["submission"] = record

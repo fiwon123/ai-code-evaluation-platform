@@ -4,6 +4,7 @@ import httpx
 
 from app.services.llm_providers.base import (
     LLMProvider,
+    build_user_message,
     get_system_prompt,
     strip_code_fences,
 )
@@ -25,14 +26,21 @@ class GeminiProvider(LLMProvider):
         self._model = model
         self._client = httpx.Client(base_url=base_url, transport=transport, timeout=60)
 
-    def generate_code(self, prompt: str, language: str = "python") -> str:
+    def generate_code(
+        self, prompt: str, language: str = "python", feedback: str | None = None
+    ) -> str:
         self.validate_language(language)
         response = self._client.post(
             f"/models/{self._model}:generateContent",
             params={"key": self._api_key},
             json={
                 "system_instruction": {"parts": [{"text": get_system_prompt(language)}]},
-                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": build_user_message(prompt, feedback)}],
+                    }
+                ],
                 "generationConfig": {"temperature": 0.2},
             },
         )

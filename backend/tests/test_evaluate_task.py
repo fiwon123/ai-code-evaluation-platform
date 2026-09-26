@@ -1,6 +1,6 @@
-from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -10,6 +10,7 @@ from app.models.challenge import Challenge
 from app.models.evaluation_result import EvaluationResult
 from app.models.submission import Submission
 from app.models.user import User
+from app.services.evaluation import EvaluationOutcome
 from app.tasks.evaluate import _run_submission_evaluation
 
 
@@ -57,6 +58,19 @@ def _seed(session) -> UUID:
     return submission.id
 
 
+@pytest.fixture(autouse=True)
+def _single_attempt(monkeypatch):
+    """Keep these tests on the single-attempt path.
+
+    They cover phase transitions, duplicate races and error handling — not the
+    repair loop (see tests/test_repair_task.py). Pinning the budget to 1 keeps
+    a failing run terminal in one attempt, which is what they assert against.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "evaluation_max_attempts", 1)
+
+
 class TestSubmissionEvaluation:
     def test_full_success_flow(self):
         session = _make_sync_session()
@@ -94,7 +108,7 @@ class TestSubmissionEvaluation:
         submission_id = _seed(session)
         observed: list[str | None] = []
 
-        def fake_generate(self, prompt, language="python"):
+        def fake_generate(self, prompt, language="python", feedback=None):
             # Runs right after the task commits phase="generating" — read the
             # row from a second session over the same engine.
             with session_factory() as other:
@@ -105,7 +119,7 @@ class TestSubmissionEvaluation:
             # Runs right after the task commits phase="testing".
             with session_factory() as other:
                 observed.append(other.get(Submission, submission_id).phase)
-            return SimpleNamespace(
+            return EvaluationOutcome(
                 passed=0, total=2, score=0.0, logs="ran", metrics={"duration_ms": 5}
             )
 
@@ -136,7 +150,11 @@ class TestSubmissionEvaluation:
             lambda name, api_key=None, model=None: type(
                 "P",
                 (),
-                {"generate_code": lambda self, prompt, language="python": "x = 1"},
+                {
+                    "generate_code": (
+                        lambda self, prompt, language="python", feedback=None: "x = 1"
+                    ),
+                },
             )(),
         )
 
@@ -170,7 +188,7 @@ class TestSubmissionEvaluation:
             return type(
                 "P",
                 (),
-                {"generate_code": lambda self, prompt, language="python": ""},
+                {"generate_code": lambda self, prompt, language="python", feedback=None: ""},
             )()
 
         monkeypatch.setattr("app.tasks.evaluate.get_llm_provider", fake_get)
@@ -185,7 +203,7 @@ class TestSubmissionEvaluation:
         session = _make_sync_session()
         submission_id = _seed(session)
 
-        def fake_generate(self, prompt, language="python"):
+        def fake_generate(self, prompt, language="python", feedback=None):
             # Simulate the duplicate run winning: a result already exists.
             session.add(
                 EvaluationResult(
@@ -208,7 +226,7 @@ class TestSubmissionEvaluation:
         )
         monkeypatch.setattr(
             "app.tasks.evaluate.evaluate_code",
-            lambda **kwargs: SimpleNamespace(
+            lambda **kwargs: EvaluationOutcome(
                 passed=0, total=2, score=0.0, logs="loser", metrics={}
             ),
         )
@@ -234,7 +252,7 @@ class TestSubmissionEvaluation:
 
         monkeypatch.setattr("app.tasks.evaluate.publish_submission_event", fake_publish)
 
-        def fake_generate(self, prompt, language="python"):
+        def fake_generate(self, prompt, language="python", feedback=None):
             # The winning duplicate already recorded its result mid-run.
             session.add(
                 EvaluationResult(
@@ -257,7 +275,7 @@ class TestSubmissionEvaluation:
         )
         monkeypatch.setattr(
             "app.tasks.evaluate.evaluate_code",
-            lambda **kwargs: SimpleNamespace(
+            lambda **kwargs: EvaluationOutcome(
                 passed=0, total=2, score=0.0, logs="loser", metrics={}
             ),
         )
@@ -277,7 +295,7 @@ class TestSubmissionEvaluation:
         session = _make_sync_session()
         submission_id = _seed(session)
 
-        def boom(self, prompt, language="python"):
+        def boom(self, prompt, language="python", feedback=None):
             session.add(
                 EvaluationResult(
                     submission_id=submission_id,
@@ -310,7 +328,7 @@ class TestSubmissionEvaluation:
         session = _make_sync_session()
         submission_id = _seed(session)
 
-        def boom(self, prompt, language="python"):
+        def boom(self, prompt, language="python", feedback=None):
             raise RuntimeError("LLM down")
 
         monkeypatch.setattr(
@@ -348,7 +366,11 @@ class TestSubmissionEvaluation:
             return type(
                 "P",
                 (),
-                {"generate_code": lambda self, prompt, language="python": correct_code},
+                {
+                    "generate_code": lambda self, prompt, language="python", feedback=None: (
+                        correct_code
+                    )
+                },
             )()
 
         monkeypatch.setattr("app.tasks.evaluate.get_llm_provider", fake_get)
@@ -361,7 +383,7 @@ class TestSubmissionEvaluation:
         session = _make_sync_session()
         submission_id = _seed(session)
 
-        def boom(self, prompt, language="python"):
+        def boom(self, prompt, language="python", feedback=None):
             raise RuntimeError("upstream rejected sk-secret-key")
 
         monkeypatch.setattr(

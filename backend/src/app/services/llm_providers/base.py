@@ -103,14 +103,42 @@ def get_system_prompt(language: str) -> str:
     return _SYSTEM_PROMPTS.get(language, _SYSTEM_PROMPTS["python"])
 
 
+#: Prepended to the user message when the worker retries a failed attempt. Kept
+#: separate from the per-language system prompts because "fix your own code" is
+#: orthogonal to the language.
+REPAIR_PREAMBLE = (
+    "You are fixing code you wrote yourself for this prompt. The previous "
+    "attempt failed its test suite — use the failure output below to produce a "
+    "corrected version. Return only the complete corrected source code."
+)
+
+
+def build_user_message(prompt: str, feedback: str | None) -> str:
+    """Compose the user turn, appending repair ``feedback`` when present.
+
+    Every provider sends a single user message, so this keeps the repair path
+    consistent across them: same ordering, same instruction, no provider needs
+    to know the retry protocol.
+    """
+    if not feedback:
+        return prompt
+    return f"{REPAIR_PREAMBLE}\n\n{prompt}\n\n{feedback}"
+
+
 class LLMProvider(ABC):
     """Interface for LLM code generation providers."""
 
     name: str = "base"
 
     @abstractmethod
-    def generate_code(self, prompt: str, language: str = "python") -> str:
+    def generate_code(
+        self, prompt: str, language: str = "python", feedback: str | None = None
+    ) -> str:
         """Generate a code solution for the given prompt and language.
+
+        ``feedback`` carries the previous attempt's code and failure output
+        when the worker is retrying; providers pass it through
+        :func:`build_user_message`. Omitted for a first attempt.
 
         Returns only the source code (no markdown fences, no prose).
         """

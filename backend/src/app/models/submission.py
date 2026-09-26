@@ -11,6 +11,7 @@ from app.core.database import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from app.models.challenge import Challenge
+    from app.models.evaluation_attempt import EvaluationAttempt
     from app.models.evaluation_result import EvaluationResult
     from app.models.user import User
 
@@ -41,8 +42,9 @@ class Submission(UUIDMixin, TimestampMixin, Base):
     #: When evaluation began (status → processing); set once, kept on terminal
     #: rows so the UI can show "started at" / true elapsed time.
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    #: Pipeline phase while processing: ``"generating"`` (LLM call in flight)
-    #: or ``"testing"`` (code generated, tests running). NULL when pending or
+    #: Pipeline phase while processing: ``"generating"`` (LLM call in flight),
+    #: ``"testing"`` (code generated, tests running) or ``"repairing"`` (a
+    #: failed attempt is being fed back for another try). NULL when pending or
     #: terminal — the worker clears it on completion/failure.
     phase: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
@@ -52,4 +54,9 @@ class Submission(UUIDMixin, TimestampMixin, Base):
         back_populates="submission",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+    attempts: Mapped[list[EvaluationAttempt]] = relationship(
+        back_populates="submission",
+        cascade="all, delete-orphan",
+        order_by="EvaluationAttempt.attempt_number",
     )
