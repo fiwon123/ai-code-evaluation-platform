@@ -1,0 +1,38 @@
+/* The 404 page had no stylesheet at all: a bare `<div>` with no class, so it had
+ * no shell, no gutter, and no page rhythm. It is the one page a user is
+ * guaranteed to reach by following a dead link, so it gets the same shell as
+ * every other page rather than none. */
+
+.page {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  width: 100%;
+  /* The `app` rhythm. */
+  padding: var(--space-12) var(--space-6) var(--space-16);
+}
+
+.body {
+  max-width: 60ch;
+}
+
+.message {
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.action {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.action:hover {
+  color: var(--color-primary-hover);
+}
