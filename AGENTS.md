@@ -191,6 +191,22 @@ VSCode/opencode CLI connects to the host workspace directly.
 - **gh CLI** authenticated on the host (`~/.config/gh`, shared read-only
   with the dev sandbox)
 
+**How the sandbox gets a token.** `gh` reads its credential from the
+environment (`GH_TOKEN`, then `GITHUB_TOKEN`) *before* the credential store,
+and `gh auth login` writes to the store rather than the environment. So an
+operator who logged in but never exported a token forwarded nothing, and a
+stale token lingering in a shell profile shadowed the fresh one — both ended in
+401s from inside the container. `scripts/resolve-gh-token.sh` closes both: it
+probes each candidate (exported `GH_TOKEN`, exported `GITHUB_TOKEN`, then the
+store) with a real authenticated call and prints one only once it is proven
+good. The Makefile and `scripts/open-in-sandbox.sh` call it and forward
+**nothing** when there is no working token, so `gh` inside the sandbox falls
+back to the read-only `~/.config/gh` mount — which beats a guaranteed 401.
+Each `gh` call is capped (default 5s, `GH_TOKEN_PROBE_TIMEOUT`) because the
+Makefile runs the resolver in a `$(shell ...)` at parse time, so an unbounded
+probe would block *every* target, `make help` included.
+Locked by `backend/tests/test_dev_sandbox_gh_token.py`.
+
 ### What the agent CAN do
 
 - Run backend commands (uv, python, pytest, ruff)

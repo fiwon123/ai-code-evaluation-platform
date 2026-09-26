@@ -34,6 +34,34 @@ HOST_GID ?= $(shell id -g)
 DOCKER_GID ?= $(shell stat -c %g /var/run/docker.sock 2>/dev/null || stat -f %g /var/run/docker.sock 2>/dev/null || echo 0)
 export HOST_UID HOST_GID DOCKER_GID
 
+# --- GitHub auth for the dev sandbox ------------------------------------------
+# The sandboxed agent needs a working token to push branches and open PRs, and
+# it has to arrive as an environment variable: docker-compose.yml forwards
+# GH_TOKEN/GITHUB_TOKEN, and `gh` prefers those names over its credential store.
+# Reading the token straight from the shell used to break in two ways —
+#
+#   1. `gh auth login` writes to the gh credential store, not the environment,
+#      so an operator who logged in but never exported GH_TOKEN forwarded
+#      nothing and `gh` had no credential at all;
+#   2. a STALE GH_TOKEN lingering in a shell profile shadowed the fresh token
+#      `gh auth login` had just written (gh checks the env name first), so
+#      every call failed with 401 Bad credentials.
+#
+# So resolve a token that is proven to work with a real authenticated call, and
+# forward NOTHING when there is none — that leaves gh inside the sandbox to
+# fall back to the read-only ~/.config/gh mount, which beats a guaranteed 401.
+#
+# `:=` not `?=`: an exported-but-stale GH_TOKEN must be REPLACED by the
+# validated value, not preserved. stderr is dropped so make output stays clean;
+# scripts/resolve-gh-token.sh explains itself when run directly.
+GH_TOKEN := $(shell scripts/resolve-gh-token.sh 2>/dev/null || true)
+# Exported only when non-empty: an exported-but-empty GH_TOKEN is worse than
+# an absent one, because compose would still interpolate a value for it.
+ifneq ($(strip $(GH_TOKEN)),)
+GITHUB_TOKEN := $(GH_TOKEN)
+export GH_TOKEN GITHUB_TOKEN
+endif
+
 # --- Host-native path (fastest, no containers) -------------------------------
 install: setup ## Alias for setup (kept for backwards compatibility)
 setup: ## Install host-native deps (uv sync + npm install)
