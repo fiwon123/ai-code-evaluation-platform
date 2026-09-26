@@ -243,6 +243,19 @@ Backend reads from `.env` (gitignored):
 - `REDIS_URL`: Redis connection
 - `JWT_SECRET_KEY`: JWT signing key (required)
 - `LLM_API_KEYS`: JSON object with provider API keys
+- Per-provider keys, read by the worker and the dev sandbox: `OPENAI_API_KEY`,
+  `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`. Never committed; a
+  provider without its key fails with "API key missing" instead of falling
+  back to a different vendor.
+- `OLLAMA_BASE_URL`: Ollama endpoint (default `http://localhost:11434` inside
+  the container; compose sets `http://host.docker.internal:11434` because a
+  container's localhost is the container, not the host)
+- `LLM_FALLBACK_PROVIDER` / `LLM_FALLBACK_MODEL`: opt-in generation fallback.
+  When the primary provider raises (rate limit, quota, network), the worker
+  retries once with this provider/model and records the provenance in the
+  result metrics. Empty (the default) disables the retry, so behaviour is
+  unchanged. Intended pairing: `LLM_FALLBACK_PROVIDER=ollama` with
+  `LLM_FALLBACK_MODEL=tinyllama` (small enough for a CPU-only host)
 - Other service-specific variables
 
 ## Key Conventions

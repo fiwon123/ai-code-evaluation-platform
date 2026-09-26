@@ -29,6 +29,19 @@ class Settings(BaseSettings):
     llm_provider: str = "demo"  # default provider: demo | openai | anthropic
     evaluation_timeout: int = 30  # seconds for test execution
     evaluation_dir: str = "/tmp/evaluations"
+    #: Fallback chain for code generation. When the primary provider raises
+    #: (rate limit, quota, network, missing key), one retry is made with
+    #: ``llm_fallback_provider``/``llm_fallback_model`` before the run is failed.
+    #: Empty provider (the default) disables the fallback, so behaviour is
+    #: unchanged unless an operator opts in. The intended pairing is a
+    #: generous cloud provider with a small local model:
+    #: ``LLM_FALLBACK_PROVIDER=ollama`` + ``LLM_FALLBACK_MODEL=tinyllama``.
+    llm_fallback_provider: str = ""
+    llm_fallback_model: str = ""
+    #: Base URL of the Ollama server. The default suits a host-native worker;
+    #: a containerized worker must point at the host, e.g.
+    #: ``http://host.docker.internal:11434``.
+    ollama_base_url: str = "http://localhost:11434"
     #: Total generate-and-test attempts per submission. Attempt 1 is the
     #: initial generation; a failing attempt is fed back to the provider and
     #: re-tested until the code passes or the budget runs out. ``1`` disables

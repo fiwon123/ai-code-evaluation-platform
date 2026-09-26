@@ -220,7 +220,44 @@ build so it stays fast. Run it before shipping UI changes.
 | Docker unavailable | Backend falls back to subprocess execution (`DOCKER_ENABLED=false`) |
 | `make test-e2e` says "No Playwright browser found" | The image predates the Chromium bake — `make dev-build` (then `make dev-restart` if the stack is already up). On a host-native checkout, `cd frontend && npx playwright install chromium` |
 | e2e fails with "Execution context was destroyed" or a form stuck on its own page | The Vite dev server pushed a full page reload into the run — `make dev-log` shows `[vite] (client) page reload` at the failure time. It only kills whichever tests were mid-navigation, so re-run; editing `frontend/src` while the suite runs causes it deliberately |
+| Ollama fallback leg fails with a DNS error | `host.docker.internal` is not mapped — the compose services that call a local model need `extra_hosts: host.docker.internal:host-gateway` (#233) |
+| Fallback never engages | `LLM_FALLBACK_PROVIDER` is empty (that is the off switch) — and remember `make dev-down && make dev-up` to re-read `.env` into the worker |
 | Submissions stuck "pending" for hours | The recovery sweep (Celery beat) must be running: `docker compose ps` should show `beat` healthy. Stale `pending` rows are re-dispatched after 10 min and **abandoned (failed) 60 min after creation** (`PENDING_MAX_MINUTES` in `backend/src/app/tasks/recover.py`). The Profile/SubmissionDetail UI shows "stuck"/"waiting over 10 minutes" in the meantime. |
+
+## Local model fallback (optional, for real-model testing)
+
+A provider failure — rate limit, exhausted quota, mistyped key, an Ollama server
+that isn't running — burns the whole submission for a score of 0 without ever
+reaching the sandbox. Set the fallback in `.env` and the worker retries the
+generation **once** with a second provider; the report then names which model
+actually wrote the code:
+
+```bash
+# .env (gitignored) — the free, CPU-only pairing
+GROQ_API_KEY=gsk_...                 # free tier, no credit card
+LLM_FALLBACK_PROVIDER=ollama
+LLM_FALLBACK_MODEL=tinyllama
+```
+
+- **Opt-in.** Empty `LLM_FALLBACK_PROVIDER` (the default) re-raises the
+  provider's own error untouched, so an unconfigured stack behaves exactly as
+  before.
+- **Generation only.** A sandbox failure is the *model's* problem and goes to the
+  repair loop instead; the fallback never sees it.
+- **No key hand-off.** The retry is made with `api_key=None`, so the primary's
+  key is never sent to a second vendor. A keyed fallback reads its own
+  `KEYED_PROVIDERS` environment variable.
+- **Host Ollama.** Ollama runs on the *host*, but the worker's localhost is the
+  container — compose sets `OLLAMA_BASE_URL=http://host.docker.internal:11434`
+  and maps that name with `extra_hosts: host.docker.internal:host-gateway`. On a
+  CPU-only host, cap it before pulling a model:
+  ```bash
+  OLLAMA_NUM_THREADS=2 OLLAMA_MAX_PARALLEL=1 OLLAMA_KEEP_ALIVE=0 ollama serve
+  ollama pull tinyllama
+  ```
+- Prove the retry without spending quota: point a submission at Groq with a
+  deliberately wrong key. The report shows the fallback provider, its model,
+  and the primary's error (with the key redacted).
 
 ## Recovery sweep (Celery beat)
 

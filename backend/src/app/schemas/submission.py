@@ -10,7 +10,7 @@ from app.services.llm_models import model_belongs_to_provider
 # Providers that require an API key to generate code. Mirrors the UI provider
 # list in frontend/src/pages/ChallengeDetail.tsx (requiresKey) and the env-var
 # mapping in app/services/llm.py (KEYED_PROVIDERS) — keep all three in sync.
-KEY_REQUIRED_PROVIDERS = frozenset({"openai", "anthropic", "gemini"})
+KEY_REQUIRED_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "groq"})
 
 
 class SubmissionCreate(BaseModel):
@@ -46,9 +46,7 @@ class SubmissionCreate(BaseModel):
         if self.model:
             provider = self.provider or settings.llm_provider or "demo"
             if not model_belongs_to_provider(self.model, provider):
-                raise ValueError(
-                    f"Model '{self.model}' is not available for provider '{provider}'"
-                )
+                raise ValueError(f"Model '{self.model}' is not available for provider '{provider}'")
         return self
 
 

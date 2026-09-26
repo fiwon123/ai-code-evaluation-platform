@@ -12,6 +12,27 @@ from app.models.submission import Submission
 from app.models.user import User
 from app.services.evaluation import EvaluationOutcome
 from app.tasks.evaluate import _run_submission_evaluation
+from tests.conftest import fake_provider as _fake_provider
+
+
+def _always_fails(exc: Exception):
+    """A ``generate_code`` stand-in that always fails with ``exc``.
+
+    Named rather than a lambda so a test reads as "this provider is down"
+    instead of a generator-expression trick.
+    """
+
+    def generate_code(self, prompt, language="python", feedback=None):
+        raise exc
+
+    return generate_code
+
+
+def _stored_result(session, submission_id):
+    """The submission's result row, re-read so metrics are the persisted ones."""
+    session.expire_all()
+    submission = session.get(Submission, submission_id)
+    return session.get(EvaluationResult, submission.evaluation_result.id)
 
 
 def _make_sync_session():
@@ -124,10 +145,8 @@ class TestSubmissionEvaluation:
             )
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type(
-                "P", (), {"generate_code": fake_generate}
-            )(),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=fake_generate),
         )
         monkeypatch.setattr("app.tasks.evaluate.evaluate_code", fake_evaluate)
 
@@ -146,10 +165,8 @@ class TestSubmissionEvaluation:
         submission_id = _seed(session)
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type(
-                "P",
-                (),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(
                 {
                     "generate_code": (
                         lambda self, prompt, language="python", feedback=None: "x = 1"
@@ -185,13 +202,11 @@ class TestSubmissionEvaluation:
 
         def fake_get(name, api_key=None, model=None):
             calls.append(name)
-            return type(
-                "P",
-                (),
-                {"generate_code": lambda self, prompt, language="python", feedback=None: ""},
-            )()
+            return _fake_provider(
+                generate_code=lambda self, prompt, language="python", feedback=None: ""
+            )
 
-        monkeypatch.setattr("app.tasks.evaluate.get_llm_provider", fake_get)
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get)
         result = _run_submission_evaluation(session, submission_id)
 
         assert result["status"] == "completed"
@@ -219,10 +234,8 @@ class TestSubmissionEvaluation:
             return "def two_sum(nums, target):\n    return []\n"
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type(
-                "P", (), {"generate_code": fake_generate}
-            )(),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=fake_generate),
         )
         monkeypatch.setattr(
             "app.tasks.evaluate.evaluate_code",
@@ -268,10 +281,8 @@ class TestSubmissionEvaluation:
             return "def two_sum(nums, target):\n    return []\n"
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type(
-                "P", (), {"generate_code": fake_generate}
-            )(),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=fake_generate),
         )
         monkeypatch.setattr(
             "app.tasks.evaluate.evaluate_code",
@@ -310,8 +321,8 @@ class TestSubmissionEvaluation:
             raise RuntimeError("LLM down")
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type("P", (), {"generate_code": boom})(),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=boom),
         )
 
         result = _run_submission_evaluation(session, submission_id)
@@ -332,8 +343,8 @@ class TestSubmissionEvaluation:
             raise RuntimeError("LLM down")
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type("P", (), {"generate_code": boom})(),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=boom),
         )
         result = _run_submission_evaluation(session, submission_id)
 
@@ -363,17 +374,11 @@ class TestSubmissionEvaluation:
 
         def fake_get(name, api_key=None, model=None):
             captured["api_key"] = api_key
-            return type(
-                "P",
-                (),
-                {
-                    "generate_code": lambda self, prompt, language="python", feedback=None: (
-                        correct_code
-                    )
-                },
-            )()
+            return _fake_provider(
+                generate_code=lambda self, prompt, language="python", feedback=None: correct_code
+            )
 
-        monkeypatch.setattr("app.tasks.evaluate.get_llm_provider", fake_get)
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get)
         result = _run_submission_evaluation(session, submission_id, api_key="sk-task")
 
         assert captured["api_key"] == "sk-task"
@@ -387,8 +392,8 @@ class TestSubmissionEvaluation:
             raise RuntimeError("upstream rejected sk-secret-key")
 
         monkeypatch.setattr(
-            "app.tasks.evaluate.get_llm_provider",
-            lambda name, api_key=None, model=None: type("P", (), {"generate_code": boom})(),
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=boom),
         )
         result = _run_submission_evaluation(session, submission_id, api_key="sk-secret-key")
 
@@ -455,3 +460,122 @@ class TestSubmissionEvaluation:
         assert "sandbox image missing" in result["error"]
         evaluation = session.get(EvaluationResult, submission.evaluation_result.id)
         assert "sandbox image missing" in evaluation.logs
+
+
+class TestFallbackProvenance:
+    """The report must say which provider actually produced the code.
+
+    A run served by the fallback carries another model's work, so the metrics
+    row is the only place the UI learns about it. These cover the task wiring
+    (the fallback service itself is tested in ``test_llm_fallback.py``).
+    """
+
+    def test_normal_run_records_no_fallback_metrics(self, monkeypatch):
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        _run_submission_evaluation(session, submission_id)
+
+        result = _stored_result(session, submission_id)
+        assert "fallback_used" not in result.metrics
+        assert "primary_error" not in result.metrics
+
+    def test_fallback_run_records_provenance_on_the_result(self, monkeypatch):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "llm_fallback_provider", "ollama")
+        monkeypatch.setattr(settings, "llm_fallback_model", "tinyllama")
+
+        used: list[str] = []
+
+        def fake_get(name, api_key=None, model=None):
+            used.append(name)
+
+            def generate_code(self, prompt, language="python", feedback=None):
+                if name == "groq":
+                    raise RuntimeError("429 rate_limit_exceeded")
+                return "def two_sum(nums, target):\n    return [0, 1]\n"
+
+            return _fake_provider(generate_code=generate_code)
+
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get)
+        monkeypatch.setattr(
+            "app.tasks.evaluate.evaluate_code",
+            lambda **kwargs: EvaluationOutcome(
+                passed=2, total=2, score=100.0, logs="ok", metrics={"duration_ms": 7}
+            ),
+        )
+
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        submission = session.get(Submission, submission_id)
+        submission.provider = "groq"
+        session.commit()
+
+        outcome = _run_submission_evaluation(session, submission_id)
+
+        assert outcome["status"] == "completed"
+        assert used == ["groq", "ollama"]
+        result = _stored_result(session, submission_id)
+        assert result.metrics["fallback_used"] is True
+        assert result.metrics["fallback_provider"] == "ollama"
+        assert result.metrics["fallback_model"] == "tinyllama"
+        assert "429" in result.metrics["primary_error"]
+        # The sandbox's own metrics survive alongside the provenance.
+        assert result.metrics["duration_ms"] == 7
+
+    def test_the_per_run_key_is_not_handed_to_the_fallback(self, monkeypatch):
+        """The primary's key must never be sent to a different vendor."""
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "llm_fallback_provider", "ollama")
+        monkeypatch.setattr(settings, "llm_fallback_model", "tinyllama")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        keys: list[tuple[str, str | None]] = []
+
+        def fake_get(name, api_key=None, model=None):
+            keys.append((name, api_key))
+            if name == "groq":
+                return _fake_provider(generate_code=_always_fails(RuntimeError("boom")))
+            return _fake_provider(
+                generate_code=lambda self, p, language="python", feedback=None: "x = 1"
+            )
+
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get)
+
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        submission = session.get(Submission, submission_id)
+        submission.provider = "groq"
+        session.commit()
+
+        _run_submission_evaluation(session, submission_id, api_key="sk-primary-secret")
+
+        assert keys == [("groq", "sk-primary-secret"), ("ollama", None)]
+
+    def test_both_providers_failing_still_fails_the_submission(self, monkeypatch):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "llm_fallback_provider", "ollama")
+        monkeypatch.setattr(settings, "llm_fallback_model", "tinyllama")
+
+        def fake_get(name, api_key=None, model=None):
+            return _fake_provider(generate_code=_always_fails(RuntimeError(f"{name} is down")))
+
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get)
+
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        submission = session.get(Submission, submission_id)
+        submission.provider = "groq"
+        session.commit()
+
+        outcome = _run_submission_evaluation(session, submission_id)
+
+        assert outcome["status"] == "failed"
+        # The message names both, so the operator can see which one to fix.
+        assert "groq is down" in outcome["error"]
+        assert "ollama is down" in outcome["error"]
+        session.expire_all()
+        assert session.get(Submission, submission_id).status == "failed"

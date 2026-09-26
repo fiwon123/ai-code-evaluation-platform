@@ -46,7 +46,7 @@ describe("Home ambient layer", () => {
     renderHome();
     // Unlike the fragments, the chips carry real information, so they stay in
     // the tree. The label says "example" because six chips stand in for
-    // thirteen languages and five providers.
+    // thirteen languages and six providers.
     const chips = screen.getByRole("list", {
       name: /example integrations and test runners/i,
     });
@@ -105,9 +105,10 @@ describe("Home copy stays true to the code", () => {
   });
 
   it("does not name only two providers", () => {
-    // services/llm.py ships five; Gemini and Ollama were missing.
+    // services/llm.py ships six; Gemini, Groq and Ollama must all be named.
     const text = homeText();
     expect(text).toMatch(/Gemini/);
+    expect(text).toMatch(/Groq/);
     expect(text).toMatch(/Ollama/);
   });
 
