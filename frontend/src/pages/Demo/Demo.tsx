@@ -26,12 +26,12 @@ const STEPS = [
   {
     icon: "📝",
     title: "Create a challenge",
-    text: "Define an LLM prompt and a pytest test suite. Example: 'Write a function that returns the sum of a list.' with a few assertion tests.",
+    text: "Define an LLM prompt and a test suite in the language you want evaluated. Example: 'Write a function that returns the sum of a list.' with a few assertion tests.",
   },
   {
     icon: "🤖",
     title: "Submit for evaluation",
-    text: "Pick a provider — OpenAI, Anthropic, or the free demo model — and submit. The platform records your submission and kicks off generation.",
+    text: "Pick a provider — OpenAI, Anthropic, Gemini, a local Ollama server, or the free demo model — and submit. The platform records your submission and kicks off generation.",
   },
   {
     icon: "⚙️",

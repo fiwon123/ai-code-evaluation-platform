@@ -46,7 +46,7 @@ describe("landing pages", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/production-shaped evaluation pipeline/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/pytest test suites defined per challenge/i),
+      screen.getByText(/test suites defined per challenge/i),
     ).toBeInTheDocument();
   });
 
@@ -127,3 +127,60 @@ describe("landing pages", () => {
     expect(screen.getByText("Try the live demo")).toBeInTheDocument();
   });
 });
+
+/**
+ * The landing pages make promises about what the platform guarantees. Those
+ * promises are the kind of copy that creeps back in during a rewrite, and a
+ * guarantee the code does not make is a support ticket later. These assertions
+ * are deliberately about the *rendered* pages rather than the copy constants,
+ * so a page cannot be fixed in one place and left stale in another.
+ *
+ * The Home page is excluded here: its copy is corrected in #221, which
+ * rewrites the hero. It is asserted there instead.
+ */
+describe("landing copy does not over-promise", () => {
+  const pages = [
+    ["Features", <Features key="f" />],
+    ["Pricing", <Pricing key="p" />],
+    ["About", <About key="a" />],
+    ["Demo", <Demo key="d" />],
+  ] as const;
+
+  it.each(pages)("%s makes no unconditional safety guarantee", (_name, page) => {
+    render(<MemoryRouter>{page}</MemoryRouter>);
+    const text = document.body.textContent ?? "";
+    // services/evaluation.py falls back to a host subprocess with no caps when
+    // Docker is unavailable, so no page may claim a solution cannot escape.
+    expect(text).not.toMatch(/can never/i);
+    expect(text).not.toMatch(/never harm/i);
+    expect(text).not.toMatch(/cannot harm/i);
+    expect(text).not.toMatch(/guarantee[ds]? (?:your )?safety/i);
+  });
+
+  it.each(pages)("%s does not claim a single-language platform", (_name, page) => {
+    render(<MemoryRouter>{page}</MemoryRouter>);
+    const text = document.body.textContent ?? "";
+    // Thirteen languages ship (services/languages.py). "a pytest suite" as the
+    // only description understates the platform by eight languages.
+    expect(text).not.toMatch(/a pytest test suite/i);
+    expect(text).not.toMatch(/pytest test suites defined per challenge/i);
+  });
+
+  it("does not list shipped features as roadmap items", () => {
+    render(
+      <MemoryRouter>
+        <About />
+      </MemoryRouter>,
+    );
+    // Scoped to the sentence that makes the roadmap claim. Docker sandbox
+    // execution and self-hosting both ship, so they belong in the "functional"
+    // list — it is only wrong for them to sit in the "on the roadmap" one.
+    const roadmapParagraph = (document.body.textContent ?? "")
+      .split(/(?<=\.)\s+/)
+      .find((sentence) => /on the roadmap/i.test(sentence));
+    expect(roadmapParagraph, "About page no longer states a roadmap").toBeDefined();
+    expect(roadmapParagraph).not.toMatch(/Docker sandbox/i);
+    expect(roadmapParagraph).not.toMatch(/self-hosting/i);
+  });
+});
+
