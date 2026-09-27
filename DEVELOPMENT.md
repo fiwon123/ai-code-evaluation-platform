@@ -321,7 +321,7 @@ Two files, two readers, and picking the wrong one fails silently:
 | File | Read by | Holds |
 |------|---------|-------|
 | `<repo-root>/.env` | Docker Compose, on the host, at `make dev-up` | **Provider keys** (`GROQ_API_KEY`, `GEMINI_API_KEY`), `LLM_FALLBACK_*`, `OLLAMA_BASE_URL`, `GH_TOKEN` |
-| `backend/.env` | pydantic `Settings` (`app/config.py`) | App settings only: `ENVIRONMENT`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `DOCKER_*` |
+| `backend/.env` | pydantic `Settings` (`app/config.py`) | App settings only: `ENVIRONMENT`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `DOCKER_*`, `OLLAMA_*` |
 
 Compose interpolates `${GROQ_API_KEY:-}` from the repo-root file, and
 `app/services/llm.py` reads the key with `os.getenv` — which pydantic-settings
@@ -359,6 +359,22 @@ docker compose exec celery sh -c 'test -n "$GROQ_API_KEY" && echo set'
   OLLAMA_NUM_THREADS=2 OLLAMA_MAX_PARALLEL=1 OLLAMA_KEEP_ALIVE=0 ollama serve
   ollama pull tinyllama
   ```
+  Pick the model for the box, not for the leaderboard. Sizes are Q4_K_M, so RAM
+  is roughly the download size plus overhead:
+
+  | Model | Size | On a weak CPU |
+  |-------|------|---------------|
+  | `tinyllama` | ~640 MB | Fastest. Answers reliably, rarely writes passing code — a fallback, not a tester. |
+  | `qwen2.5-coder:0.5b` | ~400 MB | Lightest option that still knows Python. |
+  | `qwen2.5-coder:1.5b` | ~1 GB | **Best quality-per-CPU-second.** A few minutes per solution on a weak host. |
+  | `qwen2.5-coder:7b` | ~4.7 GB | Needs patience and RAM; fine on a desktop, painful on a laptop. |
+
+  Generation runs on the host with no CPU/RAM cap, so a slow model costs
+  wall-clock rather than correctness — but the provider's HTTP client still needs
+  enough headroom to not hang up mid-answer. `OLLAMA_TIMEOUT` (default 300s) is
+  far above the hosted providers' 60s for exactly that reason; raise it for a
+  7B, lower it to fail fast against a dead server. The sandbox's 30s cap applies
+  to *running the tests*, which is a separate budget.
 - Prove the retry without spending quota: point a submission at Groq with a
   deliberately wrong key. The report shows the fallback provider, its model,
   and the primary's error (with the key redacted).

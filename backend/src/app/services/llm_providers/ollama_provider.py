@@ -20,6 +20,7 @@ class OllamaProvider(LLMProvider):
         self,
         model: str = "qwen2.5-coder:7b",
         base_url: str | None = None,
+        timeout: float | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._model = model
@@ -27,7 +28,14 @@ class OllamaProvider(LLMProvider):
         # worker reads it from the environment at call time, and a containerized
         # worker needs `host.docker.internal`, not its own localhost.
         self._base_url = base_url or settings.ollama_base_url
-        self._client = httpx.Client(base_url=self._base_url, transport=transport, timeout=60)
+        # A local model runs on this machine's CPU, so a 1.5B code model can take
+        # minutes to emit a solution on a weak host. The hosted providers' 60s is
+        # sized for a fast API and would fail a slow-but-correct local run as if
+        # Ollama were broken. See `settings.ollama_timeout`.
+        self._timeout = settings.ollama_timeout if timeout is None else timeout
+        self._client = httpx.Client(
+            base_url=self._base_url, transport=transport, timeout=self._timeout
+        )
 
     def generate_code(
         self, prompt: str, language: str = "python", feedback: str | None = None

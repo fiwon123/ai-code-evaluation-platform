@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     #: a containerized worker must point at the host, e.g.
     #: ``http://host.docker.internal:11434``.
     ollama_base_url: str = "http://localhost:11434"
+    #: HTTP timeout for a single Ollama generation, in seconds. Deliberately
+    #: far larger than the hosted providers' 60s: a local model runs on this
+    #: machine's CPU, so a 1.5B code model emitting a few hundred tokens can take
+    #: minutes on a weak host, and a timeout there reads as "Ollama is broken"
+    #: rather than "the model is slow". The Docker sandbox caps (CPU/RAM/30s)
+    #: apply to *running the tests*, not to generating the code, so a slow model
+    #: costs wall-clock rather than correctness. Raise it for larger local
+    #: models (a 7B wants far more), lower it to fail fast on a dead server.
+    ollama_timeout: int = 300
     #: Total generate-and-test attempts per submission. Attempt 1 is the
     #: initial generation; a failing attempt is fed back to the provider and
     #: re-tested until the code passes or the budget runs out. ``1`` disables

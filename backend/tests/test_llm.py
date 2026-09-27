@@ -3,10 +3,12 @@ import json
 import httpx
 import pytest
 
+from app.config import settings
 from app.services.llm import get_llm_provider
 from app.services.llm_providers import (
     AnthropicProvider,
     GeminiProvider,
+    GroqProvider,
     MockProvider,
     OllamaProvider,
     OpenAIProvider,
@@ -359,6 +361,38 @@ class TestOllamaProvider:
         )
         with pytest.raises(httpx.HTTPStatusError):
             provider.generate_code("fibonacci")
+        provider.close()
+
+
+class TestOllamaTimeout:
+    """A local CPU model is slow; the client's 60s (sized for a hosted API) would
+    turn a slow-but-correct run into a `ReadTimeout` that reads like "Ollama is
+    broken". The timeout must come from settings so an operator can tune it."""
+
+    def test_shipped_default_is_generous_enough_for_cpu_generation(self):
+        # Guard the real setting, not a monkeypatched stand-in: a 1.5B coder
+        # model on a weak host needs minutes, not the hosted providers' 60.
+        from app.config import Settings
+
+        assert Settings().ollama_timeout == 300
+
+    def test_hosted_default_is_untouched(self):
+        # This is a local-model problem, not a global one: 60s is right for a
+        # fast API and must not be widened for everyone.
+        provider = GroqProvider(api_key="gsk-test")
+        assert provider._client.timeout == httpx.Timeout(60)
+        provider.close()
+
+    def test_reads_the_configured_timeout(self, monkeypatch):
+        monkeypatch.setattr(settings, "ollama_timeout", 900)
+        provider = OllamaProvider()
+        assert provider._client.timeout == httpx.Timeout(900)
+        provider.close()
+
+    def test_explicit_argument_wins(self, monkeypatch):
+        monkeypatch.setattr(settings, "ollama_timeout", 900)
+        provider = OllamaProvider(timeout=45)
+        assert provider._client.timeout == httpx.Timeout(45)
         provider.close()
 
 

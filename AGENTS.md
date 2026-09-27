@@ -265,6 +265,12 @@ Backend settings read from `backend/.env` (gitignored):
 - `OLLAMA_BASE_URL`: Ollama endpoint (default `http://localhost:11434` inside
   the container; compose sets `http://host.docker.internal:11434` because a
   container's localhost is the container, not the host)
+- `OLLAMA_TIMEOUT`: seconds allowed for one local generation (default 300).
+  Deliberately far above the hosted providers' 60s: a local model runs on this
+  machine's CPU, so a 1.5B code model can take minutes on a weak host, and a
+  timeout there is indistinguishable from "Ollama is broken". The Docker sandbox
+  caps (CPU/RAM/30s) bound *test execution*, not generation, so a slow model
+  costs wall-clock rather than correctness.
 - `LLM_FALLBACK_PROVIDER` / `LLM_FALLBACK_MODEL`: opt-in generation fallback.
   When the primary provider raises (rate limit, quota, network), the worker
   retries once with this provider/model and records the provenance in the
