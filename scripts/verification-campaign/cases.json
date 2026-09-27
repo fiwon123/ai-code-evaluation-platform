@@ -165,6 +165,28 @@
       },
       "precondition": "Worker has LLM_FALLBACK_PROVIDER=ollama and LLM_FALLBACK_MODEL=tinyllama, host Ollama is running (OLLAMA_NUM_THREADS=2, OLLAMA_MAX_PARALLEL=1, OLLAMA_KEEP_ALIVE=0) and reachable from celery. The submission key is deliberately invalid \u2014 that is the point of the row. See #233.",
       "proves": "A failing primary falls back to a real TinyLlama generation and the provenance reaches the result metrics. The score itself is informational: a 1.1B model may well fail these tests, and that is not what this row is testing."
+    },
+    {
+      "id": "local-ollama-python",
+      "row": 8,
+      "title": "Free repeatable path: local TinyLlama end to end",
+      "provider": "ollama",
+      "model": "tinyllama",
+      "api_key": null,
+      "api_key_env": null,
+      "language": "python",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Two Sum",
+        "description": "Return the indices of the two numbers adding up to a target.",
+        "prompt": "Implement a function `two_sum(nums, target)` that returns the indices of the two numbers in `nums` which add up to `target`.\n- `nums` is a list of integers, `target` is an integer.\n- Return the two indices as a list `[i, j]` with `i < j`.\n- Return `[]` when no pair adds up to `target`.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import two_sum\n\n\ndef test_returns_first_matching_pair():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]\n\n\ndef test_finds_pair_not_at_the_start():\n    assert two_sum([3, 2, 4], 6) == [1, 2]\n\n\ndef test_returns_empty_when_no_pair():\n    assert two_sum([1, 2], 99) == []\n"
+      },
+      "expect": {
+        "kind": "completed"
+      },
+      "precondition": "Host Ollama serving on :11434 (OLLAMA_NUM_THREADS=2, OLLAMA_MAX_PARALLEL=1, OLLAMA_KEEP_ALIVE=0) with `ollama pull tinyllama`; the worker reaches it via OLLAMA_BASE_URL=http://host.docker.internal:11434. No API key and no egress to any hosted provider.",
+      "proves": "The real-model path works from the dev sandbox on a free, unlimited, keyless provider: a genuine generation is executed by the sandbox (a real backend is recorded and tests are collected) and the run terminates. The score is deliberately NOT asserted - TinyLlama is 1.1B and will likely fail these tests, which is irrelevant to what this row tests. A 0-100 band here would pass even if the run did nothing at all."
     }
   ]
 }

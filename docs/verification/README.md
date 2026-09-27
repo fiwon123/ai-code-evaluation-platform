@@ -44,6 +44,10 @@ python3 scripts/verification-campaign/run_case.py --case groq-typescript
 # the fallback drill — the submission key is deliberately invalid, because a
 # working primary is what this row is trying to break
 python3 scripts/verification-campaign/run_case.py --case fallback-tinyllama
+
+# the free, keyless real-model row — needs host Ollama, needs no key and no
+# egress to any hosted provider. This is the one to reach for by default.
+python3 scripts/verification-campaign/run_case.py --case local-ollama-python
 ```
 
 Useful flags: `--api-base` (default `http://localhost:8000`), `--identifier` /
@@ -65,6 +69,7 @@ usable in a terminal loop or a CI job once the stack is available.
 | 5 | `groq-javascript` | The `node --test` runner and its parser work. |
 | 6 | `groq-typescript` | The `tsx --test` runner and its TAP parser work. |
 | 7 | `fallback-tinyllama` | A failed primary falls back, and provenance reaches the result. |
+| 8 | `local-ollama-python` | The real-model path runs end to end on a free, keyless provider — and the run really executed. |
 
 Rows 1-3 use the deterministic `demo` provider, so their expected counts are
 fixed and are asserted in `backend/tests/test_verification_campaign.py` by
@@ -72,6 +77,29 @@ running the fixtures through the real `evaluate_code`. That test is what stops
 the fixtures from rotting: change the demo provider's canned solution, a runner
 command, or an output parser, and it fails here rather than producing a false
 PASS on somebody's next live run.
+
+## Which provider to test with
+
+Prefer the free, repeatable option. Only reach for a hosted provider when the
+thing under test *is* a hosted provider.
+
+| Tier | Provider | Cost | Use it for |
+| --- | --- | --- | --- |
+| Deterministic | `demo` | free, no key, no network | the baseline rows, and the whole automated suite — LLM calls are mocked, so the suite needs no key at all |
+| **Real model, repeatable** | **`ollama` / `tinyllama`** | free, unlimited, no key | **real-model testing** — no rate limit, no expiry, and no third party's WAF in the way |
+| Hosted integration | `groq` | free tier, rate limited | proving a keyed provider integrates end to end, on a network the provider accepts |
+
+OpenRouter and Together are reachable from this host but are rejected as test
+providers: they are credit-metered or hard rate limited, and their model ids
+churn. Neither is repeatable, which is the property a test fixture needs most.
+
+Row 8 uses the `completed` expectation rather than a score band, and that is
+deliberate. `tinyllama` is 1.1B and will probably fail a two-sum test suite —
+a low score is a legitimate result for this row. A `0..100` band would be
+theatre, because it passes even when the run silently did nothing. Instead the
+row requires proof of execution: tests were collected, an execution backend was
+recorded (`docker`, or `subprocess` when Docker is unavailable), no error was
+recorded, and a score came back. The score is reported and not asserted.
 
 ## Legs that cannot be exercised yet
 
@@ -84,3 +112,25 @@ with `LLM_FALLBACK_PROVIDER=ollama` / `LLM_FALLBACK_MODEL=tinyllama` and host
 Ollama reachable from celery. Row 6's fixture is the one spec that could not be
 executed while it was written (no `tsx` on the authoring host), so its first run
 is a spec check as well as a score check; its precondition in the matrix says so.
+
+**Groq is also blocked at the network level, not the key level.** From the dev
+sandbox `api.groq.com` answers `403 Access denied. Please check your network
+settings.` (`server: cloudflare`) for *any* path, including an unauthenticated
+`GET /openai/v1/models` — so it is a pre-auth rejection, and a valid key cannot
+change the outcome. General egress is fine (`api.github.com` returns 200 from
+the same shell). Run the Groq rows from a network Groq accepts — the
+operator's own machine, pointed at this API over an SSH tunnel
+(`ssh -L 8000:localhost:8000 <you>@<host>`), since `docker-compose.yml` already
+publishes `8000:8000`. Re-check with a bare `curl https://api.groq.com/openai/v1/models`
+before spending a run on it.
+
+**Row 8 needs host Ollama and nothing else.** The containers resolve
+`host.docker.internal`, so the only missing piece is a server on the host:
+
+```bash
+OLLAMA_NUM_THREADS=2 OLLAMA_MAX_PARALLEL=1 OLLAMA_KEEP_ALIVE=0 ollama serve
+ollama pull tinyllama
+```
+
+Until that is up, row 8 stays `not run` in the evidence — a fixture existing is
+not a row passing.
