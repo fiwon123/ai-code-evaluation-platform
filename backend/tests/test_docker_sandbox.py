@@ -29,6 +29,16 @@ TWO_SUM_TESTS = (
     "    assert two_sum([1, 2, 3], 99) == []\n"
 )
 
+#: Real pytest output when the suite cannot be imported (issue #255): two tests
+#: are defined, zero are collected, and the run is not "0 of 1 tests passed".
+COLLECTION_ERROR_LOGS = (
+    "E   ImportError: cannot import name 'two_sum' from 'solution' (/code/solution.py)\n"
+    "=========================== short test summary info ============================\n"
+    "ERROR test_solution.py\n"
+    "!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n"
+    "1 error in 0.27s"
+)
+
 
 class FakeContainer:
     def __init__(self, logs="2 passed in 0.05s", wait_error=None):
@@ -121,6 +131,33 @@ class TestRun:
         assert outcome.success
         assert outcome.metrics["backend"] == "docker"
         assert "duration_ms" in outcome.metrics
+
+    def test_collection_error_reports_no_tests_and_says_why(self):
+        # The regression this guards: the sandbox used to report 0 of 1 for a
+        # run where zero tests were collected, and the "backend"/"image" facts
+        # below used to be assigned over the outcome's metrics, so a diagnosis
+        # recorded during parsing would have been erased.
+        containers = FakeContainers(container=FakeContainer(logs=COLLECTION_ERROR_LOGS))
+        outcome = DockerSandbox(client=FakeClient(containers=containers)).run(
+            TWO_SUM_CODE, TWO_SUM_TESTS
+        )
+        assert (outcome.passed, outcome.total) == (0, 0)
+        assert outcome.score == 0.0
+        assert outcome.success is False
+        assert outcome.test_results == []
+        assert outcome.metrics["error"] == "collection error"
+        assert outcome.metrics["error_count"] == 1
+        # Sandbox facts survive the merge.
+        assert outcome.metrics["backend"] == "docker"
+        assert outcome.metrics["image"] == "eval-sandbox:latest"
+        assert "duration_ms" in outcome.metrics
+
+    def test_normal_run_carries_no_error_classification(self):
+        containers = FakeContainers(container=FakeContainer(logs="2 passed in 0.05s"))
+        outcome = DockerSandbox(client=FakeClient(containers=containers)).run(
+            TWO_SUM_CODE, TWO_SUM_TESTS
+        )
+        assert "error" not in outcome.metrics
 
     def test_container_created_with_hardening(self):
         containers = FakeContainers()

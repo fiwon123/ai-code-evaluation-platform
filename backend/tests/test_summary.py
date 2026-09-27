@@ -1,6 +1,7 @@
 """Tests for the readable failure summary and the repair feedback block."""
 
 from app.services.summary import (
+    COLLECTION_ERROR,
     MAX_LISTED_TESTS,
     MAX_MESSAGE_CHARS,
     build_repair_feedback,
@@ -75,6 +76,38 @@ class TestFormatFailureSummary:
 
         assert "test runner never started" in summary
         assert "pytest" in summary
+
+    def test_collection_error_says_the_suite_never_loaded(self):
+        # "No tests reported a result." is true but useless here: it reads as an
+        # empty test file when in fact the module could not be imported, and
+        # the run is repairable.
+        summary = format_failure_summary(
+            passed=0,
+            total=0,
+            test_results=[],
+            logs="E   ImportError: cannot import name 'two_sum'\n1 error in 0.27s",
+            metrics={"error": COLLECTION_ERROR, "error_count": 1},
+        )
+
+        assert summary.startswith("The test suite failed to load")
+        assert "no tests ran" in summary
+        assert "1 collection error)" in summary
+        assert "No tests reported a result." not in summary
+        # The per-test-detail aside is noise when we know the suite never ran.
+        assert "No per-test detail" not in summary
+        # The log tail carries the import error, which is the actionable part.
+        assert "ImportError" in summary
+
+    def test_collection_error_count_is_pluralized(self):
+        summary = format_failure_summary(
+            passed=0,
+            total=0,
+            test_results=[],
+            logs="2 errors in 0.10s",
+            metrics={"error": COLLECTION_ERROR, "error_count": 2},
+        )
+
+        assert "2 collection errors)" in summary
 
     def test_no_detail_falls_back_to_a_log_tail(self):
         summary = format_failure_summary(

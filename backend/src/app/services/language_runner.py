@@ -21,15 +21,27 @@ Parser = Callable[[str], tuple[int, int]]
 #: Detail parsers additionally reduce the runner output to one row per test:
 #: ``(passed, total, [{name, passed, message}])``.
 ParserDetail = Callable[[str], tuple[int, int, list[dict[str, Any]]]]
+#: Error counters report how many *runner errors* the output recorded. An error
+#: is not a test case, so the count travels beside the totals instead of inside
+#: them — see :func:`parse_pytest_errors`.
+ParserCount = Callable[[str], int]
 
 # --- output parsers ---------------------------------------------------------
 
 _PYTEST_PASSED_RE = re.compile(r"(\d+) passed")
 _PYTEST_FAILED_RE = re.compile(r"(\d+) failed")
-_PYTEST_ERRORED_RE = re.compile(r"(\d+) error")
+#: pytest's trailing counts line lists errors among the outcomes: ``1 error in
+#: 0.27s`` (collection aborted), ``1 passed, 1 error in 0.51s`` (a teardown
+#: blew up). The lookahead keeps a test *named* after errors ("1 error
+#: handling test") and traceback prose out of the count.
+_PYTEST_ERRORS_RE = re.compile(r"(?<!\w)(\d+) errors?(?=\s+in\s|,|\.|$)", re.MULTILINE)
 # pytest -rA prints one "short test summary info" line per outcome:
 #   PASSED test_solution.py::test_two_sum
 #   FAILED test_solution.py::test_edge_case - assert 1 == 2
+#   ERROR test_solution.py::test_crash - fixture 'db' errored
+# The required ``::`` is what keeps a module-level collection error
+# ("ERROR test_solution.py") out of the breakdown: that line names a file, not
+# a selected test, so it cannot become a per-test row.
 _PYTEST_SUMMARY_RE = re.compile(
     r"^(?P<status>PASSED|FAILED|ERROR)\s+(?P<nodeid>\S+?::\S+?)(?:\s+-\s+(?P<message>.*))?$",
     re.MULTILINE,
@@ -37,14 +49,42 @@ _PYTEST_SUMMARY_RE = re.compile(
 
 
 def parse_pytest(output: str) -> tuple[int, int]:
-    """Parse pytest's summary line into ``(passed, total)`` counts."""
+    """Parse pytest's summary line into ``(passed, total)`` counts.
+
+    ``total`` counts **test cases**, so it is ``passed + failed`` and nothing
+    else. pytest also reports *errors* — most importantly a collection error,
+    where the test module could not be imported, so pytest aborted before
+    selecting a single test:
+
+    .. code-block:: text
+
+        ERROR test_solution.py
+        !!!!!! Interrupted: 1 error during collection !!!!!!
+        1 error in 0.27s
+
+    Counting that error as a test reported "0 of 1 tests passed" for a run where
+    **zero** tests existed, inventing a denominator the user then reads as
+    "one of my tests failed". Errors are therefore counted separately by
+    :func:`parse_pytest_errors` and never widen ``total``.
+    """
     passed_match = _PYTEST_PASSED_RE.search(output)
     failed_match = _PYTEST_FAILED_RE.search(output)
-    errored_match = _PYTEST_ERRORED_RE.search(output)
     passed = int(passed_match.group(1)) if passed_match else 0
     failed = int(failed_match.group(1)) if failed_match else 0
-    errored = int(errored_match.group(1)) if errored_match else 0
-    return passed, passed + failed + errored
+    return passed, passed + failed
+
+
+def parse_pytest_errors(output: str) -> int:
+    """Count the runner errors pytest reported (collection, setup, teardown).
+
+    Distinct from :func:`parse_pytest`'s ``total`` on purpose: an error is a
+    failure to *run* a test, not a test that ran and failed. Note the
+    ``-rA`` detail parser still counts a ``ERROR test_x.py::test_y`` row as a
+    failed test case — there the test was selected and simply never completed,
+    which is a different thing from a module that never imported.
+    """
+    match = _PYTEST_ERRORS_RE.search(output)
+    return int(match.group(1)) if match else 0
 
 
 def parse_pytest_detail(output: str) -> tuple[int, int, list[dict[str, Any]]]:
@@ -258,6 +298,11 @@ class LanguageRunner:
     #: (``(passed, total, [{name, passed, message}])``). When set it is
     #: preferred over :attr:`parse` because it also yields the breakdown.
     parse_detail: ParserDetail | None = None
+    #: Optional counter of runner *errors* (as opposed to test cases), used to
+    #: explain a run that reported no test at all. Set only by runners whose
+    #: output distinguishes the two — pytest does, because a collection error
+    #: aborts before any test is selected.
+    detect_errors: ParserCount | None = None
     #: Timeout in seconds; compilation-heavy runtimes get a longer budget so
     #: slow javac/go build steps do not trip the default 30s limit.
     timeout: int = settings.evaluation_timeout
@@ -274,6 +319,7 @@ PYTHON_RUNNER = LanguageRunner(
     command=["pytest", "test_solution.py", *_PYTEST_FLAGS],
     parse=parse_pytest,
     parse_detail=parse_pytest_detail,
+    detect_errors=parse_pytest_errors,
 )
 
 JAVASCRIPT_RUNNER = LanguageRunner(

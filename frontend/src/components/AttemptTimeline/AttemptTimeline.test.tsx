@@ -31,6 +31,18 @@ function passingAttempt(n: number): EvaluationAttempt {
   });
 }
 
+/** A run where the suite never loaded, so no test case exists (#255). */
+function noTestsRanAttempt(n: number): EvaluationAttempt {
+  return attempt(n, {
+    passed_tests: 0,
+    total_tests: 0,
+    score: 0,
+    logs: "Interrupted: 1 error during collection",
+    logs_summary: "The test suite failed to load — no tests ran (1 collection error).",
+    test_results: [],
+  });
+}
+
 describe("AttemptTimeline", () => {
   it("renders nothing when there is no history", () => {
     // A run that passed on the first attempt must look exactly as it did
@@ -107,5 +119,24 @@ describe("AttemptTimeline", () => {
     );
 
     expect(screen.getByText("Latest")).toBeInTheDocument();
+  });
+
+  it("does not call a run that never executed a test a pass", () => {
+    // 0 >= 0 is true, so a bare passed >= total check badges a run in which
+    // zero tests were collected as "Final" and paints its 0% green. The
+    // denominator has to exist before the ratio means anything.
+    render(
+      <AttemptTimeline
+        attempts={[noTestsRanAttempt(1), noTestsRanAttempt(2)]}
+        maxAttempts={3}
+        language="python"
+        currentAttempt={2}
+      />,
+    );
+
+    expect(screen.getByText("Latest")).toBeInTheDocument();
+    expect(screen.queryByText("Final")).not.toBeInTheDocument();
+    expect(screen.queryByText("0/0 tests")).not.toBeInTheDocument();
+    expect(screen.getAllByText("no tests ran")).toHaveLength(2);
   });
 });

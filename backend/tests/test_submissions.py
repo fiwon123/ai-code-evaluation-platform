@@ -767,6 +767,76 @@ async def test_provider_comparison_aggregates_own_runs(
 
 
 @pytest.mark.asyncio
+async def test_provider_comparison_ignores_runs_that_executed_no_test(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    """A 0/0 run must not shrink the denominator of the runs beside it.
+
+    Averaged naively, one flawless 2/2 run next to one suite that never loaded
+    reads as ``passed 1.0 of total 1.0`` — a perfect result the provider never
+    produced (#255).
+    """
+    token, user = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    challenge_id = uuid.UUID(challenge["id"])
+    own_id = uuid.UUID(user["id"])
+
+    await _insert_completed_run(
+        db_sessionmaker,
+        own_id,
+        challenge_id,
+        provider="demo",
+        score=100.0,
+        passed=2,
+        total=2,
+        duration_ms=600,
+    )
+    # A collection error: stored as 0/0, never as 0 of 1.
+    await _insert_completed_run(
+        db_sessionmaker,
+        own_id,
+        challenge_id,
+        provider="demo",
+        score=0.0,
+        passed=0,
+        total=0,
+        duration_ms=400,
+    )
+    # A provider whose every run never executed: no denominator at all.
+    await _insert_completed_run(
+        db_sessionmaker,
+        own_id,
+        challenge_id,
+        provider="anthropic",
+        score=0.0,
+        passed=0,
+        total=0,
+        duration_ms=300,
+    )
+
+    response = await db_client.get(
+        f"{SUBMISSIONS_URL}/comparison",
+        params={"challenge_id": challenge["id"]},
+        headers=auth(token),
+    )
+    assert response.status_code == 200
+    by_provider = {entry["provider"]: entry for entry in response.json()["entries"]}
+
+    demo = by_provider["demo"]
+    assert demo["runs"] == 2  # both runs still count towards the score
+    assert demo["score"] == 50.0
+    # Only the run that executed contributes to the counts.
+    assert demo["passed_tests"] == 2.0
+    assert demo["total_tests"] == 2.0
+
+    anthropic = by_provider["anthropic"]
+    assert anthropic["runs"] == 1
+    assert anthropic["score"] == 0.0
+    assert anthropic["passed_tests"] == 0.0
+    assert anthropic["total_tests"] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_provider_comparison_empty_when_no_runs(
     db_client: AsyncClient,
 ) -> None:

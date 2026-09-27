@@ -22,6 +22,59 @@ function result(overrides: Partial<EvaluationResult> = {}): EvaluationResult {
 }
 
 /**
+ * A suite that never loaded (#255): zero tests were collected, so the result
+ * is stored as 0/0 — not as 0 of 1. The Outcome card carries the reason.
+ */
+const COLLECTION_ERROR_SUMMARY =
+  "The test suite failed to load — no tests ran (1 collection error).";
+
+/**
+ * The stat cards are label/value pairs, and "—" already appears in the
+ * Duration card whenever the metric is missing — so the Tests-passed value has
+ * to be read out of its own card. A page-wide `getByText("—")` would die on a
+ * strict-mode violation here rather than on the bug.
+ */
+function statValue(label: string): string | null {
+  const card = screen.getByText(label).closest("div");
+  const paragraphs = card?.querySelectorAll("p");
+  return paragraphs?.item(paragraphs.length - 1)?.textContent ?? null;
+}
+
+describe("ResultReport when no test case exists", () => {
+  it("prints no fraction instead of 0/0", () => {
+    // 0/0 is not a score of nothing out of nothing — it is a run that never
+    // executed, and the Outcome card below says which failure it was.
+    render(
+      <ResultReport
+        result={result({
+          passed_tests: 0,
+          total_tests: 0,
+          score: 0,
+          logs: "1 error in 0.27s",
+          logs_summary: COLLECTION_ERROR_SUMMARY,
+          test_results: [],
+          metrics: { error: "collection error", error_count: 1 },
+        })}
+        code={null}
+        language="python"
+      />,
+    );
+
+    expect(screen.queryByText("0/0")).not.toBeInTheDocument();
+    expect(statValue("Tests passed")).toBe("—");
+    // The reason is on screen, not just in the raw log.
+    expect(screen.getByText(COLLECTION_ERROR_SUMMARY)).toBeInTheDocument();
+  });
+
+  it("still prints the fraction when tests did run", () => {
+    render(<ResultReport result={result()} code={null} language="python" />);
+
+    expect(statValue("Tests passed")).toBe("1/2");
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+  });
+});
+
+/**
  * The log view is opt-in per call site, so the wiring is the thing that can rot:
  * a dropped `log` prop would silently leave every report a wall of plain text
  * and no unit test of CodeBlock alone would notice.
