@@ -83,15 +83,27 @@ PASS on somebody's next live run.
 Prefer the free, repeatable option. Only reach for a hosted provider when the
 thing under test *is* a hosted provider.
 
-| Tier | Provider | Cost | Use it for |
+| Tier | Provider | Free-tier limit | Use it for |
 | --- | --- | --- | --- |
-| Deterministic | `demo` | free, no key, no network | the baseline rows, and the whole automated suite — LLM calls are mocked, so the suite needs no key at all |
-| **Real model, repeatable** | **`ollama` / `tinyllama`** | free, unlimited, no key | **real-model testing** — no rate limit, no expiry, and no third party's WAF in the way |
-| Hosted integration | `groq` | free tier, rate limited | proving a keyed provider integrates end to end, on a network the provider accepts |
+| Deterministic | `demo` | none needed | the baseline rows, and the whole automated suite — LLM calls are mocked, so the suite needs no key at all |
+| **Real model, repeatable** | **`ollama` / `tinyllama`** | **unlimited**, no key | **real-model testing** — no rate limit, no expiry, and no third party's WAF in the way |
+| Quality / hosted integration | `groq` | 30 RPM, 6k TPM, 14.4k req/day (org-wide) | when the model has to actually be good, and for proving a keyed provider integrates end to end |
 
-OpenRouter and Together are reachable from this host but are rejected as test
-providers: they are credit-metered or hard rate limited, and their model ids
-churn. Neither is repeatable, which is the property a test fixture needs most.
+**Rejected: OpenRouter's free tier.** It is reachable (200) and has capable free
+models, but the free allowance is **50 requests/day** (1,000 after a one-time $10),
+failed requests still count against it, and the per-model ids churn. A test
+fixture that runs a row per language per provider cannot live on 50 requests a
+day, and a mid-campaign 429 would be indistinguishable from a product failure.
+Together is rejected for the same reason (credit-metered, hard rate limits).
+
+**What actually leaves the machine** when a hosted provider is used — worth
+knowing before sending a challenge to a free endpoint, because it is not only the
+prompt: the provider receives the system prompt and the challenge prompt, and on a
+*repair retry* it also receives the previously generated code plus the test-failure
+`feedback`. That feedback can carry assertion text from the **hidden tests**, so
+"just a prompt" understates it. Ollama sends none of this anywhere, which is the
+privacy reason to prefer it — and the reason a free endpoint that may log prompts
+is the worst of the three.
 
 Row 8 uses the `completed` expectation rather than a score band, and that is
 deliberate. `tinyllama` is 1.1B and will probably fail a two-sum test suite —
