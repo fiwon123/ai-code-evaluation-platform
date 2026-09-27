@@ -21,6 +21,7 @@ class OllamaProvider(LLMProvider):
         model: str = "qwen2.5-coder:7b",
         base_url: str | None = None,
         timeout: float | None = None,
+        num_threads: int | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._model = model
@@ -33,6 +34,12 @@ class OllamaProvider(LLMProvider):
         # sized for a fast API and would fail a slow-but-correct local run as if
         # Ollama were broken. See `settings.ollama_timeout`.
         self._timeout = settings.ollama_timeout if timeout is None else timeout
+        # Thread count is the one lever for keeping a bursty local generation off
+        # the rest of the machine. Ollama has no OLLAMA_NUM_THREADS variable of
+        # its own (setting it is silently ignored), so the cap is applied here as
+        # the request option. Unset means "send nothing" so Ollama keeps its own
+        # auto-detected thread count.
+        self._num_threads = settings.ollama_num_threads if num_threads is None else num_threads
         self._client = httpx.Client(
             base_url=self._base_url, transport=transport, timeout=self._timeout
         )
@@ -41,15 +48,15 @@ class OllamaProvider(LLMProvider):
         self, prompt: str, language: str = "python", feedback: str | None = None
     ) -> str:
         self.validate_language(language)
-        response = self._client.post(
-            "/api/generate",
-            json={
-                "model": self._model,
-                "system": get_system_prompt(language),
-                "prompt": build_user_message(prompt, feedback),
-                "stream": False,
-            },
-        )
+        body: dict[str, object] = {
+            "model": self._model,
+            "system": get_system_prompt(language),
+            "prompt": build_user_message(prompt, feedback),
+            "stream": False,
+        }
+        if self._num_threads is not None:
+            body["options"] = {"num_thread": self._num_threads}
+        response = self._client.post("/api/generate", json=body)
         response.raise_for_status()
         text = response.json().get("response", "")
         return strip_code_fences(text)

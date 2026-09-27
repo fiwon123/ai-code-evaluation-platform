@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     #: costs wall-clock rather than correctness. Raise it for larger local
     #: models (a 7B wants far more), lower it to fail fast on a dead server.
     ollama_timeout: int = 300
+    #: CPU threads Ollama may use for one local generation, sent as the generate
+    #: request's ``num_thread`` option. ``None`` (the default) sends no option at
+    #: all, so Ollama keeps its own auto-detected thread count and existing
+    #: generation speed is unchanged. Set it to leave cores free on a weak host
+    #: (e.g. ``2``) at the cost of proportionally slower generation, which
+    #: ``ollama_timeout`` then has to accommodate. Ollama has no
+    #: ``OLLAMA_NUM_THREADS`` variable of its own — it is silently ignored — so
+    #: this is enforced on our side of the wire and works with any Ollama version.
+    ollama_num_threads: int | None = None
     #: Total generate-and-test attempts per submission. Attempt 1 is the
     #: initial generation; a failing attempt is fed back to the provider and
     #: re-tested until the code passes or the budget runs out. ``1`` disables
