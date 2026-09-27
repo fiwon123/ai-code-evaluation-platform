@@ -86,8 +86,8 @@ thing under test *is* a hosted provider.
 | Tier | Provider | Free-tier limit | Use it for |
 | --- | --- | --- | --- |
 | Deterministic | `demo` | none needed | the baseline rows, and the whole automated suite — LLM calls are mocked, so the suite needs no key at all |
-| **Real model, repeatable** | **`ollama` / `tinyllama`** | **unlimited**, no key | **real-model testing** — no rate limit, no expiry, and no third party's WAF in the way |
-| Quality / hosted integration | `groq` | 30 RPM, 6k TPM, 14.4k req/day (org-wide) | when the model has to actually be good, and for proving a keyed provider integrates end to end |
+| **Real model, repeatable** | **`ollama` / `qwen2.5-coder:1.5b`** | **unlimited**, no key | **real-model testing** — no rate limit, no expiry, and no third party's WAF in the way |
+| Quality / hosted integration | `groq` | 30 RPM, 6k TPM; daily quota is model- and plan-dependent (14.4k req/day is an upper figure, not a guarantee) | when the model has to actually be good, and for proving a keyed provider integrates end to end |
 
 **Rejected: OpenRouter's free tier.** It is reachable (200) and has capable free
 models, but the free allowance is **50 requests/day** (1,000 after a one-time $10),
@@ -106,12 +106,15 @@ privacy reason to prefer it — and the reason a free endpoint that may log prom
 is the worst of the three.
 
 Row 8 uses the `completed` expectation rather than a score band, and that is
-deliberate. `tinyllama` is 1.1B and will probably fail a two-sum test suite —
-a low score is a legitimate result for this row. A `0..100` band would be
-theatre, because it passes even when the run silently did nothing. Instead the
-row requires proof of execution: tests were collected, an execution backend was
-recorded (`docker`, or `subprocess` when Docker is unavailable), no error was
-recorded, and a score came back. The score is reported and not asserted.
+deliberate. `qwen2.5-coder:1.5b` is code-tuned and the best
+quality-per-CPU-second in the local family, but it is still a 1.5B model and may
+well fail a two-sum test suite — a low score is a legitimate result for this row.
+A `0..100` band would be theatre, because it passes even when the run silently did
+nothing. Instead the row requires proof of execution: tests were collected, no
+error was recorded, and a numeric score came back. `metrics.backend` corroborates
+a Docker run when it is present; the subprocess fallback records no such key, so
+its absence is not treated as failure (see #264). The score is reported and not
+asserted.
 
 ## Legs that cannot be exercised yet
 
@@ -147,12 +150,26 @@ docker compose exec celery curl -s -o /dev/null -w '%{http_code}\n' \
 ```
 
 **Row 8 needs host Ollama and nothing else.** The containers resolve
-`host.docker.internal`, so the only missing piece is a server on the host:
+`host.docker.internal`, so the only missing piece is a server on the host. On
+Linux it must bind `0.0.0.0`, since the default `127.0.0.1` is not reachable from
+a container:
 
 ```bash
-OLLAMA_NUM_THREADS=2 OLLAMA_MAX_PARALLEL=1 OLLAMA_KEEP_ALIVE=0 ollama serve
-ollama pull tinyllama
+sudo systemctl edit ollama        # [Service] Environment="OLLAMA_HOST=0.0.0.0:11434"
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+ollama pull qwen2.5-coder:1.5b    # ~1 GB; `tinyllama` too, for row 7's fallback
 ```
+
+`OLLAMA_MAX_PARALLEL=1` and `OLLAMA_KEEP_ALIVE=0` are real Ollama variables worth
+setting on a small host — one generation at a time, and unload the model after
+each request rather than leaving it resident for the default 5m. `OLLAMA_NUM_THREADS`
+is **not**: Ollama has no such variable and silently ignores it, which is why it is
+now applied by the platform as the generate request's `num_thread` option
+instead (see #266). A previous version of this file recommended it; it did
+nothing.
+
+Row 8 needs #266 merged before it can run at all, because the model has to be in
+the provider catalog or the submission is rejected.
 
 Until that is up, row 8 stays `not run` in the evidence — a fixture existing is
 not a row passing.

@@ -89,11 +89,14 @@ def test_row_eight_is_the_free_keyless_real_model_path():
     case = CASE_BY_ID["local-ollama-python"]
     assert case["row"] == 8
     assert case["provider"] == "ollama"
-    assert case["model"] == "tinyllama"
+    # The largest model a CPU-only host can still serve in reasonable time, and
+    # code-tuned rather than general. Requires the catalog entry from #266, so
+    # this row only runs once that PR is merged.
+    assert case["model"] == "qwen2.5-coder:1.5b"
     # The point of the row: no key, and no egress to a hosted provider at all.
     assert case["api_key"] is None and case["api_key_env"] is None
-    # "completed", not a score band. TinyLlama is 1.1B; a 0-100 band would
-    # pass even when the run silently did nothing.
+    # "completed", not a score band. A 1.5B model is still small; a 0-100 band
+    # would pass even when the run silently did nothing.
     assert case["expect"] == {"kind": "completed"}
 
 
@@ -330,9 +333,9 @@ def test_completed_row_passes_on_either_execution_path(backend):
 
 @pytest.mark.parametrize("score", [0.0, 33.3, 100.0])
 def test_completed_row_is_score_independent(score):
-    # TinyLlama is 1.1B and will likely score 0 here. That is a legitimate
-    # result for this row; the row proves the pipeline ran, not that the model
-    # is good. This is also what makes a 0-100 band useless as the expectation.
+    # A 1.5B model on a CPU may well score 0 here. That is a legitimate result
+    # for this row; the row proves the pipeline ran, not that the model is good.
+    # This is also what makes a 0-100 band useless as the expectation.
     ok, reason = _completed_outcome(score=score)
     assert ok is True
     assert "informational" in reason
