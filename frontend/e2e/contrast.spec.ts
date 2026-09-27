@@ -56,9 +56,16 @@ test.describe("Text contrast", () => {
 
       test("primary call to action", async ({ page }) => {
         await openThemed(page, theme, "/");
-        // Two CTAs point at /demo; take the hero one.
-        const cta = page.locator('main a[href="/demo"] button').first();
+        // The CTA *is* the anchor. It used to be `<Link><Button>`, so this
+        // locator was `a[href="/demo"] button` and stopped matching the moment
+        // #248 collapsed the nesting — the test died on "element(s) not found"
+        // and never measured a colour. Two CTAs point at /demo; take the hero
+        // one, which is first in document order.
+        const cta = page.locator('main a[href="/demo"]').first();
         await expect(cta).toBeVisible();
+        // Guards the premise: if this ever stops being a button-shaped link the
+        // numbers below would be measuring some other element entirely.
+        await expect(cta).toHaveClass(/button/);
         await expectReadable(page, cta, `hero CTA (${theme})`);
       });
 
