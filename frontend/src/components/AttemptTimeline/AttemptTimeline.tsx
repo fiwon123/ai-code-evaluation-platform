@@ -48,7 +48,12 @@ function AttemptTimeline({
   return (
     <ol className={styles.timeline} aria-label="Repair attempts">
       {attempts.map((attempt) => {
-        const passedAll = attempt.passed_tests >= attempt.total_tests;
+        // A run that reported no test case at all (a timeout, a suite that
+        // failed to import) is stored as 0/0, and 0 >= 0 would score it green
+        // and badge it "Final" — the UI claiming a pass for a run that never
+        // executed. Require a real denominator before believing the ratio.
+        const ranTests = attempt.total_tests > 0;
+        const passedAll = ranTests && attempt.passed_tests >= attempt.total_tests;
         const isCurrent = currentAttempt === attempt.attempt_number;
         const label = `Attempt ${attempt.attempt_number}${budget}`;
         return (
@@ -64,7 +69,9 @@ function AttemptTimeline({
                 {attempt.score}%
               </span>
               <span className={styles.mutedInline}>
-                {attempt.passed_tests}/{attempt.total_tests} tests
+                {ranTests
+                  ? `${attempt.passed_tests}/${attempt.total_tests} tests`
+                  : "no tests ran"}
               </span>
               {isCurrent ? (
                 <Badge variant="primary">{passedAll ? "Final" : "Latest"}</Badge>

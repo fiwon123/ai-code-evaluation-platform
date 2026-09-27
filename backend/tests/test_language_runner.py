@@ -25,6 +25,7 @@ from app.services.language_runner import (
     parse_pass_fail_detail,
     parse_pytest,
     parse_pytest_detail,
+    parse_pytest_errors,
 )
 from app.services.languages import EXECUTABLE_LANGUAGES
 
@@ -204,6 +205,11 @@ class TestExtraFiles:
     def test_python_has_no_extra_files(self):
         assert PYTHON_RUNNER.extra_files == {}
 
+    def test_python_runner_detects_errors(self):
+        # Without this hook a collection error would be indistinguishable from
+        # an empty suite, and the run would report a bare 0 of 0.
+        assert PYTHON_RUNNER.detect_errors is parse_pytest_errors
+
 
 class TestParsers:
     def test_parse_pytest_all_passed(self):
@@ -212,8 +218,36 @@ class TestParsers:
     def test_parse_pytest_mixed(self):
         assert parse_pytest("2 passed, 1 failed in 0.05s") == (2, 3)
 
-    def test_parse_pytest_errors(self):
-        assert parse_pytest("1 error in 0.05s") == (0, 1)
+    def test_parse_pytest_collection_error_is_not_a_test(self):
+        # A module that fails to import aborts collection: pytest selects zero
+        # tests, so the honest count is 0 of 0. Folding the "1 error" in here
+        # is what made the platform tell a user one of their tests ran and
+        # failed when nothing ran at all (issue #255).
+        output = (
+            "ERROR test_solution.py\n"
+            "!!!! Interrupted: 1 error during collection !!!!\n"
+            "1 error in 0.27s"
+        )
+        assert parse_pytest(output) == (0, 0)
+
+    def test_parse_pytest_errors_counts_them_separately(self):
+        output = "ERROR test_solution.py\n1 error in 0.27s"
+        assert parse_pytest_errors(output) == 1
+
+    def test_parse_pytest_errors_ignores_non_outcome_text(self):
+        # An error word in a test name, in traceback prose, or in a real
+        # failure must not be counted as a runner error.
+        assert parse_pytest_errors("2 passed in 0.05s\n1 error handling test skipped") == 0
+        assert parse_pytest_errors("E   ImportError: 1 error while importing") == 0
+        assert parse_pytest_errors("no tests ran in 0.01s") == 0
+
+    def test_parse_pytest_teardown_error_does_not_widen_total(self):
+        # A teardown error alongside a real outcome: the counts line decides.
+        assert parse_pytest("1 passed, 1 error in 0.51s") == (1, 1)
+        assert parse_pytest_errors("1 passed, 1 error in 0.51s") == 1
+
+    def test_parse_pytest_real_failures_still_count(self):
+        assert parse_pytest("1 failed, 2 passed in 0.05s") == (2, 3)
 
     def test_parse_node_summary(self):
         output = "# pass 2\n# fail 1\n# tests 3"

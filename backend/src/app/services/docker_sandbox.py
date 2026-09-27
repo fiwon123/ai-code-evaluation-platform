@@ -202,11 +202,15 @@ class DockerSandbox:
             )
 
         outcome = parse_outcome(output, runner)
-        outcome.metrics = {
-            "backend": "docker",
-            "language": runner.language,
-            "returncode": returncode,
-            "duration_ms": elapsed_ms,
-            "image": self.image,
-        }
+        # Merge, never assign: a collection-error diagnosis from parse_outcome
+        # has to survive alongside the sandbox facts.
+        outcome.metrics.update(
+            {
+                "backend": "docker",
+                "language": runner.language,
+                "returncode": returncode,
+                "duration_ms": elapsed_ms,
+                "image": self.image,
+            }
+        )
         return outcome

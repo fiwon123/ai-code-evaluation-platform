@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import settings
+from app.services import summary
 from app.services.language_runner import LanguageRunner, parse_pytest
 
 
@@ -42,7 +43,12 @@ class EvaluationOutcome:
 
     @property
     def success(self) -> bool:
-        """True when the evaluation ran to completion (tests executed)."""
+        """True when the evaluation ran to completion (tests executed).
+
+        A run that collected nothing is not a success: a suite that fails to
+        import reports ``total == 0``, so this is False and the repair loop
+        gets its turn.
+        """
         return self.total > 0
 
     @property
@@ -53,6 +59,32 @@ class EvaluationOutcome:
 def parse_summary(output: str) -> tuple[int, int]:
     """Parse pytest's summary line into (passed, total) counts."""
     return parse_pytest(output)
+
+
+#: ``metrics["error"]`` value for a run whose suite never loaded. Sits beside
+#: the existing "timeout" and "executable missing" classifications, which are
+#: the other two reasons a run reports no test case.
+COLLECTION_ERROR = summary.COLLECTION_ERROR
+
+
+def diagnose_run(output: str, runner: LanguageRunner, total: int) -> dict[str, Any]:
+    """Explain a run that reported no test at all, as a ``metrics`` fragment.
+
+    A zero ``total`` is ambiguous on its own — the runner may have timed out,
+    never started, or aborted while importing the suite. When the runner also
+    counted errors, the last case is provable, so record it instead of leaving
+    the user with a bare "0 of 0" that looks like an empty test file.
+
+    Only seeds ``metrics``; each execution path merges its own facts
+    (backend, returncode, duration) on top, so the Docker and subprocess
+    results stay identical.
+    """
+    if total > 0 or runner.detect_errors is None:
+        return {}
+    errors = runner.detect_errors(output)
+    if not errors:
+        return {}
+    return {"error": COLLECTION_ERROR, "error_count": errors}
 
 
 def parse_outcome(output: str, runner: LanguageRunner) -> EvaluationOutcome:
@@ -74,6 +106,7 @@ def parse_outcome(output: str, runner: LanguageRunner) -> EvaluationOutcome:
         total=total,
         score=score,
         logs=output,
+        metrics=diagnose_run(output, runner, total),
         test_results=test_results,
     )
 
@@ -212,9 +245,13 @@ def _evaluate_code_subprocess(
 
     output = result.stdout + result.stderr
     outcome = parse_outcome(output, runner)
-    outcome.metrics = {
-        "language": runner.language,
-        "returncode": result.returncode,
-        "duration_ms": int((time.monotonic() - started) * 1000),
-    }
+    # Merge, never assign: parse_outcome may have diagnosed why the run
+    # produced no test case, and that verdict has to survive.
+    outcome.metrics.update(
+        {
+            "language": runner.language,
+            "returncode": result.returncode,
+            "duration_ms": int((time.monotonic() - started) * 1000),
+        }
+    )
     return outcome

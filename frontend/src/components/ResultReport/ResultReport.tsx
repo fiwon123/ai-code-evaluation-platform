@@ -80,7 +80,13 @@ function ResultReport({ result, code, language, status }: ResultReportProps) {
         <Card>
           <p className={styles.statLabel}>Tests passed</p>
           <p className={styles.statValue}>
-            {result.passed_tests}/{result.total_tests}
+            {/* No denominator means no ratio: a timed-out run and a suite that
+                failed to import are both stored as 0/0, and printing "0/0"
+                reads as a fraction of a run rather than as "nothing ran". The
+                Outcome card below says which of the two it was. */}
+            {result.total_tests > 0
+              ? `${result.passed_tests}/${result.total_tests}`
+              : "—"}
           </p>
         </Card>
         <Card>

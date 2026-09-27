@@ -7,11 +7,14 @@ import pytest
 
 from app.config import settings
 from app.services.evaluation import (
+    COLLECTION_ERROR,
     EvaluationOutcome,
     evaluate_code,
+    parse_outcome,
     parse_summary,
     run_pytest,
 )
+from app.services.language_runner import JAVASCRIPT_RUNNER, PYTHON_RUNNER
 
 TWO_SUM_CODE = (
     "def two_sum(nums, target):\n"
@@ -47,13 +50,65 @@ class TestParseSummary:
         passed, total = parse_summary("== 2 passed, 1 failed in 0.05s ==")
         assert (passed, total) == (2, 3)
 
-    def test_errored(self):
+    def test_errored_is_not_a_test(self):
+        # "1 error" is a collection failure, not a test case: pytest selected
+        # nothing, so the count is 0 of 0 (issue #255).
         passed, total = parse_summary("== 1 error in 0.05s ==")
-        assert (passed, total) == (0, 1)
+        assert (passed, total) == (0, 0)
 
     def test_no_tests(self):
         passed, total = parse_summary("no tests ran")
         assert (passed, total) == (0, 0)
+
+
+#: Real pytest output when the test module cannot be imported (issue #255).
+COLLECTION_ERROR_LOGS = (
+    "E   ImportError: cannot import name 'two_sum' from 'solution' (/code/solution.py)\n"
+    "=========================== short test summary info ============================\n"
+    "ERROR test_solution.py\n"
+    "!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n"
+    "1 error in 0.27s"
+)
+
+
+class TestCollectionErrorDiagnosis:
+    """A suite that never loaded is a distinct outcome from an empty one.
+
+    ``total == 0`` alone is ambiguous (timeout, missing runner, empty file,
+    broken import), so the run records *why* in ``metrics["error"]`` — the
+    same channel the timeout and missing-executable paths already use.
+    """
+
+    def test_reports_no_tests_and_records_the_reason(self):
+        outcome = parse_outcome(COLLECTION_ERROR_LOGS, PYTHON_RUNNER)
+        assert (outcome.passed, outcome.total) == (0, 0)
+        assert outcome.score == 0.0
+        assert outcome.success is False
+        # Not terminal: a broken import is exactly what the repair loop exists
+        # to fix, so passed_all must stay False or the run would be accepted.
+        assert outcome.passed_all is False
+        assert outcome.test_results == []
+        assert outcome.metrics["error"] == COLLECTION_ERROR
+        assert outcome.metrics["error_count"] == 1
+
+    def test_real_failures_are_not_diagnosed_as_a_collection_error(self):
+        outcome = parse_outcome("1 failed, 2 passed in 0.05s", PYTHON_RUNNER)
+        assert (outcome.passed, outcome.total) == (2, 3)
+        assert outcome.metrics == {}
+
+    def test_empty_suite_is_not_called_a_collection_error(self):
+        # "no tests ran" means the file defined none, which is the user's
+        # business — not a suite that failed to load.
+        outcome = parse_outcome("no tests ran in 0.01s", PYTHON_RUNNER)
+        assert (outcome.passed, outcome.total) == (0, 0)
+        assert outcome.metrics == {}
+
+    def test_other_languages_are_unaffected(self):
+        # Only pytest distinguishes collection errors, so no other runner may
+        # claim a diagnosis it cannot prove.
+        outcome = parse_outcome(COLLECTION_ERROR_LOGS, JAVASCRIPT_RUNNER)
+        assert (outcome.passed, outcome.total) == (0, 0)
+        assert outcome.metrics == {}
 
 
 class TestEvaluateCode:
@@ -92,6 +147,26 @@ class TestEvaluateCode:
         assert outcome.total == 3
         assert outcome.score == 66.7
         assert not outcome.passed_all
+
+    def test_subprocess_path_keeps_the_collection_error_diagnosis(self, tmp_path):
+        # The execution facts used to be *assigned* over the outcome's metrics,
+        # which would have silently dropped the diagnosis recorded at parse
+        # time — leaving the subprocess and Docker paths disagreeing.
+        fake = subprocess.CompletedProcess(
+            args=[], returncode=2, stdout=COLLECTION_ERROR_LOGS, stderr=""
+        )
+        with patch("app.services.evaluation.run_tests", return_value=fake):
+            outcome = evaluate_code(
+                code="def solution(*a):\n    return None\n",
+                test_code="from solution import two_sum\n\ndef test_basic():\n    assert True\n",
+                workdir=tmp_path,
+            )
+        assert (outcome.passed, outcome.total) == (0, 0)
+        assert outcome.metrics["error"] == COLLECTION_ERROR
+        assert outcome.metrics["error_count"] == 1
+        assert outcome.metrics["returncode"] == 2
+        assert outcome.metrics["language"] == "python"
+        assert "duration_ms" in outcome.metrics
 
     def test_timeout(self, tmp_path):
         slow_tests = "import time\ndef test_slow():\n    time.sleep(5)\n"

@@ -204,8 +204,14 @@ async def get_provider_comparison(
     entries: list[ProviderComparisonEntry] = []
     for provider, runs in by_provider.items():
         score = sum(r.score for _, r in runs) / len(runs)
-        passed = sum(r.passed_tests for _, r in runs) / len(runs)
-        total = sum(r.total_tests for _, r in runs) / len(runs)
+        # A run that executed no test at all — timed out, or the suite failed to
+        # load — carries no denominator. Averaging it in would silently shrink
+        # the others': one 2/2 run beside one 0/0 run reads as a flawless 1/1.
+        # Score still averages over every run, because a zero is a real result
+        # for the provider; the counts only over runs that actually ran tests.
+        measured = [r for _, r in runs if r.total_tests > 0]
+        passed = sum(r.passed_tests for r in measured) / len(measured) if measured else 0.0
+        total = sum(r.total_tests for r in measured) / len(measured) if measured else 0.0
         durations = [
             elapsed
             for _, r in runs

@@ -29,6 +29,12 @@ MAX_TAIL_CHARS = 1200
 
 _MISSING_RESULT = "No per-test detail was reported by the runner."
 
+#: ``metrics["error"]`` token for a run whose suite never loaded. Owned here
+#: rather than duplicated in :mod:`app.services.evaluation`, because its
+#: meaning is exactly what :func:`format_failure_summary` says about it — a
+#: typo in one copy would silently produce the generic "no tests" headline.
+COLLECTION_ERROR = "collection error"
+
 
 def _first_line(text: Any) -> str:
     """Collapse a message to its first non-empty line, length-capped."""
@@ -65,9 +71,11 @@ def format_failure_summary(
 ) -> str:
     """Summarize a run as ``<headline>``, ``Failed tests:`` and a log tail.
 
-    Handles the three shapes a run can take: a clean pass, a partial failure
-    with parsed per-test detail, and a run that never produced detail at all
-    (a timeout, a missing executable, or a runner whose parser found nothing).
+    Handles the four shapes a run can take: a clean pass, a partial failure
+    with parsed per-test detail, a run that never produced detail at all
+    (a timeout, a missing executable, or a runner whose parser found nothing),
+    and a suite that failed to load — where zero tests ran because the test
+    module itself could not be imported.
     """
     metrics = metrics or {}
     error = metrics.get("error")
@@ -76,6 +84,14 @@ def format_failure_summary(
         headline = "The test run timed out — no tests reported a result."
     elif error == "executable missing":
         headline = f"The test runner never started: {logs.strip() or error}."
+    elif error == COLLECTION_ERROR:
+        # Distinct from the timeout case on purpose: the runner *did* start and
+        # did report, and its log explains why. Saying "no tests reported a
+        # result" here would read as an empty suite rather than a broken one.
+        count = metrics.get("error_count")
+        plural = "s" if isinstance(count, int) and count != 1 else ""
+        detail = f" ({count} collection error{plural})" if isinstance(count, int) else ""
+        headline = f"The test suite failed to load — no tests ran{detail}."
     elif total <= 0:
         headline = "No tests reported a result."
     elif passed == total:
