@@ -118,11 +118,21 @@ sandbox `api.groq.com` answers `403 Access denied. Please check your network
 settings.` (`server: cloudflare`) for *any* path, including an unauthenticated
 `GET /openai/v1/models` — so it is a pre-auth rejection, and a valid key cannot
 change the outcome. General egress is fine (`api.github.com` returns 200 from
-the same shell). Run the Groq rows from a network Groq accepts — the
-operator's own machine, pointed at this API over an SSH tunnel
-(`ssh -L 8000:localhost:8000 <you>@<host>`), since `docker-compose.yml` already
-publishes `8000:8000`. Re-check with a bare `curl https://api.groq.com/openai/v1/models`
-before spending a run on it.
+the same shell).
+
+**Whose network matters:** the worker makes the provider call, so it is the
+*container's* egress that Groq judges — not the network of whatever machine
+submits the run. Reaching the API from elsewhere (a tunnel, a second machine) only
+creates the submission; it cannot unblock the generation. So a host-side
+`curl` that succeeds while the row fails is expected, and is not a workaround.
+To unblock these rows, give the worker's egress a route Groq accepts (a proxy in
+the worker's environment, or the stack running on such a network) and check it
+from *inside the worker* before spending a run:
+
+```bash
+docker compose exec celery curl -s -o /dev/null -w '%{http_code}\n' \
+  https://api.groq.com/openai/v1/models   # 403 = still blocked; 401 = reached
+```
 
 **Row 8 needs host Ollama and nothing else.** The containers resolve
 `host.docker.internal`, so the only missing piece is a server on the host:
