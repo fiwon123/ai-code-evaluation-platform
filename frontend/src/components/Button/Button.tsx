@@ -88,7 +88,16 @@ const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonProps>(
 
     if (to !== undefined) {
       return (
-        <Link ref={ref} to={to} className={classes} {...(rest as object)}>
+        // The same cast the `<button>` branch uses below: `forwardRef` hands us
+        // one ref for both renderings, so neither branch can be handed the
+        // narrower type its element actually wants. Narrowing happens at the
+        // `to !== undefined` branch instead, where the rendering is known.
+        <Link
+          ref={ref as React.Ref<HTMLAnchorElement>}
+          to={to}
+          className={classes}
+          {...(rest as object)}
+        >
           {children}
         </Link>
       );
