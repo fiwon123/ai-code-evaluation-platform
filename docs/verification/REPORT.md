@@ -12,6 +12,7 @@ re-run a case to refresh its row, or delete `evidence.jsonl` to start over.
 | 5 | `groq-javascript` | groq | javascript | not run | — | — | — | — |
 | 6 | `groq-typescript` | groq | typescript | not run | — | — | — | — |
 | 7 | `fallback-tinyllama` | groq | python | not run | — | — | — | — |
+| 8 | `local-ollama-python` | ollama | python | completed | 100.0 | 3/3 | — | PASS |
 
 ## Cases
 
@@ -192,6 +193,47 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 
 - **Case:** `fallback-tinyllama`
 - **Proves:** A failing primary falls back to a real TinyLlama generation and the provenance reaches the result metrics. The score itself is informational: a 1.1B model may well fail these tests, and that is not what this row is testing.
-- **Precondition:** Worker has LLM_FALLBACK_PROVIDER=ollama and LLM_FALLBACK_MODEL=tinyllama, host Ollama is running (OLLAMA_NUM_THREADS=2, OLLAMA_MAX_PARALLEL=1, OLLAMA_KEEP_ALIVE=0) and reachable from celery. The submission key is deliberately invalid — that is the point of the row. See #233.
+- **Precondition:** Worker has LLM_FALLBACK_PROVIDER=ollama and LLM_FALLBACK_MODEL=tinyllama, host Ollama is running and reachable from celery (Linux: bind 0.0.0.0, not 127.0.0.1). OLLAMA_MAX_PARALLEL=1 and OLLAMA_KEEP_ALIVE=0 are genuine serve-time variables; the thread cap is the platform's OLLAMA_NUM_THREADS setting, since Ollama itself has no such variable - see #266. The submission key is deliberately invalid — that is the point of the row. See #233.
 - **Expectation:** `{"kind": "fallback"}`
 - **Result:** not run
+
+### Row 8 — Free repeatable path: local Qwen 2.5 Coder 1.5B end to end
+
+- **Case:** `local-ollama-python`
+- **Proves:** The real-model path works from the dev sandbox on a free, unlimited, keyless provider: a genuine generation is executed by the sandbox (a real backend is recorded and tests are collected) and the run terminates. Qwen 2.5 Coder 1.5B is code-tuned and the best quality-per-CPU-second of the local family, but it is still small and its score is deliberately NOT asserted - a 0-100 band here would pass even if the run did nothing at all.
+- **Precondition:** Host Ollama reachable from the worker at http://host.docker.internal:11434 (on Linux the service must bind 0.0.0.0, not the default 127.0.0.1) with `ollama pull qwen2.5-coder:1.5b` done. On a CPU-only host, cap the burst with OLLAMA_NUM_THREADS=2 and OLLAMA_MAX_PARALLEL=1 and let OLLAMA_TIMEOUT cover the slower generation; OLLAMA_KEEP_ALIVE=0 unloads the model afterwards. No API key and no egress to any hosted provider. Note EVALUATION_MAX_ATTEMPTS=1 keeps a multi-minute local run inside the harness wait budget - see #266.
+- **Expectation:** `{"kind": "completed"}`
+- **Result:** PASS — pipeline completed on the docker backend, score 100.0 (3/3 tests) — score is informational for this row
+- **Submission:** `d4263088-da6e-4fc6-8e52-8a165561193d`
+- **Challenge:** `bae2d7b9-29d9-42fc-8738-fa953a4c5471`
+- **Provider / model:** ollama / qwen2.5-coder:1.5b
+- **Attempts:** 1
+- **Run at:** 2026-09-27T23:40:43+00:00
+
+> All 3 tests passed.
+
+Passed tests: test_returns_first_matching_pair, test_finds_pair_not_at_the_start, test_returns_empty_when_no_pair
+
+Raw output (tail):
+...                                                                      [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED test_solution.py::test_returns_first_matching_pair
+PASSED test_solution.py::test_finds_pair_not_at_the_start
+PASSED test_solution.py::test_returns_empty_when_no_pair
+3 passed in 0.06s
+
+
+<details><summary>log tail</summary>
+
+```
+...                                                                      [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED test_solution.py::test_returns_first_matching_pair
+PASSED test_solution.py::test_finds_pair_not_at_the_start
+PASSED test_solution.py::test_returns_empty_when_no_pair
+3 passed in 0.06s
+```
+
+</details>
