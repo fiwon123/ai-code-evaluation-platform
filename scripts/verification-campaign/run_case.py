@@ -89,13 +89,32 @@ def load_cases(path: Path = CASES_PATH) -> list[dict[str, Any]]:
             if not str(challenge.get(key, "")).strip():
                 raise CampaignError(f"case {case['id']!r} has an empty challenge.{key}")
         expect = case["expect"]
-        if expect.get("kind") not in {"score_band", "fallback"}:
+        if expect.get("kind") not in {"score_band", "fallback", "completed"}:
             raise CampaignError(f"case {case['id']!r} has an unknown expect.kind")
         if expect["kind"] == "score_band" and not (
             "equals" in expect or "min" in expect or "max" in expect
         ):
             raise CampaignError(f"case {case['id']!r} has an empty score band")
+        if expect["kind"] == "completed" and (
+            "equals" in expect or "min" in expect or "max" in expect
+        ):
+            # evaluate_completed ignores a band, so accepting one would let a
+            # case assert a score in the file while proving nothing in the run.
+            raise CampaignError(
+                f"case {case['id']!r} mixes a completed expectation with a "
+                "score band; the score is informational for that kind"
+            )
     return cases
+
+
+#: Backends that mean code was really executed. ``docker`` is the sandbox
+#: container. The plain-subprocess fallback (:func:`evaluate_code` in backend
+#: ``services/evaluation.py``) runs real code too but records *no* ``backend``
+#: key, and that omission is locked by
+#: ``backend/tests/test_evaluation.py::test_falls_back_when_docker_unavailable``.
+#: So an absent backend is a known path, not a missing fact -- see
+#: ``evaluate_completed`` for why the row can still prove execution without it.
+KNOWN_EXECUTION_BACKENDS = frozenset({"docker", "subprocess"})
 
 
 def score_in_band(score: float | None, expect: dict[str, Any]) -> bool:
@@ -131,6 +150,10 @@ def extract_observation(payload: dict[str, Any]) -> dict[str, Any]:
         "score": result.get("score", payload.get("score")),
         "passed": result.get("passed_tests"),
         "total": result.get("total_tests"),
+        # Which evaluator actually ran the code. Without this the evidence
+        # cannot distinguish "scored 0 because the solution was wrong" from
+        # "scored 0 because nothing was ever executed".
+        "backend": metrics.get("backend"),
         "attempts": len(payload.get("attempts") or []),
         "fallback_used": bool(metrics.get("fallback_used")),
         "fallback_provider": metrics.get("fallback_provider"),
@@ -158,11 +181,58 @@ def evaluate_case(case: dict[str, Any], observation: dict[str, Any]) -> tuple[bo
         provider = observation.get("fallback_provider") or "unknown"
         return True, f"fell back to {provider}"
 
+    if expect["kind"] == "completed":
+        return evaluate_completed(observation)
+
     score = observation.get("score")
     if not score_in_band(score, expect):
         return False, f"score {score} outside expected band {expect}"
     passed, total = observation.get("passed"), observation.get("total")
     return True, f"score {score} in band {expect} ({passed}/{total} tests)"
+
+
+def _is_number(value: Any) -> bool:
+    """A real number, not ``True``/``None`` -- ``isinstance(True, int)`` is True."""
+    return not isinstance(value, bool) and isinstance(value, (int, float))
+
+
+def evaluate_completed(observation: dict[str, Any]) -> tuple[bool, str]:
+    """Did the pipeline actually run? Deliberately makes no claim on the score.
+
+    A 1.1B local model is not expected to pass a test suite, so a low score is
+    a legitimate result here and the row still passes. What the row does require
+    is proof that code was really executed, and on both real execution paths
+    that proof is ``total_tests > 0``: the counts come from parsing the test
+    runner's own output, so a suite that never started reports 0 *and* an
+    ``error`` (collection error, ``executable missing``, or ``timeout``). A
+    0-100 band cannot express any of that -- it passes when nothing happened.
+
+    ``metrics.backend`` is a corroborating signal, not a requirement: only the
+    Docker path records it. When it is present it must be a known backend, so a
+    typo or a new value surfaces as a failure rather than passing unnoticed.
+    """
+    error = observation.get("error")
+    if error:
+        return False, f"run recorded an error ({error})"
+
+    total = observation.get("total")
+    if not _is_number(total) or total <= 0:
+        return False, f"no tests were collected (total_tests={total!r})"
+
+    backend = observation.get("backend")
+    if backend is not None and backend not in KNOWN_EXECUTION_BACKENDS:
+        return False, f"unknown execution backend recorded (backend={backend!r})"
+
+    score = observation.get("score")
+    if not _is_number(score) or not 0 <= float(score) <= 100:
+        return False, f"score {score!r} is not a recorded 0-100 value"
+
+    where = f"the {backend} backend" if backend else "the unlabelled subprocess path"
+    passed = observation.get("passed")
+    return True, (
+        f"pipeline completed on {where}, score {score} "
+        f"({passed}/{total} tests) — score is informational for this row"
+    )
 
 
 def pacing_refusal(

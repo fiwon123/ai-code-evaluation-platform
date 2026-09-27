@@ -163,8 +163,30 @@
       "expect": {
         "kind": "fallback"
       },
-      "precondition": "Worker has LLM_FALLBACK_PROVIDER=ollama and LLM_FALLBACK_MODEL=tinyllama, host Ollama is running (OLLAMA_NUM_THREADS=2, OLLAMA_MAX_PARALLEL=1, OLLAMA_KEEP_ALIVE=0) and reachable from celery. The submission key is deliberately invalid \u2014 that is the point of the row. See #233.",
+      "precondition": "Worker has LLM_FALLBACK_PROVIDER=ollama and LLM_FALLBACK_MODEL=tinyllama, host Ollama is running and reachable from celery (Linux: bind 0.0.0.0, not 127.0.0.1). OLLAMA_MAX_PARALLEL=1 and OLLAMA_KEEP_ALIVE=0 are genuine serve-time variables; the thread cap is the platform's OLLAMA_NUM_THREADS setting, since Ollama itself has no such variable - see #266. The submission key is deliberately invalid \u2014 that is the point of the row. See #233.",
       "proves": "A failing primary falls back to a real TinyLlama generation and the provenance reaches the result metrics. The score itself is informational: a 1.1B model may well fail these tests, and that is not what this row is testing."
+    },
+    {
+      "id": "local-ollama-python",
+      "row": 8,
+      "title": "Free repeatable path: local Qwen 2.5 Coder 1.5B end to end",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b",
+      "api_key": null,
+      "api_key_env": null,
+      "language": "python",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Two Sum",
+        "description": "Return the indices of the two numbers adding up to a target.",
+        "prompt": "Implement a function `two_sum(nums, target)` that returns the indices of the two numbers in `nums` which add up to `target`.\n- `nums` is a list of integers, `target` is an integer.\n- Return the two indices as a list `[i, j]` with `i < j`.\n- Return `[]` when no pair adds up to `target`.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import two_sum\n\n\ndef test_returns_first_matching_pair():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]\n\n\ndef test_finds_pair_not_at_the_start():\n    assert two_sum([3, 2, 4], 6) == [1, 2]\n\n\ndef test_returns_empty_when_no_pair():\n    assert two_sum([1, 2], 99) == []\n"
+      },
+      "expect": {
+        "kind": "completed"
+      },
+      "precondition": "Host Ollama reachable from the worker at http://host.docker.internal:11434 (on Linux the service must bind 0.0.0.0, not the default 127.0.0.1) with `ollama pull qwen2.5-coder:1.5b` done. On a CPU-only host, cap the burst with OLLAMA_NUM_THREADS=2 and OLLAMA_MAX_PARALLEL=1 and let OLLAMA_TIMEOUT cover the slower generation; OLLAMA_KEEP_ALIVE=0 unloads the model afterwards. No API key and no egress to any hosted provider. Note EVALUATION_MAX_ATTEMPTS=1 keeps a multi-minute local run inside the harness wait budget - see #266.",
+      "proves": "The real-model path works from the dev sandbox on a free, unlimited, keyless provider: a genuine generation is executed by the sandbox (a real backend is recorded and tests are collected) and the run terminates. Qwen 2.5 Coder 1.5B is code-tuned and the best quality-per-CPU-second of the local family, but it is still small and its score is deliberately NOT asserted - a 0-100 band here would pass even if the run did nothing at all."
     }
   ]
 }

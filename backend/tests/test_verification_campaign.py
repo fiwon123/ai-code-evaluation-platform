@@ -56,7 +56,7 @@ CASE_BY_ID = {case["id"]: case for case in CASES}
 
 
 def test_matrix_covers_every_row_of_the_issue():
-    assert sorted(case["row"] for case in CASES) == [1, 2, 3, 4, 5, 6, 7]
+    assert sorted(case["row"] for case in CASES) == [1, 2, 3, 4, 5, 6, 7, 8]
 
 
 def test_rows_one_to_three_are_the_keyless_baseline():
@@ -85,6 +85,21 @@ def test_fallback_row_forces_the_primary_to_fail():
     assert "LLM_FALLBACK_PROVIDER=ollama" in case["precondition"]
 
 
+def test_row_eight_is_the_free_keyless_real_model_path():
+    case = CASE_BY_ID["local-ollama-python"]
+    assert case["row"] == 8
+    assert case["provider"] == "ollama"
+    # The largest model a CPU-only host can still serve in reasonable time, and
+    # code-tuned rather than general. Requires the catalog entry from #266, so
+    # this row only runs once that PR is merged.
+    assert case["model"] == "qwen2.5-coder:1.5b"
+    # The point of the row: no key, and no egress to a hosted provider at all.
+    assert case["api_key"] is None and case["api_key_env"] is None
+    # "completed", not a score band. A 1.5B model is still small; a 0-100 band
+    # would pass even when the run silently did nothing.
+    assert case["expect"] == {"kind": "completed"}
+
+
 def test_every_case_states_what_it_proves():
     for case in CASES:
         assert len(case["proves"]) > 40, f"{case['id']} does not say what it proves"
@@ -98,6 +113,7 @@ def test_no_fixture_embeds_something_that_looks_like_a_secret():
 
 def test_case_file_passes_the_runner_s_own_validation():
     # load_cases validates ids, rows, prompts, test code and expectations.
+    # This is what accepts row 8's new expectation kind.
     assert [c["id"] for c in runner.load_cases(CASES_PATH)] == [c["id"] for c in CASES]
 
 
@@ -107,6 +123,26 @@ def test_validation_rejects_a_matrix_with_a_broken_case(tmp_path):
     path = tmp_path / "cases.json"
     path.write_text(json.dumps(broken))
     with pytest.raises(runner.CampaignError, match="test_code"):
+        runner.load_cases(path)
+
+
+def test_validation_rejects_an_unknown_expectation_kind(tmp_path):
+    broken = json.loads(CASES_PATH.read_text())
+    broken["cases"][0]["expect"] = {"kind": "vibes", "min": 0}
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(broken))
+    with pytest.raises(runner.CampaignError, match="unknown expect.kind"):
+        runner.load_cases(path)
+
+
+def test_validation_rejects_a_score_band_hung_off_a_completed_case(tmp_path):
+    # A band on a "completed" case would be ignored by evaluate_completed, so
+    # the author would believe the row asserts a score when it does not.
+    broken = json.loads(CASES_PATH.read_text())
+    broken["cases"][0]["expect"] = {"kind": "completed", "min": 80}
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(broken))
+    with pytest.raises(runner.CampaignError, match="score band"):
         runner.load_cases(path)
 
 
@@ -249,6 +285,100 @@ def test_fallback_case_needs_provenance_not_a_good_score():
     )
     assert ok is True
     assert "ollama" in reason
+
+
+# --- the completed expectation (row 8: the free, keyless real-model path) ----
+
+
+def _completed_detail(**overrides) -> dict[str, Any]:
+    """A submission detail for a run that really executed, then overridden."""
+    detail = _detail()
+    result = detail["evaluation_result"]
+    result["score"] = 0.0
+    result["passed_tests"] = 0
+    result["total_tests"] = 3
+    result["metrics"] = {"backend": "docker"}
+    for key, value in overrides.items():
+        result[key] = value
+    return detail
+
+
+def _completed_outcome(**overrides) -> tuple[bool, str]:
+    return runner.evaluate_case(
+        CASE_BY_ID["local-ollama-python"],
+        runner.extract_observation(_completed_detail(**overrides)),
+    )
+
+
+def test_extract_observation_surfaces_the_execution_backend():
+    # Without this the evidence cannot tell "scored 0 because the solution was
+    # wrong" from "scored 0 because nothing was executed".
+    observation = runner.extract_observation(_completed_detail())
+    assert observation["backend"] == "docker"
+
+
+@pytest.mark.parametrize("backend", ["docker", None, "subprocess"])
+def test_completed_row_passes_on_either_execution_path(backend):
+    # Both real paths matter, and they are not symmetric: the Docker sandbox
+    # records metrics.backend, the subprocess fallback records no backend at
+    # all (locked by test_evaluation.py::test_falls_back_when_docker_unavailable
+    # — "subprocess" is never a recorded *value* today). Requiring the key would
+    # fail this row on every Docker-less host, so None must pass; "subprocess" is
+    # accepted for the day the fallback starts labelling itself (see #264).
+    metrics = {"backend": backend} if backend else {}
+    ok, reason = _completed_outcome(metrics=metrics)
+    assert ok is True
+    assert ("docker" in reason) is (backend == "docker")
+
+
+@pytest.mark.parametrize("score", [0.0, 33.3, 100.0])
+def test_completed_row_is_score_independent(score):
+    # A 1.5B model on a CPU may well score 0 here. That is a legitimate result
+    # for this row; the row proves the pipeline ran, not that the model is good.
+    # This is also what makes a 0-100 band useless as the expectation.
+    ok, reason = _completed_outcome(score=score)
+    assert ok is True
+    assert "informational" in reason
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_reason"),
+    [
+        # No tests collected: nothing was run, whatever the score says.
+        ({"total_tests": 0}, "no tests were collected"),
+        ({"total_tests": None}, "no tests were collected"),
+        # An error in metrics means the evaluator recorded a failure. Every
+        # non-execution path in the backend reports one (collection error,
+        # "executable missing", "timeout"), so this is the real guard.
+        ({"metrics": {"error": "boom"}}, "recorded an error"),
+        ({"metrics": {"error": "collection error", "error_count": 1}}, "recorded an error"),
+        # A backend that is present but unrecognised is a fact we cannot trust.
+        ({"metrics": {"backend": "magic"}}, "unknown execution backend"),
+        ({"metrics": {"backend": ""}}, "unknown execution backend"),
+        # A score that was never recorded.
+        ({"score": None}, "not a recorded 0-100"),
+        ({"score": 101.0}, "not a recorded 0-100"),
+    ],
+)
+def test_completed_row_refuses_a_run_that_did_not_actually_execute(
+    overrides, expected_reason
+):
+    # These are also the guard on the dispatch itself: if `completed` stopped
+    # being routed to evaluate_completed, it would fall through to the score
+    # band path, where an empty band passes everything and all of these
+    # observations would wrongly be accepted.
+    ok, reason = _completed_outcome(**overrides)
+    assert ok is False
+    assert expected_reason in reason
+
+
+def test_completed_row_also_refuses_a_run_that_never_completed():
+    ok, reason = runner.evaluate_case(
+        CASE_BY_ID["local-ollama-python"],
+        runner.extract_observation(_detail(status="processing")),
+    )
+    assert ok is False
+    assert "did not complete" in reason
 
 
 # --- pacing -----------------------------------------------------------------
