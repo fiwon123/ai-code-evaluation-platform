@@ -321,7 +321,7 @@ Two files, two readers, and picking the wrong one fails silently:
 | File | Read by | Holds |
 |------|---------|-------|
 | `<repo-root>/.env` | Docker Compose, on the host, at `make dev-up` | **Provider keys** (`GROQ_API_KEY`, `GEMINI_API_KEY`), `LLM_FALLBACK_*`, `OLLAMA_BASE_URL`, `GH_TOKEN` |
-| `backend/.env` | pydantic `Settings` (`app/config.py`) | App settings only: `ENVIRONMENT`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `DOCKER_*` |
+| `backend/.env` | pydantic `Settings` (`app/config.py`) | App settings only: `ENVIRONMENT`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `DOCKER_*`, `OLLAMA_*` |
 
 Compose interpolates `${GROQ_API_KEY:-}` from the repo-root file, and
 `app/services/llm.py` reads the key with `os.getenv` — which pydantic-settings
@@ -353,12 +353,47 @@ docker compose exec celery sh -c 'test -n "$GROQ_API_KEY" && echo set'
   `KEYED_PROVIDERS` environment variable.
 - **Host Ollama.** Ollama runs on the *host*, but the worker's localhost is the
   container — compose sets `OLLAMA_BASE_URL=http://host.docker.internal:11434`
-  and maps that name with `extra_hosts: host.docker.internal:host-gateway`. On a
-  CPU-only host, cap it before pulling a model:
+  and maps that name with `extra_hosts: host.docker.internal:host-gateway`. A
+  **loopback-bound server is unreachable from the container**: on Linux the
+  service must bind `0.0.0.0`, not the default `127.0.0.1`:
   ```bash
-  OLLAMA_NUM_THREADS=2 OLLAMA_MAX_PARALLEL=1 OLLAMA_KEEP_ALIVE=0 ollama serve
-  ollama pull tinyllama
+  sudo systemctl edit ollama
+  # [Service]
+  # Environment="OLLAMA_HOST=0.0.0.0:11434"
+  sudo systemctl daemon-reload && sudo systemctl restart ollama
   ```
+  (On Docker Desktop the host gateway already reaches loopback, so plain
+  `ollama serve` is enough. If `firewalld` is active on a Fedora/RHEL host and
+  the container still cannot connect, add the bridge to the trusted zone.)
+
+  Pick the model for the box, not for the leaderboard. Sizes are Q4_K_M, so RAM
+  is roughly the download size plus overhead:
+
+  | Model | Size | On a weak CPU |
+  |-------|------|---------------|
+  | `tinyllama` | ~640 MB | Fastest. Answers reliably, rarely writes passing code — a fallback, not a tester. |
+  | `qwen2.5-coder:0.5b` | ~400 MB | Lightest option that still knows Python. |
+  | `qwen2.5-coder:1.5b` | ~1 GB | **Best quality-per-CPU-second.** Minutes per solution on a weak host. |
+  | `qwen2.5-coder:7b` | ~4.7 GB | Needs patience and RAM; fine on a desktop, painful on a laptop. |
+
+  Generation runs on the host with no CPU/RAM cap, so a slow model costs
+  wall-clock rather than correctness. Two settings bound it:
+
+  - `OLLAMA_TIMEOUT` (default 300s) is far above the hosted providers' 60s, so
+    the client does not hang up mid-answer on a slow CPU. Raise it for a 7B,
+    lower it to fail fast against a dead server. The sandbox's 30s cap is a
+    separate budget for *running the tests*.
+  - `OLLAMA_NUM_THREADS` (unset by default) caps the threads one generation may
+    use, so a burst stays off the rest of a weak machine — at the cost of
+    proportionally slower answers, which the timeout then has to accommodate.
+    This is enforced **by the platform**, as Ollama's `num_thread` request
+    option: Ollama itself has no `OLLAMA_NUM_THREADS` variable and silently
+    ignores one you export. For a server outside this codebase, the equivalent
+    levers are `PARAMETER num_thread N` in a Modelfile or `taskset -c 0-1`.
+
+  `OLLAMA_MAX_PARALLEL=1` and `OLLAMA_KEEP_ALIVE=0` are genuine Ollama variables
+  worth setting on a small host — one generation at a time, and unload the model
+  after each request instead of leaving it resident for the default 5m.
 - Prove the retry without spending quota: point a submission at Groq with a
   deliberately wrong key. The report shows the fallback provider, its model,
   and the primary's error (with the key redacted).

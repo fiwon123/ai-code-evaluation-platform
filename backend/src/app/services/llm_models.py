@@ -154,10 +154,23 @@ MODELS_BY_PROVIDER: dict[str, list[LLMModel]] = {
     ],
     "ollama": [
         LLMModel(
+            id="qwen2.5-coder:1.5b",
+            provider="ollama",
+            label="Qwen 2.5 Coder 1.5B",
+            description="Code-tuned, ~1 GB, 32K context — the best quality-per-CPU-second "
+            "for a weak laptop or CI box. Slower than tinyllama, so give it a few minutes.",
+        ),
+        LLMModel(
+            id="qwen2.5-coder:0.5b",
+            provider="ollama",
+            label="Qwen 2.5 Coder 0.5B",
+            description="Code-tuned, ~400 MB — the lightest option that still knows Python.",
+        ),
+        LLMModel(
             id="qwen2.5-coder:7b",
             provider="ollama",
             label="Qwen 2.5 Coder 7B",
-            description="Local 7B code model — good default for a laptop.",
+            description="Local 7B code model — good default if you have the RAM and patience.",
         ),
         LLMModel(
             id="qwen2.5-coder:14b",
@@ -193,8 +206,8 @@ MODELS_BY_PROVIDER: dict[str, list[LLMModel]] = {
             id="tinyllama",
             provider="ollama",
             label="TinyLlama 1.1B",
-            description="~630 MB download — small enough for a CPU-only box, weak enough "
-            "to be a fallback rather than a primary.",
+            description="~640 MB, the fastest local option — kept as the fallback-provider "
+            "model because it reliably answers, though it rarely writes passing code.",
         ),
     ],
 }

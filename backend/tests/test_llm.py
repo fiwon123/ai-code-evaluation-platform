@@ -3,10 +3,12 @@ import json
 import httpx
 import pytest
 
+from app.config import Settings, settings
 from app.services.llm import get_llm_provider
 from app.services.llm_providers import (
     AnthropicProvider,
     GeminiProvider,
+    GroqProvider,
     MockProvider,
     OllamaProvider,
     OpenAIProvider,
@@ -360,6 +362,95 @@ class TestOllamaProvider:
         with pytest.raises(httpx.HTTPStatusError):
             provider.generate_code("fibonacci")
         provider.close()
+
+
+class TestOllamaTimeout:
+    """A local CPU model is slow; the client's 60s (sized for a hosted API) would
+    turn a slow-but-correct run into a `ReadTimeout` that reads like "Ollama is
+    broken". The timeout must come from settings so an operator can tune it."""
+
+    def test_shipped_default_is_generous_enough_for_cpu_generation(self):
+        # Guard the declared default, not a monkeypatched stand-in: a 1.5B coder
+        # model on a weak host needs minutes, not the hosted providers' 60.
+        assert Settings.model_fields["ollama_timeout"].default == 300
+
+    def test_hosted_default_is_untouched(self):
+        # This is a local-model problem, not a global one: 60s is right for a
+        # fast API and must not be widened for everyone.
+        provider = GroqProvider(api_key="gsk-test")
+        assert provider._client.timeout == httpx.Timeout(60)
+        provider.close()
+
+    def test_reads_the_configured_timeout(self, monkeypatch):
+        monkeypatch.setattr(settings, "ollama_timeout", 900)
+        provider = OllamaProvider()
+        assert provider._client.timeout == httpx.Timeout(900)
+        provider.close()
+
+    def test_explicit_argument_wins(self, monkeypatch):
+        monkeypatch.setattr(settings, "ollama_timeout", 900)
+        provider = OllamaProvider(timeout=45)
+        assert provider._client.timeout == httpx.Timeout(45)
+        provider.close()
+
+
+class TestOllamaThreadLimit:
+    """Thread count is how a bursty local generation is kept off the rest of a
+    weak machine. Ollama has no `OLLAMA_NUM_THREADS` of its own (it is silently
+    ignored), so the cap is applied as the request option. The critical default
+    is *unset*: always sending the option would silently cap everyone's
+    generation speed, which is a worse regression than pegging the CPU."""
+
+    def _capture(self, **kwargs) -> dict:
+        """Return the JSON body the provider actually posts."""
+        seen: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.update(json.loads(request.content))
+            return httpx.Response(200, json={"response": "def f():\n    pass", "done": True})
+
+        provider = OllamaProvider(transport=httpx.MockTransport(handler), **kwargs)
+        provider.generate_code("two sum")
+        provider.close()
+        return seen
+
+    def test_shipped_default_sends_no_thread_cap(self):
+        # The declared class default, not Settings(): a real backend/.env may
+        # override it, and that must not be able to fail this test.
+        assert Settings.model_fields["ollama_num_threads"].default is None
+
+    def test_no_options_are_sent_when_unset(self, monkeypatch):
+        monkeypatch.setattr(settings, "ollama_num_threads", None)
+        assert "options" not in self._capture()
+
+    def test_configured_limit_is_sent_as_the_request_option(self, monkeypatch):
+        monkeypatch.setattr(settings, "ollama_num_threads", 2)
+        assert self._capture()["options"] == {"num_thread": 2}
+
+    def test_explicit_argument_wins(self, monkeypatch):
+        monkeypatch.setattr(settings, "ollama_num_threads", 2)
+        assert self._capture(num_threads=6)["options"] == {"num_thread": 6}
+
+    def test_explicit_zero_is_not_treated_as_unset(self, monkeypatch):
+        # A falsy-but-deliberate value must survive; `if num_threads` would drop
+        # it and silently restore full-thread generation.
+        monkeypatch.setattr(settings, "ollama_num_threads", 4)
+        assert self._capture(num_threads=0)["options"] == {"num_thread": 0}
+
+    def test_cap_does_not_leak_into_the_hosted_providers(self):
+        # One request shape, one concern: the cap is Ollama's, and must not
+        # change what a hosted provider sends.
+        seen: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.update(json.loads(request.content))
+            content = "def f(): pass"
+            return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+        provider = GroqProvider(api_key="gsk-test", transport=httpx.MockTransport(handler))
+        provider.generate_code("two sum")
+        provider.close()
+        assert "options" not in seen
 
 
 class TestProviderErrorPaths:
