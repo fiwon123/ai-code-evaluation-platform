@@ -5,6 +5,8 @@ import ChallengeDetail from "../ChallengeDetail.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, modelsApi, submissionsApi } from "../../services/api.ts";
 import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
+import { COMPARE_POLL_MS } from "../../constants/polling.ts";
+import { SEVERE_DELAY_AFTER_MS } from "../../utils/formatting.ts";
 
 vi.mock("react-router-dom", async (importOriginal) => {
   const mod = await importOriginal<typeof import("react-router-dom")>();
@@ -82,6 +84,32 @@ function renderPage() {
   );
 }
 
+// Frozen clock for the fake-timer tests. Pinned so elapsed-time comparisons
+// ("how long has this run been in flight?") are exact instead of wall-clock.
+const BASE_TIME = new Date("2026-01-01T00:00:00Z");
+
+/**
+ * Drains pending microtasks so mount effects resolve and their state updates
+ * are flushed. The `findBy`/`waitFor` queries are unusable while timers are
+ * mocked (they wait on real timers), so fake-timer tests flush explicitly.
+ */
+async function flush() {
+  await act(async () => {});
+}
+
+/**
+ * Advances the mocked clock inside act, so every state update the advance
+ * triggers — and every effect it re-schedules — is flushed before the call
+ * returns. Asserting straight after a bare `advanceTimersByTimeAsync` instead
+ * races React's scheduler: the update is queued but not yet rendered, and the
+ * assertion observes the pre-update DOM whenever the machine is busy.
+ */
+async function tick(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
 describe("ChallengeDetail", () => {
   beforeEach(() => {
     mockUseAuth.mockReturnValue({
@@ -104,6 +132,10 @@ describe("ChallengeDetail", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    // Restored here, not at the tail of the fake-timer test: a failure or
+    // timeout partway through would otherwise leave the mocked clock armed for
+    // every test that follows in this file.
+    vi.useRealTimers();
   });
 
   it("renders the challenge details", async () => {
@@ -332,7 +364,7 @@ describe("ChallengeDetail", () => {
 
   it("gives up a provider that never produces a result past the severe-delay window", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    vi.setSystemTime(BASE_TIME);
     mockSubmissionsCreate.mockResolvedValue(submission as never);
     // The leaderboard never advances for demo → the run is effectively lost.
     mockSubmissionsComparison.mockResolvedValue({
@@ -341,34 +373,50 @@ describe("ChallengeDetail", () => {
     } as never);
 
     renderPage();
-    // Mount effects resolve on microtasks — flush them; findBy*/waitFor must
-    // be avoided here because they wait on real timers, which are mocked.
-    await act(async () => {});
-    await act(async () => {});
+    // Mount effects resolve on microtasks — flush them (see `flush`).
+    await flush();
+    await flush();
     expect(screen.getByRole("heading", { name: "Two Sum" })).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Run" })[0]);
-    await act(async () => {});
+    await flush();
     expect(mockSubmissionsCreate).toHaveBeenCalledWith({
       challenge_id: "c1",
       provider: "demo",
     });
     // Enter the running state — an in-flight counter + Running badge render.
-    await act(async () => {});
+    await flush();
     expect(screen.getByText("Running…")).toBeInTheDocument();
 
-    // Advance past the severe-delay window; the poll loop drops the provider
-    // and terminates instead of polling forever.
-    await vi.advanceTimersByTimeAsync(10 * 60_000 + 2_000);
+    // The poll loop is live, so it — not the clock alone — is what notices the
+    // elapsed window below. Without this the give-up could pass for a reason
+    // that has nothing to do with the poll loop being alive.
+    const callsBeforeTick = mockSubmissionsComparison.mock.calls.length;
+    await tick(COMPARE_POLL_MS);
+    expect(mockSubmissionsComparison.mock.calls.length).toBeGreaterThan(
+      callsBeforeTick,
+    );
+
+    // Ten minutes elapse with no result. Jump the clock instead of advancing
+    // 400 poll cycles one timer at a time: the loop compares elapsed wall time,
+    // not tick counts, so the same stimulus costs a single poll — and each
+    // yielded timer burns a real event-loop turn, which is what made this test
+    // time out (rather than fail) once the suite loaded the machine.
+    vi.setSystemTime(
+      new Date(BASE_TIME.getTime() + SEVERE_DELAY_AFTER_MS + 1_000),
+    );
+    // One further poll is all the loop needs to see the window has passed.
+    await tick(COMPARE_POLL_MS);
+
+    // The provider is dropped and shows a "no result" state.
     expect(screen.getByText("No result")).toBeInTheDocument();
     expect(screen.getByText(/Took too long/)).toBeInTheDocument();
 
+    // …and polling has stopped, so the leaderboard can't poll forever on a
+    // silently lost evaluation.
     const callsAtGiveUp = mockSubmissionsComparison.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(30_000);
-    // Polling has stopped — no further comparison fetches despite big advance.
-    expect(screen.getByText("No result")).toBeInTheDocument();
+    await tick(5 * COMPARE_POLL_MS);
     expect(mockSubmissionsComparison.mock.calls.length).toBe(callsAtGiveUp);
-    vi.useRealTimers();
   });
 
   it("requires an API key when running a keyed provider from the panel", async () => {
