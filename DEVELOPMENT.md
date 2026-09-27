@@ -163,6 +163,9 @@ npm run build                              # type check + production build
 # Playwright e2e (real Chromium — see "Browser tests" below)
 make test-e2e                              # 6 specs, desktop + Pixel 7 profiles
 
+# Visual sweep (real Chromium — see "Visual sweep" below)
+make visual-sweep                          # 344 frames + manifest + contact sheets
+
 # Full gate
 make check                                 # backend lint+tests, frontend lint+build+tests
 ```
@@ -203,6 +206,76 @@ Three things about it are deliberate, and each has a test in
 
 It is deliberately **not** part of `make check`: the gate stays lint + vitest +
 build so it stays fast. Run it before shipping UI changes.
+
+## Visual sweep (`make visual-sweep`)
+
+The screenshot matrix: every `App.tsx` route in both themes at desktop and
+Pixel 7, at top/middle/bottom scroll, plus the declared interaction states and
+a motion pass. Needs the same baked Chromium as `make test-e2e` and the same
+`make dev-build` if your image predates the bake.
+
+```bash
+make visual-sweep                 # inside the sandbox: ~3 min, ~70 MB, 344 frames
+VISUAL_SWEEP_KEEP=4 make visual-sweep   # keep more runs; the default prunes to 3
+```
+
+It builds the app and serves it with `vite preview` on :4173 — **never** the dev
+server, whose HMR CSS can leave a stale module in a capture. Everything is
+mocked at the network layer, so no backend is needed.
+
+Output is per-run and gitignored:
+
+```text
+frontend/visual-sweeps/<run>/
+├── light|dark/<viewport>/<route>/   PNG frames
+├── states/ motion/                  declared states, motion filmstrips
+├── contact-sheet/                   one captioned 4x3 sheet per route/theme/viewport
+└── manifest.json                    browser version + executable path, commit, counts
+```
+
+Contact sheets are the review surface: each thumbnail is captioned with its
+frame path, so a sheet is evidence rather than a picture of something.
+
+**The run also measures the page.** Alongside each frame, 11 layout and
+accessibility rules run against the same rendered DOM at the instant the frame was
+shot (`e2e/visual/helpers/audit.ts`) — horizontal overflow, clipped text, content
+left at opacity 0, unlabelled controls, images without `alt`, heading structure,
+focus rings, touch-target size, sub-12px text. Results land in
+`visual-sweeps/<run>/findings.json`, one entry per defect with the frames it was
+seen in, and the rule table beside them so the file reads without a legend.
+
+Those numbers are review input, not a gate: the sweep never fails on a finding.
+The rules are locked by `e2e/visual/audit.lock.visual.ts`, which builds a page
+that breaks each rule in one specific way and asserts it fires *about the element
+it was aimed at*, plus pages that must produce nothing at all. Without that lock a
+rule that silently stopped matching would make the report shorter, not the run
+red — and "no findings" is what a broken audit looks like.
+
+**Write the report to `docs/visual-sweep/REPORT.md` (committed), not beside the
+frames.**
+The frames are gitignored on purpose (70 MB per run), so a report left in the run
+directory dies with the machine and its findings are never reviewed. The
+manifest's provenance line — browser version, executable path, commit — belongs
+at the top of the report so a finding can be traced to a browser and a tree.
+
+Four things about this sweep are deliberate, and each is locked:
+
+| Property | How it is held |
+|---|---|
+| Runs **this project's** browser | `provenance.lock.visual.ts` — a realpath under `/ms-playwright`; a `channel:`/CDP launch resolves outside it and the run aborts |
+| Runs the **production build** | the config's `webServer` is `vite preview`; the guard asserts the origin is :4173 |
+| No network egress | every request to an origin other than :4173 is aborted, per capture |
+| Static/state frames are reproducible | `determinism.lock.visual.ts` — the same capture twice must be byte-identical, which wall-clock sampling can never be |
+
+Static and state frames are captured with `prefers-reduced-motion: reduce`:
+Home's hero types a prompt and cycles a status chip on timers that never finish,
+so "at rest" is the app's own reduced-motion rendering rather than an arbitrary
+freeze. Motion filmstrips keep motion on and are explicitly **not**
+byte-reproducible — a transition sampled at 30% is a frame of a moving page.
+
+Like `make test-e2e`, the sweep is **not** in `make check`: it needs the sandbox
+browser, and the gate must stay fast. `*.visual.ts` is collected by neither the
+vitest gate nor the normal Playwright config.
 
 ## Troubleshooting
 
