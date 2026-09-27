@@ -1,6 +1,6 @@
 .PHONY: help setup host-tools infra-up infra-down preflight dev-up dev-build dev-down dev-restart \
         dev-log dev-exec dev-agent opencode shell sandbox reset \
-        test test-backend test-frontend test-e2e lint lint-fix format typecheck build check \
+        test test-backend test-frontend test-e2e visual-sweep lint lint-fix format typecheck build check \
         install run dev-backend dev-frontend dev-celery dev-all seed-examples clean \
         tools-k8s k8s-setup k8s-deploy k8s-teardown k8s-dev k8s-status
 
@@ -232,6 +232,64 @@ test-e2e: ## Run the Playwright e2e suite in a real Chromium (baked into the dev
 		exit 1; \
 	fi
 	cd $(FRONTEND_DIR) && npm run test:e2e
+
+# Visual sweep — deliberately NOT part of `make check` or CI, for the same
+# reason as test-e2e (it needs the baked browser) plus one of its own: it writes
+# hundreds of megabytes of images that a human then has to look at. It is a
+# review instrument, not a gate, so running it on every push would spend minutes
+# and disk to produce output nobody reads.
+#
+# Run it inside the dev sandbox, where the browser and the image's fonts are the
+# ones the manifest names. Captures come from the production build via
+# `vite preview` on :4173, never the dev server — a long-running dev server
+# serves stale CSS modules, so the stylesheet in the picture would not be the one
+# in the tree.
+#
+# Output lands in frontend/visual-sweeps/<run>/ (gitignored) and is pruned to the
+# newest VISUAL_SWEEP_KEEP runs, because a run is ~300 PNGs and the interesting
+# thing about an old one is usually nothing.
+VISUAL_SWEEP_KEEP ?= 3
+
+visual-sweep: ## Screenshot every page/state/motion pass in both themes and viewports, then read them
+	@if [ ! -d "$${PLAYWRIGHT_BROWSERS_PATH:-/nonexistent}" ] && [ ! -d "$${HOME:-/nonexistent}/.cache/ms-playwright" ]; then \
+		echo "No Playwright browser found — the visual sweep cannot start."; \
+		echo "  in the dev sandbox : rebuild the image (make dev-build), Chromium is baked in"; \
+		echo "  on the host        : cd $(FRONTEND_DIR) && npx playwright install chromium"; \
+		exit 1; \
+	fi
+	@# The images are hundreds of megabytes per run. If the ignore rule were ever
+	@# dropped or renamed, the run would still succeed and quietly fill the
+	@# operator's `git status` — so ask git, and fail before writing anything.
+	@git check-ignore -q $(FRONTEND_DIR)/visual-sweeps/probe || { \
+		echo "$(FRONTEND_DIR)/visual-sweeps/ is not gitignored — refusing to write there."; \
+		echo "Add '$(FRONTEND_DIR)/visual-sweeps/' to .gitignore and try again."; \
+		exit 1; \
+	}
+	@echo "Pruning all but the newest $(VISUAL_SWEEP_KEEP) visual sweep run(s)…"
+	@cd $(FRONTEND_DIR) && ls -1dt visual-sweeps/*/ 2>/dev/null | tail -n +$$(( $(VISUAL_SWEEP_KEEP) + 1 )) \
+		| xargs -r rm -rf
+	@# VISUAL_SWEEP_REQUIRE_FRAMES tells the teardown this is a full sweep, so the
+	@# frame-count audits are binding. Running one lock file by hand leaves it
+	@# unset and the teardown merges nothing — which is correct, not a pass.
+	@# The run id is minted here and reused by the footer below. Deriving it after
+	@# the fact with `ls -1t` looks equivalent and is not: a half-finished run
+	@# leaves a newer directory behind, and the footer then points the reviewer at
+	@# the wreckage of the run that just failed.
+	@# Mint the run id and print the footer in one shell: a Make recipe line is its
+	@# own shell, so a run id set on the line that runs the tests is already gone by
+	@# the next one. And the footer names the id it minted rather than the newest
+	@# directory, which after a failed run is the wreckage of that run.
+	@run="$$(date -u +%Y%m%d-%H%M%S)"; \
+		cd $(FRONTEND_DIR) && \
+		VISUAL_SWEEP_RUN="$$run" VISUAL_SWEEP_REQUIRE_FRAMES=1 npm run test:visual && \
+		{ \
+			echo ""; \
+			echo "Run:        $(FRONTEND_DIR)/visual-sweeps/$$run/"; \
+			echo "Contact:    visual-sweeps/$$run/contact-sheet/  (one 4x3 sheet per route, theme and viewport)"; \
+			echo "Manifest:   visual-sweeps/$$run/manifest.json  (browser version + executable path, viewport, theme, commit, counts)"; \
+			echo "Next:       read the frames, then write the findings up in docs/visual-sweep/REPORT.md —"; \
+			echo "            the frames are gitignored, so a report left beside them dies with the machine."; \
+		}
 
 # --- Lint / format ------------------------------------------------------------
 lint: ## Lint backend (ruff) + frontend (oxlint)

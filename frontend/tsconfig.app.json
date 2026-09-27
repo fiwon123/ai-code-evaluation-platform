@@ -19,5 +19,13 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsBuildInfoFile",
     "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["src"]
+  // `e2e/visual/routes.ts` is listed here so `visual-sweep.lock.test.ts` can
+  // import the sweep's matrix and partition it against `App.tsx` — which is the
+  // whole point of the lock: the coverage check reads the *values* the sweep
+  // shoots, not a second parse of its source. `composite: true` makes this
+  // mandatory rather than tidy: an imported file that no project lists is
+  // TS6307, so deleting this line fails the build rather than quietly making the
+  // lock vacuous. Nothing under `e2e/` may be imported from `src/` except this
+  // one data-only module.
+  "include": ["src", "e2e/visual/routes.ts"]
 }
