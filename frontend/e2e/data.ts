@@ -110,18 +110,30 @@ export const CHALLENGES: Array<{
  * Handles the endpoints the surfaced pages actually call:
  * - POST /api/auth/login   → 200 (or 401 for `WRONG_PASSWORD`)
  * - POST /api/auth/register → 201 AuthResponse
- * - GET  /api/auth/me      → 401 (no token is seeded by these tests)
+ * - GET  /api/auth/me      → 401 unless `{ auth: true }` / `{ admin: true }`
  * - GET  /api/challenges   → paginated list, honoring `difficulty`/`search`
+ * - POST /api/challenges   → 201, echoing the submitted body (signed in only)
+ * - GET  /api/challenges/:id → the submitted challenge (signed in only)
  * - GET  /api/admin/users  → paginated list (only with `{ admin: true }`)
+ *
+ * `auth` is deliberately separate from `admin`: the challenge forms sit behind
+ * `ProtectedRoute`, not `AdminRoute`, so exercising them as a plain signed-in
+ * user keeps the spec honest about who can actually create a challenge.
  */
 export async function mockApi(
   page: Page,
   challenges: typeof CHALLENGES = CHALLENGES,
-  options: { admin?: boolean } = {},
+  options: { admin?: boolean; auth?: boolean } = {},
 ): Promise<void> {
-  if (options.admin) {
-    // `AdminRoute` needs an authenticated admin before it renders anything, and
-    // the API client reads the token straight out of localStorage.
+  const signedIn = Boolean(options.admin || options.auth);
+  // Challenges created during the test, so the create → detail round trip
+  // resolves without a live backend.
+  const created: Array<Record<string, unknown>> = [];
+
+  if (signedIn) {
+    // `AdminRoute`/`ProtectedRoute` need an authenticated user before they
+    // render anything, and the API client reads the token straight out of
+    // localStorage.
     await page.addInitScript((token) => {
       window.localStorage.setItem("access_token", token);
     }, TEST_TOKEN);
@@ -159,7 +171,7 @@ export async function mockApi(
       return;
     }
 
-    if (method === "GET" && url.pathname === "/api/auth/me" && options.admin) {
+    if (method === "GET" && url.pathname === "/api/auth/me" && signedIn) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -186,6 +198,51 @@ export async function mockApi(
           page_size: pageSize,
           pages: 1,
         }),
+      });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/api/challenges" && signedIn) {
+      const body = (route.request().postDataJSON() ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const challenge = {
+        ...body,
+        id: "c-created-1",
+        owner_id: (options.admin ? ADMIN_USER : TEST_USER).id,
+        created_at: "2026-02-01T09:00:00Z",
+        updated_at: "2026-02-01T09:00:00Z",
+      };
+      created.push(challenge);
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify(challenge),
+      });
+      return;
+    }
+
+    // The single-challenge read that follows a create. Registered after the list
+    // route, and keyed on a path segment, so `/api/challenges` itself is
+    // unaffected.
+    if (method === "GET" && url.pathname.startsWith("/api/challenges/")) {
+      const id = url.pathname.slice("/api/challenges/".length);
+      const found =
+        created.find((c) => c.id === id) ??
+        challenges.find((c) => c.id === id) ?? null;
+      if (!found) {
+        await route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Challenge not found (e2e mock)" }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(found),
       });
       return;
     }

@@ -126,7 +126,7 @@ export interface LanguageExample {
   testCode: string;
 }
 
-interface LanguageGuide {
+export interface LanguageGuide {
   /** Placeholder shown in the LLM prompt field. */
   prompt: string;
   /** Label for the test-code field, e.g. "Test code (pytest)". */

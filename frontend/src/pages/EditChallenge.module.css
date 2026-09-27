@@ -1,3 +1,6 @@
+/* The page shell — see the note in `CreateChallenge.module.css`. The field
+ * layout is shared: `components/ChallengeForm/challenge-form.module.css`. */
+
 .page {
   max-width: var(--max-width);
   margin: 0 auto;
@@ -38,37 +41,6 @@
   max-width: 760px;
 }
 
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-5);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-
-.errorBanner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-danger-light);
-  background: var(--color-danger-light);
-  color: var(--color-danger);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-}
-
 .status {
   color: var(--color-text-secondary);
   padding: var(--space-8) 0;
@@ -84,10 +56,4 @@
 
 .notFound a {
   color: var(--color-primary);
-}
-
-@media (max-width: 640px) {
-  .row {
-    grid-template-columns: 1fr;
-  }
 }
