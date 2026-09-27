@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubmissionDetail from "../SubmissionDetail.tsx";
 import { clearToken, setToken } from "../../services/api.ts";
+import { POLL_MAX_INTERVAL_MS } from "../../constants/polling.ts";
 
 const fetchMock = vi.fn();
 
@@ -88,7 +89,176 @@ describe("SubmissionDetail", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     clearToken();
+  });
+
+  // The fallback REST poll is the *only* live path when no WebSocket is
+  // available (proxied deploys, the shared-result view), which is why the locks
+  // below leave the token cleared: `useSubmissionSocket` then returns early and
+  // the REST loop carries the page.
+  describe("fallback poll cadence", () => {
+    const BASE = new Date("2026-01-01T00:00:00Z");
+    const BASE_POLL_MS = 1_000;
+
+    function pendingFixture(overrides: Record<string, unknown> = {}) {
+      return {
+        id: "s1",
+        challenge_id: "c1",
+        status: "pending",
+        phase: null,
+        provider: "demo",
+        code: null,
+        score: null,
+        evaluation_result: null,
+        created_at: "2026-01-01T00:00:00Z",
+        ...overrides,
+      };
+    }
+
+    /** Drains microtasks so mount effects and their state updates settle. */
+    async function flush() {
+      await act(async () => {});
+    }
+
+    /** Advances the mocked clock inside act, so re-armed timers are flushed. */
+    async function tick(ms: number) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+    }
+
+    /** Wall-clock gaps between successive polls, measured inside the mock. */
+    function trackPollTimes() {
+      const at: number[] = [];
+      fetchMock.mockImplementation(() => {
+        at.push(Date.now());
+        return Promise.resolve(
+          new Response(JSON.stringify(pendingFixture()), { status: 200 }),
+        );
+      });
+      return at;
+    }
+
+    function gapsOf(at: number[]): number[] {
+      return at.slice(1).map((value, i) => value - at[i]);
+    }
+
+    it("backs off instead of polling flat while a submission is stuck", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(BASE);
+      const at = trackPollTimes();
+
+      renderPage(BASE_POLL_MS);
+      await flush();
+      expect(at.length).toBe(1);
+
+      await tick(30_000);
+
+      const gaps = gapsOf(at);
+      // Grows while nothing changes…
+      expect(gaps.length).toBeGreaterThan(2);
+      expect(gaps[gaps.length - 1]).toBeGreaterThan(gaps[0]);
+      // …but never past the ceiling, so a missing cap cannot pass as growth.
+      expect(Math.max(...gaps)).toBeLessThanOrEqual(POLL_MAX_INTERVAL_MS);
+      // Budget: a flat base cadence is 30 requests in this window.
+      expect(at.length).toBeLessThan(30 / 2);
+      // Audit guard: a loop that simply died would also satisfy the budget.
+      expect(at.length).toBeGreaterThan(2);
+    });
+
+    it("restores the base cadence when the status finally changes", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(BASE);
+      // "pending" for the first CHANGE_AT polls, so the interval backs off all
+      // the way to the cap; then it advances to "processing", which is the news
+      // that must buy a fast re-check. Indexed by call number, not by clock
+      // position — reasoning about "after 30s" broke the moment the schedule
+      // changed, and silently measured the wrong pair of polls.
+      const CHANGE_AT = 6;
+      const calls: { t: number; status: string }[] = [];
+      fetchMock.mockImplementation(() => {
+        const status = calls.length + 1 >= CHANGE_AT ? "processing" : "pending";
+        calls.push({ t: Date.now(), status });
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(pendingFixture({ status, phase: "testing" })),
+            { status: 200 },
+          ),
+        );
+      });
+
+      renderPage(BASE_POLL_MS);
+      await flush();
+      await tick(30_000);
+
+      // The pre-change gaps really did back off, so the reset below is a real
+      // transition and not a schedule that never moved.
+      const preGaps: number[] = [];
+      for (let i = 1; i < CHANGE_AT; i += 1) {
+        preGaps.push(calls[i].t - calls[i - 1].t);
+      }
+      expect(preGaps.length).toBeGreaterThan(1);
+      expect(Math.max(...preGaps)).toBeGreaterThan(BASE_POLL_MS);
+      expect(Math.max(...preGaps)).toBe(POLL_MAX_INTERVAL_MS);
+
+      // The poll right after the status change is back at the base cadence.
+      // Without the reset a progressing run waits out the backoff it no longer
+      // needs, and a fast evaluation can look stalled.
+      const changeIndex = CHANGE_AT - 1;
+      expect(calls[changeIndex].status).toBe("processing");
+      expect(calls[changeIndex + 1].t - calls[changeIndex].t).toBe(BASE_POLL_MS);
+    });
+
+    it("keeps polling after a failed request instead of freezing on stale state", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(BASE);
+      let calls = 0;
+      fetchMock.mockImplementation(() => {
+        calls += 1;
+        // The first *poll* fails (the mount load is the call before it), the
+        // rest succeed and stay "pending" — a doomed run.
+        if (calls === 2) {
+          return Promise.resolve(new Response("nope", { status: 500 }));
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify(pendingFixture()), { status: 200 }),
+        );
+      });
+
+      renderPage(BASE_POLL_MS);
+      await flush();
+      // The mount load succeeded, so nothing is on screen yet; the failure is
+      // the *next* poll, one interval in.
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      await tick(BASE_POLL_MS);
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+
+      // The loop is still going. Before the fix the count froze here: with no
+      // socket to take over, the page sat on a stale "pending" until the user
+      // reloaded.
+      const afterFailure = fetchMock.mock.calls.length;
+      await tick(30_000);
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(afterFailure);
+      // Recovery clears the error rather than leaving it pinned.
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+
+    it("does not retry a failed initial load forever", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(BASE);
+      fetchMock.mockResolvedValue(new Response("nope", { status: 500 }));
+
+      renderPage(BASE_POLL_MS);
+      await flush();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+
+      // Nothing is known yet, so the error state is the honest answer — there
+      // is no "in flight" submission to keep watching.
+      const atFailure = fetchMock.mock.calls.length;
+      await tick(3 * POLL_MAX_INTERVAL_MS);
+      expect(fetchMock.mock.calls.length).toBe(atFailure);
+    });
   });
 
   it("polls while processing, then shows the final report", async () => {
