@@ -5,7 +5,7 @@ import ChallengeDetail from "../ChallengeDetail.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, modelsApi, submissionsApi } from "../../services/api.ts";
 import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
-import { COMPARE_POLL_MS } from "../../constants/polling.ts";
+import { COMPARE_POLL_MS, POLL_MAX_INTERVAL_MS } from "../../constants/polling.ts";
 import { SEVERE_DELAY_AFTER_MS } from "../../utils/formatting.ts";
 
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -87,6 +87,16 @@ function renderPage() {
 // Frozen clock for the fake-timer tests. Pinned so elapsed-time comparisons
 // ("how long has this run been in flight?") are exact instead of wall-clock.
 const BASE_TIME = new Date("2026-01-01T00:00:00Z");
+
+/**
+ * A tick long enough to land the *next* poll no matter where the backoff is.
+ *
+ * The comparison poll grows its interval, so a COMPARE_POLL_MS tick reaches a
+ * poll only while the loop is still at the base cadence. Anywhere else it
+ * advances the clock without firing anything, and an assertion after it passes
+ * for the wrong reason — the same vacuous check as no check at all.
+ */
+const PAST_CAP_TICK_MS = POLL_MAX_INTERVAL_MS + COMPARE_POLL_MS;
 
 /**
  * Drains pending microtasks so mount effects resolve and their state updates
@@ -392,7 +402,7 @@ describe("ChallengeDetail", () => {
     // elapsed window below. Without this the give-up could pass for a reason
     // that has nothing to do with the poll loop being alive.
     const callsBeforeTick = mockSubmissionsComparison.mock.calls.length;
-    await tick(COMPARE_POLL_MS);
+    await tick(PAST_CAP_TICK_MS);
     expect(mockSubmissionsComparison.mock.calls.length).toBeGreaterThan(
       callsBeforeTick,
     );
@@ -405,18 +415,244 @@ describe("ChallengeDetail", () => {
     vi.setSystemTime(
       new Date(BASE_TIME.getTime() + SEVERE_DELAY_AFTER_MS + 1_000),
     );
-    // One further poll is all the loop needs to see the window has passed.
-    await tick(COMPARE_POLL_MS);
+    // One further poll is all the loop needs to see the window has passed — but
+    // the interval has backed off past the base cadence by now, so the tick has
+    // to outlast the cap to reach the next poll. A COMPARE_POLL_MS tick would
+    // silently prove nothing.
+    await tick(PAST_CAP_TICK_MS);
 
     // The provider is dropped and shows a "no result" state.
     expect(screen.getByText("No result")).toBeInTheDocument();
     expect(screen.getByText(/Took too long/)).toBeInTheDocument();
 
     // …and polling has stopped, so the leaderboard can't poll forever on a
-    // silently lost evaluation.
+    // silently lost evaluation. The span has to exceed the backoff cap: a
+    // window shorter than the longest interval would see zero calls even if
+    // the loop were alive, which is the same vacuous assertion as no assertion.
     const callsAtGiveUp = mockSubmissionsComparison.mock.calls.length;
-    await tick(5 * COMPARE_POLL_MS);
+    await tick(3 * POLL_MAX_INTERVAL_MS);
     expect(mockSubmissionsComparison.mock.calls.length).toBe(callsAtGiveUp);
+  });
+
+  it("backs the comparison poll off instead of hammering it flat for the whole window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(BASE_TIME);
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+    // The leaderboard never advances → nothing ever completes, which is
+    // exactly the case that used to cost ~400 requests.
+    const polledAt: number[] = [];
+    mockSubmissionsComparison.mockImplementation(async () => {
+      polledAt.push(Date.now());
+      return { challenge_id: "c1", entries: [] };
+    });
+
+    renderPage();
+    await flush();
+    await flush();
+    expect(screen.getByRole("heading", { name: "Two Sum" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run" })[0]);
+    await flush();
+    expect(mockSubmissionsCreate).toHaveBeenCalled();
+
+    await tick(60_000);
+
+    // The gaps between polls are the real invariant — the total count is a
+    // consequence. Assert both, and derive the gaps from the clock the poll
+    // actually observed rather than from the call count.
+    const gaps = polledAt.slice(1).map((at, i) => at - polledAt[i]);
+    expect(gaps.length).toBeGreaterThan(2);
+    // Grows: strictly increasing while no run completes.
+    expect(gaps[1]).toBeGreaterThan(gaps[0]);
+    expect(gaps[gaps.length - 1]).toBeGreaterThan(gaps[0]);
+    // Capped: no gap exceeds the ceiling, so a broken "cap" cannot pass as
+    // "grows nicely".
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(POLL_MAX_INTERVAL_MS);
+    // Budget: a flat COMPARE_POLL_MS would be 40 requests in this window.
+    const flat = 60_000 / COMPARE_POLL_MS;
+    expect(polledAt.length).toBeLessThan(flat / 2);
+    // …and the audit guard: a loop that stopped entirely would also satisfy the
+    // budget above, so require that polling is demonstrably still alive.
+    expect(polledAt.length).toBeGreaterThan(2);
+  });
+
+  it("keeps polling a doomed run after one failed request, and clears the error on recovery", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(BASE_TIME);
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+    // Call 1 is the mount load (nothing in flight yet); call 2 is the first
+    // poll after the run is submitted, and that one fails. The leaderboard
+    // never advances either way, so the run is doomed and the loop is the only
+    // thing under test.
+    let calls = 0;
+    mockSubmissionsComparison.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 2) {
+        throw new Error("network unreachable");
+      }
+      return { challenge_id: "c1", entries: [] };
+    });
+
+    renderPage();
+    await flush();
+    await flush();
+    expect(screen.getByRole("heading", { name: "Two Sum" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run" })[0]);
+    // The failing poll lands here, while the run is in flight: the error is
+    // shown…
+    await flush();
+    expect(screen.getByRole("alert")).toHaveTextContent(/network unreachable/);
+
+    // …and the loop keeps going instead of being retired by the first error.
+    // Before the fix the count was frozen here for the rest of the run, the
+    // card stayed on "Running…" and the give-up state was unreachable.
+    const callsAfterFailure = mockSubmissionsComparison.mock.calls.length;
+    await tick(60_000);
+    expect(mockSubmissionsComparison.mock.calls.length).toBeGreaterThan(
+      callsAfterFailure,
+    );
+    // A successful poll clears the error, so a blip does not leave a stale
+    // message pinned above a healthy leaderboard.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps tracking a provider launched while the poll is already running (#258)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(BASE_TIME);
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+    const polledAt: number[] = [];
+    // ollama already has a run, so its card shows the "Running…" badge once
+    // re-run (a first-ever run records runsBefore = 0, and Boolean(0) hides the
+    // badge — a separate quirk this test must not lean on). demo starts with
+    // none. Nothing completes until poll 4, when demo lands.
+    let polls = 0;
+    const COMPLETES_AT = 4;
+    const ollamaEntry = {
+      provider: "ollama",
+      runs: 1,
+      score: 50,
+      passed_tests: 1,
+      total_tests: 2,
+      duration_ms: 900,
+      last_run_at: BASE_TIME.toISOString(),
+    };
+    mockSubmissionsComparison.mockImplementation(async () => {
+      polledAt.push(Date.now());
+      polls += 1;
+      const entries =
+        polls < COMPLETES_AT
+          ? [ollamaEntry]
+          : [
+              ollamaEntry,
+              {
+                provider: "demo",
+                runs: 1,
+                score: 100,
+                passed_tests: 3,
+                total_tests: 3,
+                duration_ms: 1200,
+                last_run_at: BASE_TIME.toISOString(),
+              },
+            ];
+      return { challenge_id: "c1", entries };
+    });
+
+    renderPage();
+    await flush();
+    await flush();
+    expect(screen.getByRole("heading", { name: "Two Sum" })).toBeInTheDocument();
+
+    // ollama already has a run, so its affordance reads "Re-run" (and its card
+    // will show the "Running…" badge once re-run, because runsBefore is then
+    // non-zero). demo has none, so its button reads "Run" and is the first of
+    // the five keyless-free providers.
+    fireEvent.click(screen.getAllByRole("button", { name: "Run" })[0]);
+    await flush();
+    // The second provider joins a loop that is already running — the case a
+    // closure snapshot of the in-flight map cannot see.
+    fireEvent.click(screen.getByRole("button", { name: "Re-run" }));
+    await flush();
+
+    // Two "Running…" texts while both are in flight: ollama's card badge plus
+    // the "Run all providers" button in its loading state.
+    expect(screen.getAllByText("Running…")).toHaveLength(2);
+
+    await tick(60_000);
+
+    // demo finished, ollama has not, so the count is unchanged. With a stale
+    // snapshot the loop dropped *both*, reported nothing in flight and stopped
+    // polling — the live state for a genuinely running evaluation.
+    expect(screen.getAllByText("Running…")).toHaveLength(2);
+    // …and the loop is still alive for the remaining provider.
+    const callsAtCompletion = polledAt.length;
+    await tick(30_000);
+    expect(polledAt.length).toBeGreaterThan(callsAtCompletion);
+  });
+
+  it("restores the fast cadence when a run completes while another is still in flight", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(BASE_TIME);
+    mockSubmissionsCreate.mockResolvedValue(submission as never);
+    const polledAt: number[] = [];
+    // Two keyless providers are launched (demo + ollama), so one can complete
+    // while the other keeps the loop alive — that is the only way to observe the
+    // cadence *reset*. When the last provider finishes the loop simply stops,
+    // which proves nothing about a reset.
+    let polls = 0;
+    const COMPLETES_AT = 6;
+    mockSubmissionsComparison.mockImplementation(async () => {
+      polledAt.push(Date.now());
+      polls += 1;
+      if (polls < COMPLETES_AT) {
+        return { challenge_id: "c1", entries: [] };
+      }
+      return {
+        challenge_id: "c1",
+        entries: [
+          {
+            provider: "demo",
+            runs: 1,
+            score: 100,
+            passed_tests: 3,
+            total_tests: 3,
+            duration_ms: 1200,
+            last_run_at: BASE_TIME.toISOString(),
+          },
+        ],
+      };
+    });
+
+    renderPage();
+    await flush();
+    await flush();
+    expect(screen.getByRole("heading", { name: "Two Sum" })).toBeInTheDocument();
+
+    // Both "Run" buttons that need no API key: demo (first) and ollama (last).
+    const runButtons = screen.getAllByRole("button", { name: "Run" });
+    fireEvent.click(runButtons[0]);
+    await flush();
+    fireEvent.click(runButtons[5]);
+    await flush();
+    expect(mockSubmissionsCreate.mock.calls.map((c) => c[0].provider)).toEqual([
+      "demo",
+      "ollama",
+    ]);
+
+    await tick(60_000);
+
+    // The interval had backed off to the cap by the time demo landed…
+    const beforeCompletion = polledAt[COMPLETES_AT - 1] - polledAt[COMPLETES_AT - 2];
+    expect(beforeCompletion).toBe(POLL_MAX_INTERVAL_MS);
+    // …so the next poll being back at the base cadence is a genuine reset.
+    // Without it, a run that completes while another is still going waits out
+    // the backoff it no longer needs, and its row appears up to 10s late.
+    expect(polledAt[COMPLETES_AT] - polledAt[COMPLETES_AT - 1]).toBe(
+      COMPARE_POLL_MS,
+    );
+    // The loop is genuinely still alive afterwards — the audit guard that stops
+    // a dead loop from passing the two assertions above.
+    expect(polledAt.length).toBeGreaterThan(COMPLETES_AT + 1);
   });
 
   it("requires an API key when running a keyed provider from the panel", async () => {

@@ -12,7 +12,7 @@ import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useSubmissionSocket } from "../hooks/useSubmissionSocket.ts";
 import { useNow } from "../hooks/useNow.ts";
 import { submissionsApi } from "../services/api.ts";
-import { SUBMISSION_POLL_MS } from "../constants/polling.ts";
+import { SUBMISSION_POLL_MS, nextPollDelay } from "../constants/polling.ts";
 import type { Submission } from "../types.ts";
 import { extractError } from "../utils/errors.ts";
 import {
@@ -44,6 +44,18 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
     const submissionId = id;
     let cancelled = false;
     let pollTimer: number | undefined;
+    // Current interval for this loop. Grows while the submission sits in the
+    // same status and resets when that status changes — see nextPollDelay.
+    let delayMs = pollIntervalMs;
+    // Last status the loop successfully saw. null until the first success,
+    // which is also what keeps a failed *initial* load from retrying forever:
+    // with nothing known yet, the error state is the honest answer.
+    let lastStatus: Submission["status"] | null = null;
+
+    function schedulePoll() {
+      pollTimer = window.setTimeout(() => void load(), delayMs);
+      delayMs = nextPollDelay(delayMs);
+    }
 
     async function load() {
       try {
@@ -54,16 +66,38 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
         setSubmission(data);
         setLoading(false);
         setError(null);
+        // A status change is the only news this endpoint can deliver, so it is
+        // the only thing that buys an immediate re-check. A submission stuck in
+        // one status for minutes returns identical rows, and at a flat 1.5s
+        // that is ~400 requests for nothing (#257) — this loop is also the
+        // *only* live path when the socket is unavailable.
+        if (data.status !== lastStatus) {
+          lastStatus = data.status;
+          delayMs = pollIntervalMs;
+        }
         if (
           (data.status === "pending" || data.status === "processing") &&
           socketState !== "open"
         ) {
-          pollTimer = window.setTimeout(() => void load(), pollIntervalMs);
+          schedulePoll();
         }
       } catch (err) {
-        if (!cancelled) {
-          setError(extractError(err));
-          setLoading(false);
+        if (cancelled) {
+          return;
+        }
+        setError(extractError(err));
+        setLoading(false);
+        // Keep polling while the submission is known to be unfinished. The old
+        // dead-catch meant one blip silently retired the fallback: with no
+        // socket to take over, the page froze on a stale "processing" until the
+        // user reloaded. The socket check mirrors the success path — if it
+        // opened while this request was in flight, it is the live path now and
+        // REST has nothing left to add.
+        if (
+          (lastStatus === "pending" || lastStatus === "processing") &&
+          socketState !== "open"
+        ) {
+          schedulePoll();
         }
       }
     }

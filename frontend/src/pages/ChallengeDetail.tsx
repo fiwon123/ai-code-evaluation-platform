@@ -11,7 +11,7 @@ import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi, modelsApi, submissionsApi } from "../services/api.ts";
-import { COMPARE_POLL_MS } from "../constants/polling.ts";
+import { COMPARE_POLL_MS, nextPollDelay } from "../constants/polling.ts";
 import { useNow } from "../hooks/useNow.ts";
 import type {
   Challenge,
@@ -110,6 +110,14 @@ function ChallengeDetail() {
   // provider → wall-clock ms when its run was submitted (ref: read from the
   // poll loop without re-running effects or capturing stale closures).
   const runningSinceRef = useRef<Record<string, number>>({});
+  // The poll effect keys on `runningCount > 0` so a map change cannot
+  // double-poll, which leaves its closure holding a *snapshot* of runningMap
+  // from whenever it last ran. A provider started while the loop is already
+  // alive would be invisible to it: the loop would drop that provider, compute
+  // an empty in-flight set, stop polling and clear the "running" indicator
+  // while the evaluation was still going (#258). Both write sites below update
+  // this ref, so the loop always reads the live set.
+  const runningMapRef = useRef<Record<string, number>>({});
   // Providers whose run never produced a result and exceeded the severe-delay
   // window — they are dropped from runningMap so the poll terminates and the
   // card shows a "no result" state instead of spinning forever.
@@ -135,6 +143,14 @@ function ChallengeDetail() {
     const challengeId = challenge.id;
     let cancelled = false;
     let timer: number | undefined;
+    // Current interval for this loop. Grows while nothing completes and resets
+    // the moment a run does — see nextPollDelay (#257).
+    let delayMs = COMPARE_POLL_MS;
+
+    function schedule() {
+      timer = window.setTimeout(() => void refresh(), delayMs);
+      delayMs = nextPollDelay(delayMs);
+    }
 
     async function refresh() {
       try {
@@ -151,28 +167,47 @@ function ChallengeDetail() {
         // mark it as such and stop polling it so the leaderboard can't poll
         // forever on a silently lost evaluation.
         const pastSevereDelay = Date.now() - SEVERE_DELAY_AFTER_MS;
+        const inFlight = runningMapRef.current;
         const next: Record<string, number> = {};
-        for (const provider of Object.keys(runningMap)) {
+        let madeProgress = false;
+        for (const provider of Object.keys(inFlight)) {
           const entry = data.entries.find((e) => e.provider === provider);
-          if (!entry || entry.runs <= runningMap[provider]) {
+          if (!entry || entry.runs <= inFlight[provider]) {
             const sinceMs = runningSinceRef.current[provider];
             if (sinceMs !== undefined && sinceMs < pastSevereDelay) {
               setGaveUpMap((prev) => ({ ...prev, [provider]: true }));
               delete runningSinceRef.current[provider];
               continue;
             }
-            next[provider] = runningMap[provider];
+            next[provider] = inFlight[provider];
           } else {
             delete runningSinceRef.current[provider];
+            madeProgress = true;
           }
         }
+        // A run landing is the only news worth an immediate re-check, so it is
+        // the only thing that restores the fast cadence. Growing on elapsed
+        // time alone would make the last provider of a slow round wait out the
+        // backoff it no longer needs.
+        if (madeProgress) {
+          delayMs = COMPARE_POLL_MS;
+        }
+        runningMapRef.current = next;
         setRunningMap(next);
         if (Object.keys(next).length > 0 && !cancelled) {
-          timer = window.setTimeout(() => void refresh(), COMPARE_POLL_MS);
+          schedule();
         }
       } catch (err) {
-        if (!cancelled) {
-          setComparisonError(extractError(err));
+        if (cancelled) {
+          return;
+        }
+        setComparisonError(extractError(err));
+        // Keep polling. A blip used to end the loop for good: the give-up
+        // check below only runs on a *successful* poll, so one 500 stranded the
+        // card on "Running…" with no result state and no recovery until a
+        // reload (#257). The error stays on screen until a poll succeeds.
+        if (Object.keys(runningMapRef.current).length > 0) {
+          schedule();
         }
       }
     }
@@ -310,6 +345,7 @@ function ChallengeDetail() {
         ...(key ? { api_key: key } : {}),
       });
       setRunningMap((prev) => ({ ...prev, [providerValue]: runsBefore }));
+      runningMapRef.current = { ...runningMapRef.current, [providerValue]: runsBefore };
       runningSinceRef.current[providerValue] = Date.now();
       setGaveUpMap((prev) => {
         if (!prev[providerValue]) {
