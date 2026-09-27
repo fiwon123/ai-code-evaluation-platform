@@ -373,8 +373,7 @@ describe("ChallengeDetail", () => {
     } as never);
 
     renderPage();
-    // Mount effects resolve on microtasks — flush them; findBy*/waitFor must
-    // be avoided here because they wait on real timers, which are mocked.
+    // Mount effects resolve on microtasks — flush them (see `flush`).
     await flush();
     await flush();
     expect(screen.getByRole("heading", { name: "Two Sum" })).toBeInTheDocument();
