@@ -3,19 +3,16 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import styles from "./EditChallenge.module.css";
 import { challengesApi } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
-import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import {
-  Field,
-  TextInput,
-  SelectInput,
-  TextAreaInput,
-  useFieldId,
-} from "../components/Input/Input.tsx";
+  ChallengeFormActions,
+  ChallengeFormFields,
+  type ChallengeFormValue,
+} from "../components/ChallengeForm/ChallengeFormFields.tsx";
 import { extractError } from "../utils/errors.ts";
-import { LANGUAGES, languageGuide, languageLabel } from "../utils/language.ts";
+import { languageGuide } from "../utils/language.ts";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 import type { ChallengeDifficulty } from "../types.ts";
 
@@ -29,22 +26,29 @@ export default function EditChallenge() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [testCode, setTestCode] = useState("");
-  const [language, setLanguage] = useState("python");
-  const [difficulty, setDifficulty] = useState<ChallengeDifficulty>("medium");
+  // The same shape `CreateChallenge` holds, because the same component renders
+  // both. Edit is the only one of the two that starts empty and is then
+  // filled from the API, so it is also the only one that has to override the
+  // whole value at once.
+  const [value, setValue] = useState<ChallengeFormValue>({
+    title: "",
+    description: "",
+    prompt: "",
+    testCode: "",
+    language: "python",
+    difficulty: "medium",
+  });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const guide = languageGuide(language);
-  const titleId = useFieldId("title");
-  const languageId = useFieldId("language");
-  const difficultyId = useFieldId("difficulty");
-  const descriptionId = useFieldId("description");
-  const promptId = useFieldId("prompt");
-  const testCodeId = useFieldId("test-code");
+  const guide = languageGuide(value.language);
+
+  function onChange<K extends keyof ChallengeFormValue>(
+    key: K,
+    next: ChallengeFormValue[K],
+  ) {
+    setValue((current) => ({ ...current, [key]: next }));
+  }
 
   useEffect(() => {
     if (!id) {
@@ -58,22 +62,24 @@ export default function EditChallenge() {
         if (cancelled) {
           return;
         }
-        setTitle(challenge.title);
-        setDescription(challenge.description ?? "");
-        setPrompt(challenge.prompt);
-        setTestCode(challenge.test_code ?? "");
-        setLanguage(challenge.language ?? "python");
-        setDifficulty(challenge.difficulty ?? "medium");
+        setValue({
+          title: challenge.title,
+          description: challenge.description ?? "",
+          prompt: challenge.prompt,
+          testCode: challenge.test_code ?? "",
+          language: challenge.language ?? "python",
+          difficulty: (challenge.difficulty ?? "medium") as ChallengeDifficulty,
+        });
         setIsOwner(challenge.owner_id === user?.id);
       } catch (err) {
           if (!cancelled) {
             setLoadError(extractError(err));
           }
         } finally {
-        if (!cancelled) {
-          setLoading(false);
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
-      }
     }
     void load();
     return () => {
@@ -90,17 +96,21 @@ export default function EditChallenge() {
     setSubmitting(true);
     try {
       await challengesApi.update(id, {
-        title,
-        description,
-        prompt,
-        test_code: testCode,
-        language,
-        difficulty,
+        title: value.title,
+        description: value.description,
+        prompt: value.prompt,
+        test_code: value.testCode,
+        language: value.language,
+        difficulty: value.difficulty,
       });
       showToast("Challenge updated successfully.", "success");
       navigate(`/challenges/${id}`);
     } catch (err) {
       setError(extractError(err));
+    } finally {
+      // Create had this and Edit did not: on success the button stayed in its
+      // loading state for as long as the component stayed mounted, which is
+      // any navigation that is slow or blocked.
       setSubmitting(false);
     }
   }
@@ -158,96 +168,18 @@ export default function EditChallenge() {
       </header>
 
       <Card className={styles.card}>
-        <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
-          <div className={styles.row}>
-            <Field id={titleId} label="Title">
-              <TextInput
-                id={titleId}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Two Sum"
-                required
-                maxLength={120}
-              />
-            </Field>
-
-            <Field id={languageId} label="Language">
-              <SelectInput
-                id={languageId}
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-              >
-                {LANGUAGES.map((lang) => (
-                  <option key={lang} value={lang}>
-                    {languageLabel(lang)}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
-
-            <Field id={difficultyId} label="Difficulty">
-              <SelectInput
-                id={difficultyId}
-                value={difficulty}
-                onChange={(e) =>
-                  setDifficulty(e.target.value as ChallengeDifficulty)
-                }
-              >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </SelectInput>
-            </Field>
-          </div>
-
-          <Field id={descriptionId} label="Description">
-            <TextAreaInput
-              id={descriptionId}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Given an array of integers, return the indices of the two numbers that add up to a target."
-              rows={3}
-            />
-          </Field>
-
-          <Field id={promptId} label="Prompt for the LLM">
-            <TextAreaInput
-              id={promptId}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={guide.prompt}
-              rows={5}
-            />
-          </Field>
-
-          <Field id={testCodeId} label={guide.testLabel}>
-            <TextAreaInput
-              id={testCodeId}
-              value={testCode}
-              onChange={(e) => setTestCode(e.target.value)}
-              placeholder={guide.testCode}
-              rows={6}
-            />
-          </Field>
-
-          {error && (
-            <p className={styles.errorBanner} role="alert">
-              {error}
-            </p>
-          )}
-
-          <div className={styles.actions}>
-            <Button type="submit" loading={submitting} loadingText="Saving…">
-              Save changes
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => navigate(`/challenges/${id}`)}
-            >
-              Cancel
-            </Button>
-          </div>
+        <form onSubmit={(e) => void handleSubmit(e)}>
+          {/* No example loader: every field is already filled, so a button
+              that overwrites three of them is a way to lose work. */}
+          <ChallengeFormFields value={value} onChange={onChange} guide={guide} />
+          <ChallengeFormActions
+            value={value}
+            submitting={submitting}
+            submitLabel="Save changes"
+            loadingText="Saving…"
+            onCancel={() => navigate(`/challenges/${id}`)}
+            error={error}
+          />
         </form>
       </Card>
     </div>
