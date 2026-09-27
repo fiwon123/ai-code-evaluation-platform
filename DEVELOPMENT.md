@@ -294,22 +294,53 @@ vitest gate nor the normal Playwright config.
 | `make test-e2e` says "No Playwright browser found" | The image predates the Chromium bake — `make dev-build` (then `make dev-restart` if the stack is already up). On a host-native checkout, `cd frontend && npx playwright install chromium` |
 | e2e fails with "Execution context was destroyed" or a form stuck on its own page | The Vite dev server pushed a full page reload into the run — `make dev-log` shows `[vite] (client) page reload` at the failure time. It only kills whichever tests were mid-navigation, so re-run; editing `frontend/src` while the suite runs causes it deliberately |
 | Ollama fallback leg fails with a DNS error | `host.docker.internal` is not mapped — the compose services that call a local model need `extra_hosts: host.docker.internal:host-gateway` (#233) |
-| Fallback never engages | `LLM_FALLBACK_PROVIDER` is empty (that is the off switch) — and remember `make dev-down && make dev-up` to re-read `.env` into the worker |
+| Fallback never engages | `LLM_FALLBACK_PROVIDER` is empty (that is the off switch) — and remember `make dev-down && make dev-up` to re-read the repo-root `.env` into the worker |
+| Worker says "API key missing" for a provider you configured | The key is in `backend/.env`, but compose interpolates `${GROQ_API_KEY:-}` / `${GEMINI_API_KEY:-}` from the **repo-root** `.env` and the worker reads it with `os.getenv` — move the key (see "Which `.env` gets which variable") and `make dev-restart` |
 | Submissions stuck "pending" for hours | The recovery sweep (Celery beat) must be running: `docker compose ps` should show `beat` healthy. Stale `pending` rows are re-dispatched after 10 min and **abandoned (failed) 60 min after creation** (`PENDING_MAX_MINUTES` in `backend/src/app/tasks/recover.py`). The Profile/SubmissionDetail UI shows "stuck"/"waiting over 10 minutes" in the meantime. |
 
 ## Local model fallback (optional, for real-model testing)
 
 A provider failure — rate limit, exhausted quota, mistyped key, an Ollama server
 that isn't running — burns the whole submission for a score of 0 without ever
-reaching the sandbox. Set the fallback in `.env` and the worker retries the
+reaching the sandbox. Set the fallback in the **repo-root `.env`** (the file
+next to `docker-compose.yml`) and the worker retries the
 generation **once** with a second provider; the report then names which model
 actually wrote the code:
 
 ```bash
-# .env (gitignored) — the free, CPU-only pairing
+# <repo-root>/.env (gitignored) — the free, CPU-only pairing
 GROQ_API_KEY=gsk_...                 # free tier, no credit card
 LLM_FALLBACK_PROVIDER=ollama
 LLM_FALLBACK_MODEL=tinyllama
+```
+
+### Which `.env` gets which variable
+
+Two files, two readers, and picking the wrong one fails silently:
+
+| File | Read by | Holds |
+|------|---------|-------|
+| `<repo-root>/.env` | Docker Compose, on the host, at `make dev-up` | **Provider keys** (`GROQ_API_KEY`, `GEMINI_API_KEY`), `LLM_FALLBACK_*`, `OLLAMA_BASE_URL`, `GH_TOKEN` |
+| `backend/.env` | pydantic `Settings` (`app/config.py`) | App settings only: `ENVIRONMENT`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `DOCKER_*` |
+
+Compose interpolates `${GROQ_API_KEY:-}` from the repo-root file, and
+`app/services/llm.py` reads the key with `os.getenv` — which pydantic-settings
+never populates from `backend/.env`. A key in the wrong file therefore just
+yields "API key missing". See `backend/.env.example`.
+
+Compose only interpolates the names `docker-compose.yml` actually references, so
+only those values cross into the containers; anything else in the file stays on
+the host. Values are read when the container starts, so **restart after
+editing**: `make dev-restart`.
+
+Neither file is readable by the agent: `opencode.json` denies `Read` of
+`.env`/`.env.*` and denies `cat`/`head`/`tail`/`printenv`/`env`/
+`docker compose config`/`docker inspect` of them, so
+`backend/.env.example` stays readable while a live key cannot leak into a
+transcript. Confirm a key arrived with a presence check, never a print:
+
+```bash
+docker compose exec celery sh -c 'test -n "$GROQ_API_KEY" && echo set'
 ```
 
 - **Opt-in.** Empty `LLM_FALLBACK_PROVIDER` (the default) re-raises the

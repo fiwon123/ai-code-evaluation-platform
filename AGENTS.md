@@ -238,7 +238,22 @@ Locked by `backend/tests/test_dev_sandbox_gh_token.py`.
 
 ## Environment Variables
 
-Backend reads from `.env` (gitignored):
+**Two `.env` files, two different readers** — putting a variable in the wrong one
+fails silently:
+- `<repo-root>/.env` (next to `docker-compose.yml`) — read by **Docker Compose on
+  the host** at `make dev-up`. Holds the provider keys (`GROQ_API_KEY`,
+  `GEMINI_API_KEY`), `LLM_FALLBACK_*`, `OLLAMA_BASE_URL`, `GH_TOKEN`. Compose
+  only interpolates the names `docker-compose.yml` references (`${VAR:-}`), so
+  only those values reach the containers. Restart the stack after editing.
+- `backend/.env` — read by pydantic `Settings` for app settings only
+  (`ENVIRONMENT`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `DOCKER_*`).
+  `app/services/llm.py` reads provider keys with `os.getenv`, which
+  pydantic-settings does **not** populate from this file.
+
+Both are gitignored. See `backend/.env.example` and DEVELOPMENT.md →
+"Which `.env` gets which variable".
+
+Backend settings read from `backend/.env` (gitignored):
 - `DATABASE_URL`: Database connection
 - `REDIS_URL`: Redis connection
 - `JWT_SECRET_KEY`: JWT signing key (required)
@@ -291,11 +306,22 @@ Backend reads from `.env` (gitignored):
 
 ## Environment and Secret-File Rules
 
-- The backend environment file is `.env`.
-- Never access it without explicit permission.
-- Never open, read, print, summarize, quote, or send the contents of `.env`, `.env.*`, or any other environment/secret file unless the user explicitly gives permission in the current conversation.
-- Never run commands that reveal environment values (e.g., `cat .env`, `printenv`, `env`).
+- The environment files are `<repo-root>/.env` and `backend/.env` (see
+  Environment Variables above for which variables belong in each).
+- Never access either without explicit permission.
+- Never open, read, print, summarize, quote, or send the contents of `.env`, `.env.*`, or any other environment/secret file unless the user explicitly gives permission in the current conversation. `backend/.env.example` is the one exception: it holds placeholders and is safe to read.
+- Never run commands that reveal environment values (e.g., `cat .env`, `printenv`, `env`, `docker compose config`, `docker inspect …`). `docker compose config` looks like a harmless inspection command but renders the *interpolated* values, keys included.
+- To confirm a variable is set, check for presence, never print it:
+  `docker compose exec celery sh -c 'test -n "$GROQ_API_KEY" && echo set'`
 - Never display, repeat, log, store, or include secret values in responses, code changes, or commits.
+- `opencode.json` enforces the above at the tool level (deny `Read` of `.env`/
+  `.env.*`, deny `cat`/`head`/`tail`/`printenv`/`env`/`docker compose config`/
+  `docker inspect` of them, allow `*.env.example`). It is the backstop, not the
+  permission: bash rules are pattern-based, so an allowed interpreter
+  (`uv run python -c …`) can still reach a file, and a repo-wide
+  `grep -rn GROQ_API_KEY .` ignores `.gitignore`. Prefer the Grep tool
+  (gitignore-aware) and locked-down patterns. Locked by
+  `backend/tests/test_opencode_env_guard.py`.
 
 If the user explicitly permits reading environment configuration:
 
