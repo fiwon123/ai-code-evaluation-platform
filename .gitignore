@@ -128,6 +128,10 @@ activemq-data/
 
 # Environments
 .env
+# .env.local / .env.production / ... would otherwise be committable; the
+# negation keeps backend/.env.example tracked (it holds placeholders only).
+.env.*
+!.env.example
 .envrc
 .venv
 env/
