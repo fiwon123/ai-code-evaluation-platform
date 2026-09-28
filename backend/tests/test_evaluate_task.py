@@ -579,3 +579,128 @@ class TestFallbackProvenance:
         assert "ollama is down" in outcome["error"]
         session.expire_all()
         assert session.get(Submission, submission_id).status == "failed"
+
+
+class _SteppedClock:
+    """Monotonic stand-in that jumps by a fixed step on every read.
+
+    Bound to the task module's ``time`` (not the stdlib module) so the test can
+    assert exact durations without sleeping: two reads — the start mark and the
+    one after generation returns — always yield ``step_ms``.
+    """
+
+    def __init__(self, step_ms: int = 250) -> None:
+        self._step = step_ms / 1000
+        self._now = 0.0
+        self.reads = 0
+
+    def monotonic(self) -> float:
+        self.reads += 1
+        self._now += self._step
+        return self._now
+
+    def burn(self, steps: int) -> None:
+        """Simulate time passing (a sandbox run, a slow provider)."""
+        for _ in range(steps):
+            self.monotonic()
+
+
+def _bind_clock(monkeypatch, step_ms: int = 250) -> _SteppedClock:
+    clock = _SteppedClock(step_ms)
+    monkeypatch.setattr("app.tasks.evaluate.time", clock)
+    return clock
+
+
+class TestGenerationMetrics:
+    """Every attempt records how long generation took, and which attempt it was.
+
+    ``duration_ms`` covers the whole run (queue wait included), so it cannot
+    separate a slow provider from a slow sandbox. A run that never reached the
+    sandbox is exactly the one that needs the answer, so the metric is recorded
+    on the failure path too.
+    """
+
+    def test_success_records_generation_time_and_attempt(self, monkeypatch):
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        clock = _bind_clock(monkeypatch)
+
+        def fake_evaluate(**kwargs):
+            # The sandbox burns clock too — those reads must not reach the
+            # generation metric.
+            clock.burn(4)
+            return EvaluationOutcome(
+                passed=2, total=2, score=100.0, logs="ok", metrics={"duration_ms": 7}
+            )
+
+        monkeypatch.setattr("app.tasks.evaluate.evaluate_code", fake_evaluate)
+
+        _run_submission_evaluation(session, submission_id)
+
+        result = _stored_result(session, submission_id)
+        assert result.metrics["generation_ms"] == 250
+        assert result.metrics["attempt"] == 1
+        # The sandbox's own metrics are untouched alongside the new ones.
+        assert result.metrics["duration_ms"] == 7
+
+    def test_generation_failure_records_the_time_it_took_to_fail(self, monkeypatch):
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        clock = _bind_clock(monkeypatch)
+
+        def boom(self, prompt, language="python", feedback=None):
+            clock.burn(3)  # a provider that stalled before giving up
+            raise RuntimeError("provider read timeout")
+
+        monkeypatch.setattr(
+            "app.services.llm_fallback.get_llm_provider",
+            lambda name, api_key=None, model=None: _fake_provider(generate_code=boom),
+        )
+
+        outcome = _run_submission_evaluation(session, submission_id)
+
+        assert outcome["status"] == "failed"
+        result = _stored_result(session, submission_id)
+        assert "provider read timeout" in result.metrics["error"]
+        # Start mark + 3 stalled steps + the read after the raise = 4 steps.
+        assert result.metrics["generation_ms"] == 1000
+        assert result.metrics["attempt"] == 1
+
+    def test_sandbox_failure_keeps_the_generation_time(self, monkeypatch):
+        """Generation already returned, so its duration is known and usable."""
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        clock = _bind_clock(monkeypatch)
+
+        def fake_evaluate(**kwargs):
+            clock.burn(6)  # a slow, then broken, sandbox
+            raise RuntimeError("sandbox image missing")
+
+        monkeypatch.setattr("app.tasks.evaluate.evaluate_code", fake_evaluate)
+
+        outcome = _run_submission_evaluation(session, submission_id)
+
+        assert outcome["status"] == "failed"
+        result = _stored_result(session, submission_id)
+        assert "sandbox image missing" in result.metrics["error"]
+        # Two reads only: the sandbox's time is not added to generation.
+        assert result.metrics["generation_ms"] == 250
+        assert result.metrics["attempt"] == 1
+
+    def test_a_repair_attempt_records_its_own_number(self, monkeypatch):
+        session = _make_sync_session()
+        submission_id = _seed(session)
+        _bind_clock(monkeypatch)
+
+        monkeypatch.setattr(
+            "app.tasks.evaluate.evaluate_code",
+            lambda **kwargs: EvaluationOutcome(
+                passed=2, total=2, score=100.0, logs="ok", metrics={"duration_ms": 9}
+            ),
+        )
+
+        # Attempt 2 is a repair; the metric must say 2, not "the first one".
+        _run_submission_evaluation(session, submission_id, attempt=2)
+
+        result = _stored_result(session, submission_id)
+        assert result.metrics["attempt"] == 2

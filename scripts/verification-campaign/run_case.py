@@ -155,6 +155,13 @@ def extract_observation(payload: dict[str, Any]) -> dict[str, Any]:
         # "scored 0 because nothing was ever executed".
         "backend": metrics.get("backend"),
         "attempts": len(payload.get("attempts") or []),
+        # Cost of the final attempt's generation leg alone, and which attempt
+        # the recorded result came from — a slow provider and a slow sandbox
+        # are different failures, and `duration_ms` covers both plus the wait.
+        # Absent on results recorded before these metrics existed, so the report
+        # only prints them when present.
+        "generation_ms": metrics.get("generation_ms"),
+        "attempt": metrics.get("attempt"),
         "fallback_used": bool(metrics.get("fallback_used")),
         "fallback_provider": metrics.get("fallback_provider"),
         "fallback_model": metrics.get("fallback_model"),
@@ -333,8 +340,13 @@ def render_report(cases: list[dict[str, Any]], entries: list[dict[str, Any]]) ->
             f"- **Provider / model:** {_fmt(observation.get('provider'))} / "
             f"{_fmt(observation.get('model'))}",
             f"- **Attempts:** {_fmt(observation.get('attempts'))}",
-            f"- **Run at:** {_fmt(entry.get('run_at'))}",
         ]
+        if observation.get("generation_ms") is not None:
+            lines.append(
+                f"- **Generation:** {_fmt(observation.get('generation_ms'))} ms "
+                f"(result from attempt {_fmt(observation.get('attempt'))})"
+            )
+        lines.append(f"- **Run at:** {_fmt(entry.get('run_at'))}")
         if observation.get("fallback_used"):
             lines.append(
                 f"- **Fallback:** {_fmt(observation.get('fallback_provider'))} / "

@@ -139,6 +139,8 @@ describe("humanizeMetricKey", () => {
     expect(humanizeMetricKey("returncode")).toBe("Return code");
     expect(humanizeMetricKey("language")).toBe("Language");
     expect(humanizeMetricKey("backend")).toBe("Backend");
+    expect(humanizeMetricKey("generation_ms")).toBe("Generation (ms)");
+    expect(humanizeMetricKey("attempt")).toBe("Attempt");
   });
 
   it("falls back to sentence case for unknown keys", () => {

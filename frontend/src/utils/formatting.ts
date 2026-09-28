@@ -135,6 +135,8 @@ const METRIC_LABELS: Record<string, string> = {
   language: "Language",
   returncode: "Return code",
   error: "Error",
+  generation_ms: "Generation (ms)",
+  attempt: "Attempt",
   fallback_used: "Fallback used",
   fallback_provider: "Fallback provider",
   fallback_model: "Fallback model",
