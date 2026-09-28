@@ -293,3 +293,101 @@ error with it. The fix ships a new audit rule plus the wiring:
 
 The sweep's `login-field-errors` state exercises the wiring on a real page:
 0 `field-error-announced` findings.
+
+## v0.21.0 evidence pass — geometry audit (#307)
+
+Two runs feed this section:
+
+- `make visual-sweep` → **`20260928-200411`**: **0 rule findings** — `text-tiny`,
+  `heading-skip`, `no-h1`, `touch-target-small`, `field-error-announced` all
+  clean across the 344-frame matrix (light + dark × desktop + Pixel 7).
+- A one-off **geometry audit** (temporary `e2e/visual/geometry.visual.ts`,
+  deleted after the run): `getComputedStyle` + `getBoundingClientRect` per
+  route × theme × viewport on the sweep's deterministic production build, so
+  every number below is a computed value, not an impression.
+
+Dark-theme parity is confirmed: h1 and subtitle sizes are identical in both
+themes on every route. The `color: transparent` computed on every `h1` is the
+intentional `background-clip: text` gradient in `PageTitle` — not a defect
+(locked by `hero-sweep.test.ts`).
+
+### A — Structural inconsistency (same family, different treatment)
+
+**A1. App-family h1 splits: 30px content vs 24px administrative.**
+Measured `h1` font-size, desktop @1280 / Pixel 7 @412:
+
+| Tier | Pages | px |
+|---|---|---|
+| Content | challenges, challenges/:id, results/:token, challenges/new, challenges/:id/edit, submissions/:id, * (404) | 30 / 30 |
+| Administrative | profile, admin, admin/users, admin/challenges, admin/submissions | **24 / 24** |
+| Auth shell | login, register, auth/callback (deliberately separate family) | 24 / 24 |
+| Marketing | features, pricing, demo, about, contact, privacy/terms/security/gdpr | 44 / 32 |
+| Home hero | / (hero variant, by design) | 44 / 36 |
+
+Cause: `PageTitle size="md"` on the content pages vs `size="sm"` on Profile +
+all four Admin pages. `sm` (2xl) is otherwise the auth shell's tier, so the
+administrative suite renders an auth-sized title 6px below its sibling content
+pages. Recommendation: content + administrative apps all use `md`.
+
+**A2. Marketing title→subtitle gap drifts: 8px vs 16px.** Measured `h1`
+margin-bottom: Features and Contact 8px; Pricing, Demo, About and all four
+legal pages 16px. Same hero block, two gaps.
+
+**A3. Marketing subtitle measure drifts: 600px vs 640px.** Features, Pricing,
+Demo, About, Contact subtitles are 18px capped at 600px; the legal pages are
+18px capped at 640px; challenge forms are 16px capped at 640px. The same
+"subtitle under the h1" role uses three widths.
+
+**A4. App-family subtitle tiers: 14px plain vs 16px/640px on forms.**
+Challenges, Profile and Admin subtitles are 14px with no measure; Create and
+Edit challenge are 16px at 640px. The forms define a second tier inside the
+same family.
+
+**A5. Structural outliers.** `/profile` renders the username as the bare h1
+with no header block, eyebrow or subtitle (page-rhythm's "app" rhythm but no
+header treatment at all). The catch-all 404 renders a bare h1 + EmptyState
+with no header wrapper — the only app page with none. `/challenges/:id` and
+`/submissions/:id` use the back-link header with no subtitle (defensible as a
+detail rhythm; the header wrapper exists).
+
+**A6. Naming drift (code-level).** The hero-subtitle role is `.subtitle`
+(Features, Contact), `.pageSubtitle` (Pricing, Demo), `.tagline` (About) and
+`.summary` (Legal); `page-rhythm.test.ts` probes three of them. The title
+layout class is `.title` vs `.pageTitle` vs `.name`. Header wrapper is
+`<header class={header}>` vs `<div class={pageHeader}>` vs bare siblings.
+
+### B — Typography off the token scale
+
+`docs/DESIGN_SYSTEM.md` says components reference tokens only; `Features`'
+font-size literals are not among the sanctioned exceptions:
+
+**B1. `Features.module.css` — 15 literal font-sizes** (`0.75, 0.78, 0.8, 0.85,
+0.9, 0.95, 1.4, 1.6, 1.75, 2rem`). The page's `h2` renders at 22.4px —
+between the scale's 1.25rem and 1.5rem steps — so the off-scale values are
+visible, not hypothetical.
+
+**B2. Off-scale literals elsewhere:** Pricing `2.5rem` (above the scale max
+2.25rem) and `1.4rem`; Home `0.85/1.5/2/2.25rem`; Demo `1.5rem` + two
+`0.85rem`; Contact `2rem`; `ResultReport` `22px`. Each should land on the
+nearest `--font-size-*` token.
+
+### C — Visible upgrade candidates (subjective; before/after per batch)
+
+- **C1** Apply A1: the admin suite at 30px lifts the whole administrative
+  hierarchy to the content tier.
+- **C2** Give the 404 the app header treatment (back link + header wrapper)
+  so the error state does not read as a blank page.
+- **C3** Profile: keep the h1 as the username (identity), add the app header
+  rhythm around it (subtitle line with email/joined) instead of a bare card
+  title.
+- **C4** Single subtitle measure on marketing (600px everywhere) — the legal
+  640px reads as an accident of copy volume.
+- **C5** Deliver batch 3 with frame evidence (contact sheets) so each upgrade
+  is approved on what it looks like, not on the number.
+
+### Verdict
+
+Every rule is clean and dark parity holds; all findings here are **measured
+family drift** — same role, different size/width/gap — plus off-scale
+typography. Fixed in three batches: structural (A1–A6), typography scale
+(B1–B2), polish (C1–C5).
