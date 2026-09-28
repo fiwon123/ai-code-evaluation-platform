@@ -66,6 +66,13 @@ def parse_summary(output: str) -> tuple[int, int]:
 #: the other two reasons a run reports no test case.
 COLLECTION_ERROR = summary.COLLECTION_ERROR
 
+#: ``metrics["backend"]`` recorded by the subprocess path, mirroring the
+#: ``"docker"`` the sandbox records on its own two paths (#264). Both execution
+#: paths must name themselves, or a consumer cannot tell "the fallback ran" from
+#: "nothing executed" — and on a Docker-less host the metric was simply absent,
+#: which is the supported configuration rather than a degraded one.
+SUBPROCESS_BACKEND = "subprocess"
+
 
 def diagnose_run(output: str, runner: LanguageRunner, total: int) -> dict[str, Any]:
     """Explain a run that reported no test at all, as a ``metrics`` fragment.
@@ -77,7 +84,8 @@ def diagnose_run(output: str, runner: LanguageRunner, total: int) -> dict[str, A
 
     Only seeds ``metrics``; each execution path merges its own facts
     (backend, returncode, duration) on top, so the Docker and subprocess
-    results stay identical.
+    results stay identical -- which is what makes the name recorded here worth
+    asserting: it is the only thing that says the fallback executed at all.
     """
     if total > 0 or runner.detect_errors is None:
         return {}
@@ -225,6 +233,7 @@ def _evaluate_code_subprocess(
         return EvaluationOutcome(
             logs=f"Evaluation timed out after {timeout}s",
             metrics={
+                "backend": SUBPROCESS_BACKEND,
                 "language": runner.language,
                 "error": "timeout",
                 "duration_ms": int((time.monotonic() - started) * 1000),
@@ -235,6 +244,7 @@ def _evaluate_code_subprocess(
         return EvaluationOutcome(
             logs=f"'{runner.command[0]}' executable not found",
             metrics={
+                "backend": SUBPROCESS_BACKEND,
                 "language": runner.language,
                 "error": "executable missing",
                 "duration_ms": elapsed,
@@ -249,6 +259,7 @@ def _evaluate_code_subprocess(
     # produced no test case, and that verdict has to survive.
     outcome.metrics.update(
         {
+            "backend": SUBPROCESS_BACKEND,
             "language": runner.language,
             "returncode": result.returncode,
             "duration_ms": int((time.monotonic() - started) * 1000),

@@ -8,6 +8,7 @@ import pytest
 from app.config import settings
 from app.services.evaluation import (
     COLLECTION_ERROR,
+    SUBPROCESS_BACKEND,
     EvaluationOutcome,
     evaluate_code,
     parse_outcome,
@@ -15,6 +16,8 @@ from app.services.evaluation import (
     run_pytest,
 )
 from app.services.language_runner import JAVASCRIPT_RUNNER, PYTHON_RUNNER
+
+FE_ROOT = Path(__file__).resolve().parents[2] / "frontend"
 
 TWO_SUM_CODE = (
     "def two_sum(nums, target):\n"
@@ -304,7 +307,11 @@ class TestEvaluateCodeDockerPath:
         monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", UnavailableSandbox)
         outcome = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
         assert outcome.passed == 3
-        assert outcome.metrics.get("backend") is None
+        # The fallback names itself. This used to assert the metric was absent,
+        # which codified the gap rather than describing it: a consumer asking
+        # "where did this run?" got nothing, and could not tell "the fallback
+        # ran" from "nothing executed" (#264).
+        assert outcome.metrics["backend"] == "subprocess"
 
     def test_disabled_docker_uses_subprocess(self, monkeypatch, tmp_path):
         monkeypatch.setattr(settings, "docker_enabled", False)
@@ -391,6 +398,77 @@ class TestEvaluateCodeDockerPath:
                 evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
             # Sandbox guarantees untrusted code stays isolated: no host fallback.
             subprocess_mock.assert_not_called()
+
+
+class TestBackendIsRecordedOnEveryPath:
+    """`metrics["backend"]` must be present on *every* execution path (#264).
+
+    The metric is the only thing that distinguishes "the subprocess fallback
+    ran" from "nothing executed", and the subprocess path has three separate
+    metrics dicts, so each one is asserted: a single assertion on the happy
+    path would leave the timeout and missing-executable branches free to lose
+    it again.
+    """
+
+    def test_success_path_records_the_backend(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", False)
+        outcome = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
+        assert outcome.metrics["backend"] == "subprocess"
+
+    def test_timeout_branch_records_the_backend(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(settings, "docker_enabled", False)
+        expired = subprocess.TimeoutExpired(cmd="pytest", timeout=30)
+        with patch("app.services.evaluation.run_tests", side_effect=expired):
+            outcome = evaluate_code(
+                code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path
+            )
+        assert outcome.metrics["error"] == "timeout"
+        assert outcome.metrics["backend"] == "subprocess"
+
+    def test_missing_executable_branch_records_the_backend(self, tmp_path):
+        with patch("app.services.evaluation.subprocess.run", side_effect=FileNotFoundError):
+            outcome = evaluate_code(
+                code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path
+            )
+        assert outcome.metrics["error"] == "executable missing"
+        assert outcome.metrics["backend"] == "subprocess"
+
+    def test_both_paths_name_themselves_in_the_same_vocabulary(self, monkeypatch, tmp_path):
+        """The two backends are the values consumers switch on, so they are
+        locked together -- a new spelling on one path would silently stop
+        matching the other."""
+        monkeypatch.setattr(settings, "docker_enabled", True)
+
+        class FakeSandbox:
+            def __init__(self, *args, **kwargs):
+                self.image = "eval-sandbox:test"
+
+            def is_available(self):
+                return True
+
+            def run(self, code, test_code, timeout=None, language="python"):
+                return EvaluationOutcome(
+                    passed=3, total=3, score=100.0, logs="", metrics={"backend": "docker"}
+                )
+
+        monkeypatch.setattr("app.services.docker_sandbox.DockerSandbox", FakeSandbox)
+        docker = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
+        monkeypatch.setattr(settings, "docker_enabled", False)
+        sub = evaluate_code(code=TWO_SUM_CODE, test_code=TWO_SUM_TESTS, workdir=tmp_path)
+
+        assert docker.metrics["backend"] == "docker"
+        assert sub.metrics["backend"] == "subprocess"
+        assert {docker.metrics["backend"], sub.metrics["backend"]} == {
+            "docker",
+            SUBPROCESS_BACKEND,
+        }
+
+    def test_the_backend_label_the_frontend_renders_exists_for_both(self):
+        """Acceptance criterion 4: the UI already has the label, so the fix is
+        data-side. Guarded here so a future metric rename cannot leave the
+        frontend rendering a field nothing ever fills."""
+        labels = Path(FE_ROOT / "src" / "utils" / "formatting.ts").read_text()
+        assert "Backend" in labels
 
 
 class TestRunPytest:
