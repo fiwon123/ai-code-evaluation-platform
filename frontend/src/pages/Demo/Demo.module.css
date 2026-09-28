@@ -221,6 +221,37 @@
   color: var(--color-text-secondary);
 }
 
+/* The sign-in wall that replaces the runner controls for signed-out
+   visitors. Deliberately a solid panel (not dashed, like the empty state):
+   this is an action a guest can take, not a vacancy. */
+.guestWall {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-secondary);
+}
+
+.guestWallTitle {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.guestWallText {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.guestWallActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
 .error {
   margin-top: var(--space-3);
   color: var(--color-danger);

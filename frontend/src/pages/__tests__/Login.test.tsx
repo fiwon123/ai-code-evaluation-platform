@@ -23,12 +23,13 @@ function mockAuth(overrides: Record<string, unknown> = {}) {
   });
 }
 
-function renderLogin() {
+function renderLogin(entry: { pathname: string; state?: unknown } = { pathname: "/login" }) {
   return render(
-    <MemoryRouter initialEntries={["/login"]}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/challenges" element={<div>Challenges page</div>} />
+        <Route path="/demo" element={<div>Demo page</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -79,6 +80,51 @@ describe("Login", () => {
     mockAuth({ user: { id: "u1" } });
     renderLogin();
     expect(screen.getByText("Challenges page")).toBeInTheDocument();
+  });
+
+  it("returns to the page the visitor came from after login", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+    mockAuth({ login });
+    renderLogin({ pathname: "/login", state: { from: "/demo" } });
+
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Demo page")).toBeInTheDocument(),
+    );
+  });
+
+  it("redirects an already-authed visitor to the return target", () => {
+    mockAuth({ user: { id: "u1" } });
+    renderLogin({ pathname: "/login", state: { from: "/demo" } });
+    expect(screen.getByText("Demo page")).toBeInTheDocument();
+  });
+
+  it("ignores a non-internal return target", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+    mockAuth({ login });
+    renderLogin({
+      pathname: "/login",
+      state: { from: "https://evil.example/path" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Challenges page")).toBeInTheDocument(),
+    );
   });
 
   it("links to the register page", () => {

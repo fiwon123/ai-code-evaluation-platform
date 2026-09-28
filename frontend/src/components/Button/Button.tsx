@@ -44,6 +44,8 @@ type AsLink = CommonProps &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof CommonProps> & {
     /** Renders a react-router `Link` instead of a `<button>`. */
     to: To;
+    /** Router location state carried to the target (e.g. a post-login return path). */
+    state?: unknown;
   };
 
 type ButtonProps = AsButton | AsLink;
@@ -65,12 +67,14 @@ const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonProps>(
       className = "",
       children,
       to,
+      state,
       loading,
       loadingText,
       disabled,
       ...rest
     } = props as CommonProps & {
       to?: To;
+      state?: unknown;
       loading?: boolean;
       loadingText?: string;
       disabled?: boolean;
@@ -95,6 +99,7 @@ const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonProps>(
         <Link
           ref={ref as React.Ref<HTMLAnchorElement>}
           to={to}
+          state={state}
           className={classes}
           {...(rest as object)}
         >

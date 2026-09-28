@@ -51,7 +51,7 @@ const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 60000; // ~60s cap before we give up
 
 function Demo() {
-  const { user } = useAuth();
+  const { user, initializing } = useAuth();
   const navigate = useNavigate();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -69,6 +69,11 @@ function Demo() {
   );
   const resultLanguage = selectedChallenge?.language ?? "python";
   const previewRunner = runnerForLanguage(resultLanguage);
+
+  // Guests get the sign-in wall instead of the runner. `initializing` bars
+  // the wall during the brief token check so it doesn't flash before the
+  // session is known.
+  const isGuestWallVisible = () => !initializing && !user;
 
   useEffect(() => {
     let cancelled = false;
@@ -102,8 +107,11 @@ function Demo() {
   }
 
   async function handleRun() {
+    // Guests never reach this button (see the sign-in wall below), but a
+    // session can expire while this page stays open — send a returning user
+    // to login with the demo as the post-login destination, not a dead end.
     if (!user) {
-      navigate("/register");
+      navigate("/login", { state: { from: "/demo" } });
       return;
     }
     if (!selectedId) {
@@ -249,6 +257,27 @@ function Demo() {
         <div className={styles.runner}>
           {challenges.length > 0 ? (
             <>
+            {isGuestWallVisible() ? (
+              <div className={styles.guestWall}>
+                <h3 className={styles.guestWallTitle}>
+                  Sign in to run the live demo
+                </h3>
+                <p className={styles.guestWallText}>
+                  Running an evaluation creates a submission on your account —
+                  the demo provider is free and needs no API keys once
+                  you’re in.
+                </p>
+                <div className={styles.guestWallActions}>
+                  <Button to="/login" state={{ from: "/demo" }}>
+                    Sign in
+                  </Button>
+                  <Button to="/register" variant="secondary">
+                    Create account
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
               <div className={styles.chips}>
                 <span className={styles.chipsLabel}>Try a prompt:</span>
                 {KEYWORD_CHIPS.map((keyword) => (
@@ -280,11 +309,13 @@ function Demo() {
                 </SelectInput>
                 <Button
                   onClick={() => void handleRun()}
-                  disabled={inProgress}
+                  disabled={inProgress || initializing}
                 >
                   {inProgress ? "Generating…" : "Generate & evaluate"}
                 </Button>
               </div>
+            </>
+            )}
 
               {/* Feedback sits directly under the run controls, above the
                   preview, so a run's outcome is visible without scrolling. */}
@@ -457,13 +488,6 @@ function Demo() {
             </p>
           )}
 
-          {!user && challenges.length > 0 && (
-            <p className={styles.loginNote}>
-              You'll need a free account —{" "}
-              <Link to="/register">sign up</Link> or{" "}
-              <Link to="/login">log in</Link> to run the demo.
-            </p>
-          )}
         </div>
       </section>
 
