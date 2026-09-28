@@ -265,6 +265,30 @@ def pacing_refusal(
     )
 
 
+def latest_run_timestamp(entries: list[dict[str, Any]]) -> float | None:
+    """The most recent run recorded in the ledger, as a POSIX timestamp.
+
+    ``None`` when nothing usable is recorded, which lets the first run of the
+    campaign through.
+
+    The ledger is kept **sorted by row**, not by time, so its final entry is
+    the highest-numbered row rather than whatever ran most recently. Reading
+    pacing from the end therefore gated on the wrong row (#275): once row 10
+    existed it always supplied a stale timestamp, so the guard went inert for
+    the rows people actually re-ran, while a recent run of a *low* row was
+    ignored entirely. Take the maximum instead of trusting the order.
+    """
+    stamps: list[float] = []
+    for entry in entries:
+        try:
+            stamps.append(datetime.fromisoformat(entry.get("run_at")).timestamp())
+        except (TypeError, ValueError):
+            # Missing, null, non-string or corrupt: a bad timestamp in one row
+            # must not lock the campaign, nor mask the good rows.
+            continue
+    return max(stamps) if stamps else None
+
+
 def upsert_ledger(entries: list[dict[str, Any]], entry: dict[str, Any]) -> list[dict[str, Any]]:
     """Replace this case's entry, keeping one row per case and row order."""
     kept = [e for e in entries if e.get("case_id") != entry.get("case_id")]
@@ -590,14 +614,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"unknown case {args.case!r}; run with --list to see the matrix"
             )
 
-        last = None
-        for entry in reversed(load_ledger(args.ledger)):
-            if entry.get("run_at"):
-                try:
-                    last = datetime.fromisoformat(entry["run_at"]).timestamp()
-                except ValueError:
-                    last = None
-                break
+        last = latest_run_timestamp(load_ledger(args.ledger))
         refusal = pacing_refusal(last, time.time(), args.min_interval)
         if refusal:
             print(refusal, file=sys.stderr)

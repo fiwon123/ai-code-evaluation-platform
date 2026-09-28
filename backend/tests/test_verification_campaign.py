@@ -21,6 +21,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -451,6 +452,138 @@ def test_pacing_can_be_deliberately_overridden():
 def test_pacing_ignores_an_unparseable_ledger_timestamp():
     # A corrupt timestamp must not lock the campaign forever.
     assert runner.pacing_refusal(None, 1000.0, 60.0) is None
+
+
+# --- pacing reads the latest run, not the last row (#275) --------------------
+
+
+def _at(iso: str) -> float:
+    return datetime.fromisoformat(iso).timestamp()
+
+
+def _ledger(*rows: tuple[int, str]) -> list[dict[str, Any]]:
+    """Build a ledger the way the tool does: via upsert_ledger, so the row
+    order is canonical (ascending) rather than whatever the test felt like
+    typing. The bug is an ordering bug, so a hand-ordered fixture can hide it.
+    """
+    entries: list[dict[str, Any]] = []
+    for row, run_at in rows:
+        entries = runner.upsert_ledger(
+            entries,
+            {"row": row, "case_id": f"case-{row}", "run_at": run_at, "verdict": "pass"},
+        )
+    return entries
+
+
+# Row 10 ran at 00:20, row 4 at 02:44. In canonical order the *final* entry is
+# row 10, which is not the latest run.
+_STALE_HIGH_ROW = ((10, "2026-09-28T00:20:00+00:00"), (4, "2026-09-28T02:44:00+00:00"))
+
+
+def test_latest_run_is_none_for_an_empty_ledger():
+    assert runner.latest_run_timestamp([]) is None
+
+
+def test_latest_run_ignores_the_ledger_row_order():
+    entries = _ledger(*_STALE_HIGH_ROW)
+    # Guard the fixture itself: the whole bug lives in this order.
+    assert [e["row"] for e in entries] == [4, 10]
+    assert runner.latest_run_timestamp(entries) == _at("2026-09-28T02:44:00+00:00")
+
+
+def test_latest_run_paces_against_the_recent_low_row_not_the_stale_high_row():
+    # The bug: half a minute after the row-4 run the guard must still refuse,
+    # because the *latest* run was then.
+    entries = _ledger(*_STALE_HIGH_ROW)
+    now = _at("2026-09-28T02:44:30+00:00")
+    assert (
+        runner.pacing_refusal(runner.latest_run_timestamp(entries), now, 60.0)
+        is not None
+    )
+    # The old read took the final entry (row 10) and saw 2h24m had passed,
+    # letting the run start 30s after the previous one.
+    assert runner.pacing_refusal(entries[-1] and _at(entries[-1]["run_at"]), now, 60.0) is None
+
+
+def test_latest_run_skips_entries_without_a_timestamp():
+    entries = _ledger(
+        (4, "2026-09-28T02:44:00+00:00"),
+        (8, None),
+        (9, ""),
+    )
+    entries[1]["run_at"] = None
+    del entries[2]["run_at"]
+    assert runner.latest_run_timestamp(entries) == _at("2026-09-28T02:44:00+00:00")
+
+
+def test_latest_run_skips_corrupt_timestamps():
+    entries = _ledger((4, "2026-09-28T02:44:00+00:00"), (5, "not-a-timestamp"))
+    entries[1]["run_at"] = 1759175040  # a number, not an ISO string
+    assert runner.latest_run_timestamp(entries) == _at("2026-09-28T02:44:00+00:00")
+
+
+def test_latest_run_is_none_when_every_timestamp_is_unusable():
+    entries = _ledger((5, "not-a-timestamp"), (10, None))
+    assert runner.latest_run_timestamp(entries) is None
+
+
+def test_latest_run_uses_a_newer_high_row_not_merely_the_first_one():
+    # The mirror image: here the newest run *is* the final entry, so "take the
+    # first row" and "take the maximum" agree on every fixture above. Without
+    # this case the implementation could return the first stamp and stay green.
+    entries = _ledger((4, "2026-09-28T00:20:00+00:00"), (10, "2026-09-28T02:44:00+00:00"))
+    assert [e["row"] for e in entries] == [4, 10]
+    assert runner.latest_run_timestamp(entries) == _at("2026-09-28T02:44:00+00:00")
+    # 30s after that run the guard still applies, off the row-10 stamp.
+    now = _at("2026-09-28T02:44:30+00:00")
+    assert (
+        runner.pacing_refusal(runner.latest_run_timestamp(entries), now, 60.0)
+        is not None
+    )
+
+
+def test_latest_run_compares_instants_not_strings():
+    # Same instant written two ways; a lexical max would order them wrongly.
+    entries = _ledger(
+        (1, "2026-09-28T04:44:00+02:00"),
+        (2, "2026-09-28T02:44:00+00:00"),
+    )
+    assert runner.latest_run_timestamp(entries) == _at("2026-09-28T02:44:00+00:00")
+
+
+def test_main_derives_pacing_from_the_latest_run(monkeypatch, tmp_path):
+    # The derivation has to be wired into the CLI, or the helper can be
+    # correct while the guard still reads the wrong entry.
+    rows = _ledger(*_STALE_HIGH_ROW)
+    ledger = tmp_path / "evidence.jsonl"
+    ledger.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    called: list[Any] = []
+
+    def fake_refusal(last, now, interval):
+        called.append(last)
+        return None
+
+    monkeypatch.setattr(runner.time, "time", lambda: _at("2026-09-28T02:44:30+00:00"))
+    monkeypatch.setattr(runner, "pacing_refusal", fake_refusal)
+    monkeypatch.setattr(runner, "run_case", lambda *a, **k: {"verdict": "pass"})
+    monkeypatch.setattr(runner, "write_evidence", lambda *a, **k: None)
+    assert runner.main(["--case", "groq-python", "--ledger", str(ledger)]) == 0
+    # The row-4 timestamp, not the final row-10 entry.
+    assert called == [_at("2026-09-28T02:44:00+00:00")]
+
+
+def test_main_refuses_a_run_that_violates_the_interval(monkeypatch, tmp_path):
+    # And the end-to-end effect: 30s after the latest run the CLI exits 2 and
+    # never reaches run_case.
+    rows = _ledger(*_STALE_HIGH_ROW)
+    ledger = tmp_path / "evidence.jsonl"
+    ledger.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    ran: list[Any] = []
+    monkeypatch.setattr(runner.time, "time", lambda: _at("2026-09-28T02:44:30+00:00"))
+    monkeypatch.setattr(runner, "run_case", lambda *a, **k: ran.append(a) or {"verdict": "pass"})
+    monkeypatch.setattr(runner, "write_evidence", lambda *a, **k: None)
+    assert runner.main(["--case", "groq-python", "--ledger", str(ledger)]) == 2
+    assert ran == []
 
 
 # --- ledger and report ------------------------------------------------------
