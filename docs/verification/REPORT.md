@@ -13,6 +13,8 @@ re-run a case to refresh its row, or delete `evidence.jsonl` to start over.
 | 6 | `groq-typescript` | groq | typescript | not run | — | — | — | — |
 | 7 | `fallback-tinyllama` | groq | python | not run | — | — | — | — |
 | 8 | `local-ollama-python` | ollama | python | completed | 100.0 | 3/3 | — | PASS |
+| 9 | `local-ollama-javascript` | ollama | javascript | completed | 100.0 | 3/3 | — | PASS |
+| 10 | `local-ollama-typescript` | ollama | typescript | failed | 0.0 | 0/0 | — | FAIL |
 
 ## Cases
 
@@ -234,6 +236,113 @@ PASSED test_solution.py::test_returns_first_matching_pair
 PASSED test_solution.py::test_finds_pair_not_at_the_start
 PASSED test_solution.py::test_returns_empty_when_no_pair
 3 passed in 0.06s
+```
+
+</details>
+
+### Row 9 — Free repeatable path: the node --test runner, proven without a keyed provider
+
+- **Case:** `local-ollama-javascript`
+- **Proves:** The node --test runner and its output parser work on real generated code - the same claim row 5 makes, proven without a keyed provider. Row 5 is about a *hosted* provider integrating end to end, which is a separate claim; this row is about our runner, and it should not take a third party's WAF to prove that. Asserts completed rather than a score band for row 8's reason: a band passes even when the run did nothing.
+- **Precondition:** Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 5, so the two rows differ only in which provider produced the code.
+- **Expectation:** `{"kind": "completed"}`
+- **Result:** PASS — pipeline completed on the docker backend, score 100.0 (3/3 tests) — score is informational for this row
+- **Submission:** `95b248f0-a025-49c6-b372-ffaa34aecf38`
+- **Challenge:** `94860e17-9e19-463d-9274-51f7a8157889`
+- **Provider / model:** ollama / qwen2.5-coder:1.5b
+- **Attempts:** 2
+- **Run at:** 2026-09-28T00:01:45+00:00
+
+> All 3 tests passed.
+
+Passed tests: rejects small numbers, accepts small primes, rejects composites
+
+Raw output (tail):
+TAP version 13
+# Subtest: rejects small numbers
+ok 1 - rejects small numbers
+  ---
+  duration_ms: 1.003342
+  type: 'test'
+  ...
+# Subtest: accepts small primes
+ok 2 - accepts small primes
+  ---
+  duration_ms: 0.222979
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.147177
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 147.848501
+
+
+<details><summary>log tail</summary>
+
+```
+  ---
+  duration_ms: 1.003342
+  type: 'test'
+  ...
+# Subtest: accepts small primes
+ok 2 - accepts small primes
+  ---
+  duration_ms: 0.222979
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.147177
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 147.848501
+```
+
+</details>
+
+### Row 10 — Free repeatable path: the tsx --test runner and its TAP parser, proven without a keyed provider
+
+- **Case:** `local-ollama-typescript`
+- **Proves:** The tsx --test runner and its TAP parser work on real generated code - the same claim row 6 makes, proven without a keyed provider. As row 9: a band would pass even when the run did nothing, so this row asserts completed and reports the score.
+- **Precondition:** Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 6, so the two rows differ only in which provider produced the code.
+- **Expectation:** `{"kind": "completed"}`
+- **Result:** FAIL — run did not complete (timed out)
+- **Submission:** `13a1bea1-7e0e-4832-9895-99d81ec6ed69`
+- **Challenge:** `13f394fc-de78-4f9a-9fad-4d84d21fcd2e`
+- **Provider / model:** ollama / qwen2.5-coder:1.5b
+- **Attempts:** 1
+- **Run at:** 2026-09-28T00:20:37+00:00
+
+> No tests reported a result.
+
+Raw output (tail):
+Evaluation error: timed out
+
+
+<details><summary>log tail</summary>
+
+```
+Evaluation error: timed out
 ```
 
 </details>

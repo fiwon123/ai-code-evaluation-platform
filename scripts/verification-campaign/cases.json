@@ -187,6 +187,50 @@
       },
       "precondition": "Host Ollama reachable from the worker at http://host.docker.internal:11434 (on Linux the service must bind 0.0.0.0, not the default 127.0.0.1) with `ollama pull qwen2.5-coder:1.5b` done. On a CPU-only host, cap the burst with OLLAMA_NUM_THREADS=2 and OLLAMA_MAX_PARALLEL=1 and let OLLAMA_TIMEOUT cover the slower generation; OLLAMA_KEEP_ALIVE=0 unloads the model afterwards. No API key and no egress to any hosted provider. Note EVALUATION_MAX_ATTEMPTS=1 keeps a multi-minute local run inside the harness wait budget - see #266.",
       "proves": "The real-model path works from the dev sandbox on a free, unlimited, keyless provider: a genuine generation is executed by the sandbox (a real backend is recorded and tests are collected) and the run terminates. Qwen 2.5 Coder 1.5B is code-tuned and the best quality-per-CPU-second of the local family, but it is still small and its score is deliberately NOT asserted - a 0-100 band here would pass even if the run did nothing at all."
+    },
+    {
+      "id": "local-ollama-javascript",
+      "row": 9,
+      "title": "Free repeatable path: the node --test runner, proven without a keyed provider",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b",
+      "api_key": null,
+      "api_key_env": null,
+      "language": "javascript",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Is Prime",
+        "description": "Return whether a number is prime.",
+        "prompt": "Implement a function `isPrime(n)` that returns `true` when `n` is a prime number and `false` otherwise. Numbers below 2 are not prime.\n- Export it with `module.exports = { isPrime }` (CommonJS).\n- Put the code in `solution.js` and do not include tests.",
+        "test_code": "const test = require('node:test');\nconst assert = require('node:assert');\nconst { isPrime } = require('./solution.js');\n\ntest('rejects small numbers', () => {\n  assert.strictEqual(isPrime(0), false);\n  assert.strictEqual(isPrime(1), false);\n});\n\ntest('accepts small primes', () => {\n  assert.strictEqual(isPrime(2), true);\n  assert.strictEqual(isPrime(3), true);\n});\n\ntest('rejects composites', () => {\n  assert.strictEqual(isPrime(9), false);\n  assert.strictEqual(isPrime(100), false);\n});\n"
+      },
+      "expect": {
+        "kind": "completed"
+      },
+      "precondition": "Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 5, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly.",
+      "proves": "The node --test runner and its output parser work on real generated code - the same claim row 5 makes, proven without a keyed provider. Row 5 is about a *hosted* provider integrating end to end, which is a separate claim; this row is about our runner, and it should not take a third party's WAF to prove that. Asserts completed rather than a score band for row 8's reason: a band passes even when the run did nothing."
+    },
+    {
+      "id": "local-ollama-typescript",
+      "row": 10,
+      "title": "Free repeatable path: the tsx --test runner and its TAP parser, proven without a keyed provider",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b",
+      "api_key": null,
+      "api_key_env": null,
+      "language": "typescript",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Is Prime",
+        "description": "Return whether a number is prime.",
+        "prompt": "Implement `isPrime` in TypeScript: given a number `n`, return `true` when `n` is a prime number and `false` otherwise. Numbers below 2 are not prime.\n- Export it as `export function isPrime(n: number): boolean`.\n- Put the code in `solution.ts` and do not include tests.",
+        "test_code": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { isPrime } from \"./solution\";\n\ntest(\"rejects numbers below two\", () => {\n  assert.equal(isPrime(0), false);\n  assert.equal(isPrime(1), false);\n});\n\ntest(\"accepts primes\", () => {\n  assert.equal(isPrime(2), true);\n  assert.equal(isPrime(7), true);\n});\n\ntest(\"rejects composites\", () => {\n  assert.equal(isPrime(9), false);\n  assert.equal(isPrime(91), false);\n});\n"
+      },
+      "expect": {
+        "kind": "completed"
+      },
+      "precondition": "Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 6, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly. This row is currently recorded as failing for that reason - see the README before reading anything into it.",
+      "proves": "The tsx --test runner and its TAP parser work on real generated code - the same claim row 6 makes, proven without a keyed provider. As row 9: a band would pass even when the run did nothing, so this row asserts completed and reports the score."
     }
   ]
 }

@@ -14,7 +14,7 @@ from app.services.llm_fallback import (
     GenerationError,
     generate_code,
 )
-from app.services.llm_providers import GroqProvider, MockProvider
+from app.services.llm_providers import GroqProvider, MockProvider, OllamaProvider
 from tests.conftest import fake_provider
 
 
@@ -321,6 +321,125 @@ class TestGroqProvider:
         # The pipeline closes every provider it builds; the demo one has no
         # transport to release.
         MockProvider().close()
+
+
+class TestBlockedPrimaryFallsBack:
+    """A 403 from the primary is a *generation* failure, so it must fall back.
+
+    The suite above proves the fallback recovers from a scripted exception and
+    that a 429 surfaces as an ``HTTPStatusError``. Neither is quite the failure
+    a real environment produces when a provider's edge rejects the worker: a
+    WAF answers ``403 Forbidden`` **before auth**, so the request never reaches
+    the API and the key is irrelevant. That is a different failure with
+    different causes — a bad key, a blocked network, a wrong region — and it is
+    the one that actually happens.
+
+    These tests drive a real :class:`GroqProvider` over a mock transport rather
+    than a hand-raised error, so what is proven is that the real provider
+    surfaces the real 403 as an exception the fallback recovers from.
+    """
+
+    @staticmethod
+    def _blocked_403(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            json={"error": {"message": "Access denied. Please check your network settings."}},
+        )
+
+    def _patch_real_primary(self, monkeypatch, status: int = 403) -> list[httpx.Request]:
+        """Serve ``status`` to the primary Groq provider; record what it was asked.
+
+        The fallback leg is a real :class:`OllamaProvider` over its own mock
+        transport, so the whole chain runs the way the worker runs it: a real
+        Groq request that is refused, then a real Ollama request that answers.
+        """
+        seen: list[httpx.Request] = []
+
+        def blocked(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            if status == 403:
+                return self._blocked_403(request)
+            return httpx.Response(status, json={"error": {"message": "upstream says no"}})
+
+        def answered(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={"response": "```python\ndef two_sum(nums, target):\n    return []\n```"},
+            )
+
+        def fake_get_llm_provider(name=None, api_key=None, model=None):
+            if str(name) == "groq":
+                return GroqProvider(
+                    api_key=api_key or "gsk-key-that-never-gets-checked",
+                    model=model or "llama-3.1-8b-instant",
+                    transport=httpx.MockTransport(blocked),
+                )
+            return OllamaProvider(
+                model=model or "tinyllama",
+                base_url="http://ollama.test",
+                transport=httpx.MockTransport(answered),
+            )
+
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get_llm_provider)
+        return seen
+
+    def test_a_403_from_the_primary_answers_from_the_fallback(self, fallback, monkeypatch):
+        fallback("ollama", "tinyllama")
+        self._patch_real_primary(monkeypatch, 403)
+
+        result = generate_code(provider_name="groq", prompt="two sum", api_key="gsk-bad")
+
+        assert result.used_fallback is True
+        assert result.provider == "ollama"
+        assert result.model == "tinyllama"
+        assert "def two_sum" in result.code
+
+    def test_the_403_is_reported_as_the_primary_error(self, fallback, monkeypatch):
+        """The report has to say *why* the primary was skipped, not just that it was."""
+        fallback("ollama", "tinyllama")
+        self._patch_real_primary(monkeypatch, 403)
+
+        metrics = generate_code(
+            provider_name="groq", prompt="two sum", api_key="gsk-bad"
+        ).as_metrics()
+
+        assert metrics["fallback_used"] is True
+        assert metrics["fallback_provider"] == "ollama"
+        assert metrics["fallback_model"] == "tinyllama"
+        assert "403" in metrics["primary_error"]
+
+    def test_a_403_with_no_fallback_configured_still_raises(self, fallback, monkeypatch):
+        """Opt-in stays opt-in: blocking the primary must not silently change provider.
+
+        Without this, "the fallback saved the run" and "the run quietly used a
+        different model" become indistinguishable from the outside.
+        """
+        fallback("")  # the default: no fallback
+        self._patch_real_primary(monkeypatch, 403)
+
+        with pytest.raises(httpx.HTTPStatusError) as excinfo:
+            generate_code(provider_name="groq", prompt="two sum", api_key="gsk-bad")
+
+        assert excinfo.value.response.status_code == 403
+
+    def test_the_key_is_not_the_cause_of_a_403(self, fallback, monkeypatch):
+        """A WAF 403 arrives before auth, so a valid-looking key must not help.
+
+        This is the case that made the fallback look broken in a live run: the
+        submission's key was deliberately invalid *and* the network was blocked,
+        and the only way to tell those apart from the outside is the status
+        code and the provider's own message landing in ``primary_error``.
+        """
+        fallback("ollama", "tinyllama")
+        seen = self._patch_real_primary(monkeypatch, 403)
+
+        result = generate_code(
+            provider_name="groq", prompt="two sum", api_key="gsk_deliberately_invalid"
+        )
+
+        assert len(seen) == 1, "the primary was called exactly once — no retry storm"
+        assert seen[0].headers["Authorization"] == "Bearer gsk_deliberately_invalid"
+        assert "gsk_deliberately_invalid" not in (result.primary_error or "")
 
 
 class TestOllamaBaseUrl:
