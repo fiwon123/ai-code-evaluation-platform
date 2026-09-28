@@ -136,10 +136,18 @@
   margin: 0 0 var(--space-1);
 }
 
+/*
+ * A stat holds a verb ("completed") or a number — both short — but CDN font
+ * metrics vary enough between renderers that a single word can exceed its
+ * column (CI's runner rendered "completed" 16px wider than the sandbox does,
+ * spilling out of the Status card). `overflow-wrap` lets a too-long token
+ * break mid-word instead of pushing the card past its column.
+ */
 .statValue {
   font-size: var(--font-size-2xl);
   font-weight: 700;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .sectionTitle {
