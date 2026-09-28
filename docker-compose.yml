@@ -332,6 +332,26 @@ services:
           cpus: "0.5"
           memory: 256M
 
+networks:
+  # Dual-stack (IPv4 + IPv6) so containerised providers get the same address
+  # family the host uses. This is not cosmetic: Groq's edge answers on IPv6 and
+  # returns 403 to the same request over IPv4, and an IPv4-only bridge network
+  # forces every container onto the rejected family. Measured on the dev host
+  # (issue #270): `curl -4 https://api.groq.com/.../models` → 403, `curl -6`
+  # and unflagged `curl` → 401 (reached, credentials only), so the fix is to
+  # give the worker an IPv6 route rather than to change the key.
+  #
+  # A ULA (fc00::/7) subnet is required for user-defined networks: Docker
+  # cannot derive a prefix on its own, and containers need an address to be
+  # reachable on. Outbound IPv6 from that subnet is NAT66-masqueraded to the
+  # host, so no Docker daemon configuration is needed. IPv4 is unaffected —
+  # Docker allocates a v4 subnet for the network as before.
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:1157::/64
+
 volumes:
   postgres_data:
   redis_data:
