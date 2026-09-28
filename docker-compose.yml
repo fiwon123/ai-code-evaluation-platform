@@ -102,6 +102,9 @@ services:
       # drift. Ollama is keyless and needs nothing here.
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      # Same address-family choice the worker makes, so a submission created in
+      # the UI reaches the provider the same way the worker will (issue #270).
+      - LLM_PREFER_IPV6=${LLM_PREFER_IPV6:-true}
       # GitHub OAuth2 — inert until client credentials are supplied.
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
@@ -194,6 +197,15 @@ services:
       # LLM_FALLBACK_MODEL=tinyllama (small enough for a CPU-only host).
       - LLM_FALLBACK_PROVIDER=${LLM_FALLBACK_PROVIDER:-}
       - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-}
+      # Address family for provider calls (issue #270). On by default here, and
+      # only here: this host's IPv4 egress is blocked by Groq's edge (403 "Access
+      # denied. Please check your network settings.") while IPv6 serves the same
+      # request, and a blocked family reads as a bad API key. The resolver will
+      # not pick IPv6 on its own — see the dual-stack network block at the bottom
+      # of this file — so the choice is made per request, falling back to IPv4
+      # whenever IPv6 cannot connect. Set LLM_PREFER_IPV6=false to restore the
+      # platform default.
+      - LLM_PREFER_IPV6=${LLM_PREFER_IPV6:-true}
       # A container's own localhost is the container, so Ollama running on the
       # HOST needs the gateway alias (extra_hosts below). Override when Ollama
       # runs in a different container or on another machine.
@@ -349,14 +361,16 @@ networks:
   #
   # NECESSARY BUT NOT SUFFICIENT — verified on 2026-09-28. This block was
   # measured working (the container gained fd00:1157::6 and IPv6 stopped failing
-  # with [Errno 101] Network is unreachable), yet the worker still got 403,
-  # because a container holding both addresses dials whichever getaddrinfo
-  # returns FIRST (httpcore has no Happy Eyeballs) and the image's /etc/gai.conf
-  # sorts IPv4 first (`precedence ::ffff:0:0/96 100`). The host's gai.conf is all
-  # comments, so glibc's own default prefers IPv6 and unflagged curl there
-  # reached 401 — which is why the host could not reproduce the worker's failure.
-  # The other half of the fix is the gai.conf COPY in the Dockerfile; these two
-  # are one change. Locked by backend/tests/test_provider_host_reachability.py.
+  # with [Errno 101] Network is unreachable), yet the worker still got 403:
+  # a container holding both addresses dials whichever getaddrinfo returns
+  # FIRST, and httpcore has no Happy Eyeballs, so there is no second attempt on
+  # the other family. An /etc/gai.conf was tried for the selection half and
+  # removed: it did not reorder anything, and it cannot be tested from inside
+  # the container (/etc is not writable, unshare is denied, no strace). The
+  # selection half is now made in application code — see the LLM_PREFER_IPV6
+  # entries in the dev and celery services above, and
+  # backend/src/app/services/http_transport.py. Locked by
+  # backend/tests/test_provider_host_reachability.py.
   default:
     enable_ipv6: true
     ipam:

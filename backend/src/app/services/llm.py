@@ -1,6 +1,7 @@
 import os
 
 from app.config import settings
+from app.services.http_transport import PreferIPv6Transport
 from app.services.llm_providers import (
     LLMProvider,
     MockProvider,
@@ -33,6 +34,18 @@ KEYED_PROVIDERS = {
     "gemini": "GEMINI_API_KEY",
     "groq": "GROQ_API_KEY",
 }
+
+
+def _transport_kwargs() -> dict[str, object]:
+    """Constructor kwargs for the shared HTTP transport, per ``LLM_PREFER_IPV6``.
+
+    One transport per provider instance: httpx pools connections per client, and
+    a client is created per provider instance, so a shared instance would be
+    closed by the first provider that is.
+    """
+    if not settings.llm_prefer_ipv6:
+        return {}
+    return {"transport": PreferIPv6Transport()}
 
 
 def get_llm_provider(
@@ -69,13 +82,14 @@ def get_llm_provider(
                 f"API key missing for '{provider_name}' — provide an api_key or set {env_var}"
             )
         if model:
-            return provider_cls(api_key=key, model=model)
-        return provider_cls(api_key=key)
+            return provider_cls(api_key=key, model=model, **_transport_kwargs())
+        return provider_cls(api_key=key, **_transport_kwargs())
 
     if provider_cls is MockProvider:
-        # The demo provider is fixed — it has no model knob.
+        # The demo provider is fixed — it has no model knob, and never opens a
+        # socket, so it gets no transport either.
         return provider_cls()
 
     if model:
-        return provider_cls(model=model)
-    return provider_cls()
+        return provider_cls(model=model, **_transport_kwargs())
+    return provider_cls(**_transport_kwargs())

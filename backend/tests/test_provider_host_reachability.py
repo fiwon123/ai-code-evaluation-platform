@@ -12,9 +12,10 @@ with a DNS or connection error long before any model is involved:
 4. The compose network being IPv4-only, so the worker cannot use the address
    family its host uses (issue #270: Groq's edge answers 403 over IPv4 and 401
    over IPv6, and a v4-only network pins every container to the rejected one).
-5. Having an IPv6 *address* and still dialling IPv4, because the image's
-   /etc/gai.conf sorts IPv4 ahead of IPv6. Same 403, same false "bad key" read —
-   and the one that survives the fix for (4).
+5. Having an IPv6 *address* and still dialling IPv4, because the resolver
+   returns IPv4 first. Same 403, same false "bad key" read — and the one that
+   survives the fix for (4). The resolver cannot be steered from here (see
+   `TestResolverIsNotThePlace`), so the family is chosen per request instead.
 
 Text-based assertions, like the other dev-sandbox infra guards: the contract
 spans Makefile -> docker-compose.yml -> Dockerfile, and a YAML parser would test
@@ -24,77 +25,21 @@ the syntax rather than the wiring.
 import re
 from pathlib import Path
 
+from app.config import Settings
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = REPO_ROOT / "docker-compose.yml"
 SECRETS_FILE = REPO_ROOT / "k8s" / "base" / "secrets.yaml"
 DOCKERFILE = REPO_ROOT / "Dockerfile"
-GAI_CONF = REPO_ROOT / "docker" / "gai.conf"
 SANDBOX_DOCKERFILE = REPO_ROOT / "backend" / "Dockerfile.sandbox"
 
 #: Services that may call a provider over the network, so each needs the host
 #: gateway alias for a host-side Ollama.
 PROVIDER_SERVICES = ("dev", "celery")
 
-#: glibc's built-in RFC 3484 precedence for IPv4 destinations. RFC 3484 §2.1
-#: says an IPv4 address is looked up as its IPv4-mapped form, so this is the
-#: value that must lose to ::/0. NB 4 is the *label* for ::ffff:0:0/96 in the
-#: manual's example, not a precedence — the precedence default is 10, which is
-#: what a wrong constant here silently compared against.
-GLIBC_DEFAULT_V4_PRECEDENCE = 10
-
-#: glibc's built-in precedence for global IPv6 (RFC 3484 default: 40).
-GLIBC_DEFAULT_V6_PRECEDENCE = 40
-
-#: glibc's built-in precedence for IPv6 loopback (RFC 3484 default: 50). Loopback
-#: must stay above global IPv6 or a name resolving to ::1 alongside a global
-#: address could be reordered behind it.
-GLIBC_DEFAULT_V6_LOOPBACK_PRECEDENCE = 50
-
-#: The prefix IPv4 destinations are classified under. Its ABSENCE is the bug
-#: this whole class exists to catch — see TestIPv4IsNotSilentlyTiedWithIPv6.
-GLIBC_V4_MAPPED_PREFIX = "::ffff:0:0/96"
-
 
 def _compose_text() -> str:
     return COMPOSE_FILE.read_text()
-
-
-def _gai_precedence_rules() -> dict[str, int]:
-    """Parse the ``precedence <prefix> <value>`` rules out of docker/gai.conf.
-
-    Longest-prefix matching is glibc's job, so this deliberately does not
-    reproduce it: it only needs to know which values the file *declares*.
-    """
-    rules: dict[str, int] = {}
-    for line in GAI_CONF.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if not line.startswith("precedence "):
-            continue
-        parts = line.split()
-        assert len(parts) == 3, f"malformed precedence rule: {line!r}"
-        prefix, value = parts[1], parts[2]
-        assert re.fullmatch(r"[0-9a-fA-F:]+/[0-9]+", prefix), f"bad prefix: {prefix!r}"
-        assert value.isdigit(), f"precedence must be an integer: {value!r}"
-        rules[prefix] = int(value)
-    return rules
-
-
-def _gai_label_rules() -> dict[str, int]:
-    """Parse the ``label <prefix> <value>`` rules out of docker/gai.conf.
-
-    Present because `label` and `precedence` share the same
-    replaces-the-default-table behaviour, so a file that declares only labels
-    would drop every precedence rule just as silently.
-    """
-    rules: dict[str, int] = {}
-    for line in GAI_CONF.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if not line.startswith("label "):
-            continue
-        parts = line.split()
-        assert len(parts) == 3, f"malformed label rule: {line!r}"
-        rules[parts[1]] = int(parts[2])
-    return rules
 
 
 def _service_block(service: str) -> str:
@@ -205,166 +150,103 @@ class TestDualStackNetwork:
         )
 
 
-class TestIPv6IsActuallySelected:
-    """An IPv6 address is worthless if the resolver never picks it (#270).
+class TestResolverIsNotThePlace:
+    """The gai.conf attempt: installed, believed, and a no-op (#270).
 
-    ``TestDualStackNetwork`` covers reachability. This covers selection, which is
-    the half that failed after the network fix shipped: the container held
-    ``fd00:1157::6``, IPv6 connected fine (401 = reached auth), and the worker
-    still got 403 because the resolver's order put IPv4 first. httpx dials the
-    first address getaddrinfo returns — httpcore 1.0.9 has no Happy Eyeballs, so
-    unlike curl it cannot paper over a bad order.
+    An /etc/gai.conf restating RFC 3484's whole table (with ::ffff:0:0/96
+    present, so IPv4 could not tie with IPv6) was installed in the dev image and
+    changed nothing: getaddrinfo still returned ``v4 v4 v6 v6`` for every
+    dual-stack name, which is the un-sorted resolver order. glibc 2.41's own
+    documented behaviour says that table must reorder the result, so the file was
+    not doing what it claimed — and it could not be diagnosed further from inside
+    the container: /etc is not writable, unshare is denied, there is no strace,
+    and glibc reads the file through an internal libc call that cannot be
+    interposed.
 
-    Neither half is observable from inside the worker, so both are locked here.
+    These guards exist so the failed approach is not silently retried, and so the
+    image does not grow a resolver override whose only proven effect is to
+    reorder DNS for every process in it.
     """
 
-    def test_global_ipv6_outranks_ipv4(self):
-        # RFC 3484 Rule 6: prefer the HIGHER precedence value, and §2.1: an IPv4
-        # destination is looked up as its v4-mapped address. Compared by value
-        # rather than by literal string, so the numbers can be retuned without
-        # touching this guard.
-        rules = _gai_precedence_rules()
-        ipv6 = rules.get("::/0")
-        ipv4 = rules.get(GLIBC_V4_MAPPED_PREFIX)
-        assert ipv6 is not None, "docker/gai.conf does not declare ::/0"
-        assert ipv4 is not None, (
-            f"docker/gai.conf does not declare {GLIBC_V4_MAPPED_PREFIX}, so IPv4 "
-            "matches the ::/0 catch-all and ties with IPv6"
-        )
-        assert ipv6 > ipv4, (
-            f"::/0 is {ipv6} and {GLIBC_V4_MAPPED_PREFIX} is {ipv4}: RFC 3484 Rule 6 "
-            "prefers the higher value, so IPv4 would be dialled first and Groq's "
-            "edge would answer 403 again"
+    def test_the_image_installs_no_resolver_override(self):
+        assert "gai.conf" not in DOCKERFILE.read_text(), (
+            "the dev image installs an /etc/gai.conf again. It was measured to "
+            "leave getaddrinfo's order untouched (v4 v4 v6 v6 for every dual-stack "
+            "name), so it buys nothing and only reorders DNS for every process in "
+            "the image. Address selection belongs in app/services/http_transport.py"
         )
 
-    def test_loopback_keeps_its_own_precedence(self):
-        # Loopback is declared explicitly rather than left to the ::/0 rule. glibc
-        # resolves precedence by LONGEST prefix match, so ::/0 does not capture
-        # ::1 — the two values are never compared numerically, which is why the
-        # default 50 is correct next to 40 for ::/0. Declaring it states the
-        # intent and catches a future edit that flattens loopback to the global
-        # value.
-        rules = _gai_precedence_rules()
-        loopback = rules.get("::1/128")
-        assert loopback is not None, (
-            "docker/gai.conf does not declare ::1/128, so loopback silently falls "
-            "back to glibc's built-in precedence"
-        )
-        assert loopback == GLIBC_DEFAULT_V6_LOOPBACK_PRECEDENCE, (
-            f"::1/128 is {loopback}, not glibc's built-in loopback precedence "
-            f"({GLIBC_DEFAULT_V6_LOOPBACK_PRECEDENCE}) — loopback would be "
-            "reordered relative to a host that resolves ::1 first"
+    def test_no_policy_file_is_shipped_for_it(self):
+        assert not (REPO_ROOT / "docker" / "gai.conf").exists(), (
+            "docker/gai.conf is back. Delete it rather than editing it: the table "
+            "was already correct and still had no effect"
         )
 
-    def test_no_rule_re_raises_the_v4_mapped_prefix(self):
-        # `precedence ::ffff:0:0/96 100` is the one active rule Debian ships, and
-        # it is what made this container dial IPv4 first. Re-adding it (or any
-        # equivalent v4-favouring rule) would silently restore the 403.
-        for prefix, value in _gai_precedence_rules().items():
-            if prefix == GLIBC_V4_MAPPED_PREFIX:
-                assert value < _gai_precedence_rules()["::/0"], (
-                    f"{prefix} is {value}, which would again outrank ::/0 and put "
-                    "IPv4 back in front"
-                )
-
-    def test_the_file_is_installed_over_the_base_images_copy(self):
-        # COPY (not a RUN heredoc) so the file stays reviewable in the repo and
-        # the Dockerfile cannot drift from it.
-        dockerfile = DOCKERFILE.read_text()
-        assert "COPY docker/gai.conf /etc/gai.conf" in dockerfile, (
-            "docker/gai.conf is not installed at /etc/gai.conf, so the image keeps "
-            "Debian's IPv4-first rule"
-        )
-
-    def test_the_reason_survives_because_it_is_not_measurable_from_the_worker(self):
-        # Same argument as the network block: if this file loses its comments, the
-        # next 403 is read as a bad key. The host cannot reproduce the failure —
-        # its gai.conf is all comments, so glibc's own default already prefers
-        # IPv6 and unflagged curl there reaches 401.
-        text = GAI_CONF.read_text()
-        assert "#270" in text
-        assert "403" in text and "401" in text
-
-
-class TestIPv4IsNotSilentlyTiedWithIPv6:
-    """The override that looks applied and changes nothing (#270).
-
-    This is the failure a campaign row caught and a text guard could not: the
-    file was installed in the image, every assertion about it passed, and
-    getaddrinfo still returned `v4 v4 v6 v6` with the worker on 403.
-
-    gai.conf(5): "the presence of a single precedence line in the configuration
-    file causes the default table to not be used." So the file does not *adjust*
-    glibc's table, it *replaces* it — and a rule set that forgets a class leaves
-    that class to be matched by whatever catch-all remains. Since ::/0 is the
-    catch-all, omitting ::ffff:0:0/96 gave IPv4 the same value as IPv6. A tie is
-    not a mild outcome: RFC 3484 Rule 10 resolves it by leaving the order
-    unchanged, which is how a file written to prefer IPv6 ended up preferring
-    whatever DNS returned first.
-    """
-
-    #: Every prefix in the RFC 3484 default table printed in `man gai.conf`. The
-    #: file replaces the table wholesale, so a rule set is only meaningful if it
-    #: restates the classes it relies on.
-    RFC3484_DEFAULT_CLASSES = (
-        "::1/128",
-        "::/0",
-        "2002::/16",
-        "::/96",
-        GLIBC_V4_MAPPED_PREFIX,
-    )
-
-    def test_the_table_is_not_a_partial_override(self):
-        # Asserted as a set so the guard names what is missing instead of merely
-        # counting rules — the count alone would pass for a file that declared
-        # ::/0 five times over.
-        declared = set(_gai_precedence_rules())
-        missing = set(self.RFC3484_DEFAULT_CLASSES) - declared
-        assert not missing, (
-            "docker/gai.conf replaces glibc's whole default table (any single "
-            f"precedence line disables it) but omits {sorted(missing)}; the "
-            "remaining catch-all then decides those classes, silently"
-        )
-
-    def test_every_class_is_ordered_and_the_v4_class_loses(self):
-        # Belt and braces for the same trap, expressed as the property that
-        # actually matters: a strict, total order over the classes we care
-        # about, with IPv4-mapped strictly below global IPv6.
-        rules = _gai_precedence_rules()
-        values = [rules[c] for c in ("::/0", GLIBC_V4_MAPPED_PREFIX)]
-        assert values[0] != values[1], (
-            f"::/0 and {GLIBC_V4_MAPPED_PREFIX} are both {values[0]}: a tie falls "
-            "through to RFC 3484 Rule 10 and preserves the resolver's order, which "
-            "is how IPv4 stayed first"
-        )
-
-    def test_no_label_rules_accidentally_drop_the_precedence_table(self):
-        # `label` shares the replaces-the-default-table behaviour with
-        # `precedence`. A label line added for readability would therefore
-        # discard the precedence table just as effectively as deleting it.
-        assert not _gai_label_rules(), (
-            "docker/gai.conf declares label rules; any label line disables glibc's "
-            "default label table and needs the full set restated alongside the "
-            "precedence rules"
-        )
-
-    def test_the_no_op_failure_is_recorded_where_the_file_is_read(self):
-        # A future edit that drops ::ffff:0:0/96 again would satisfy every value
-        # assertion above while restoring the 403, so the reason has to be
-        # legible in the file itself, not only in the commit history.
-        text = GAI_CONF.read_text()
-        assert GLIBC_V4_MAPPED_PREFIX in text
-        assert "Rule 10" in text or "rule 10" in text, (
-            "the file must record why a tie is not a mild outcome"
+    def test_the_dev_image_does_not_touch_the_stock_rule(self):
+        # Debian ships `precedence ::ffff:0:0/96 100`, which is what makes the
+        # container dial IPv4 first. Overriding it is what the removed file tried
+        # to do; a future "quick fix" would do it again.
+        assert "precedence" not in DOCKERFILE.read_text(), (
+            "a precedence rule has been added to the image; see the class docstring "
+            "for why that was measured to be a no-op"
         )
 
     def test_the_air_gapped_eval_sandbox_is_left_alone(self):
-        # backend/Dockerfile.sandbox runs generated code and has no egress. The
-        # precedence file belongs to the dev image only; giving the sandbox
-        # outbound IPv6 preference would be a regression in the one place that
-        # must stay isolated.
+        # backend/Dockerfile.sandbox runs generated code and has no egress. It
+        # must not gain outbound IPv6 of any kind.
         assert "gai.conf" not in SANDBOX_DOCKERFILE.read_text(), (
-            "the evaluation sandbox must not inherit the dev image's gai.conf"
+            "the evaluation sandbox must not inherit a resolver override"
+        )
+
+
+class TestAddressFamilyIsChosenPerRequest:
+    """The family is selected in the client, where it can actually be tested (#270).
+
+    Reachability is the compose network; selection is this. httpx dials the first
+    address getaddrinfo returns and httpcore 1.0.9 has no Happy Eyeballs, so
+    unlike curl it cannot paper over a bad order — and a successful IPv4 connect
+    that is answered with 403 means no client-side retry can ever reach the IPv6
+    address either. Hence an explicit choice, with a fallback for hosts whose
+    IPv6 does not work.
+    """
+
+    def test_the_platform_default_is_off(self):
+        # Preferring IPv6 changes which egress IP a provider sees. That is a
+        # deployment's decision, so the library default must not make it.
+        assert Settings().llm_prefer_ipv6 is False, (
+            "llm_prefer_ipv6 must default to False; the dev stack opts in"
+        )
+
+    def test_the_dev_services_opt_in(self):
+        for service in PROVIDER_SERVICES:
+            assert "LLM_PREFER_IPV6" in _service_block(service), (
+                f"the {service} service does not set LLM_PREFER_IPV6, so the "
+                "worker keeps dialling the family Groq blocks on this host"
+            )
+
+    def test_the_dev_services_default_it_on(self):
+        # `${LLM_PREFER_IPV6:-true}`: on for this stack (whose IPv4 egress is
+        # blocked), still overridable by an operator who does not need it.
+        for service in PROVIDER_SERVICES:
+            block = _service_block(service)
+            assert "LLM_PREFER_IPV6=${LLM_PREFER_IPV6:-true}" in block, (
+                f"the {service} service must default LLM_PREFER_IPV6 to true, so "
+                "the stack works on a host whose IPv4 egress a provider blocks"
+            )
+
+    def test_the_reason_survives_because_it_is_not_measurable_from_the_worker(self):
+        # Same argument as the network block: this fact lives only in a comment,
+        # and losing it is how the next 403 gets read as a bad key.
+        for service in PROVIDER_SERVICES:
+            assert "#270" in _service_block(service)
+
+    def test_the_network_comment_points_at_the_selection_half(self):
+        # Measured on 2026-09-28: the dual-stack network was verified working and
+        # the worker still got 403. A comment claiming the network alone fixes it
+        # sends the next reader looking for a bad key instead of at the transport.
+        assert "http_transport" in _networks_block(), (
+            "the compose network comment must record that reachability alone left "
+            "the worker on IPv4 — see TestAddressFamilyIsChosenPerRequest"
         )
 
 

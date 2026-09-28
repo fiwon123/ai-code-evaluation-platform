@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     #: ``LLM_FALLBACK_PROVIDER=ollama`` + ``LLM_FALLBACK_MODEL=tinyllama``.
     llm_fallback_provider: str = ""
     llm_fallback_model: str = ""
+    #: Dial a provider's IPv6 address when its name resolves to both families,
+    #: falling back to the host's own resolution if IPv6 cannot connect. Off by
+    #: default: it changes which egress IP the provider sees, which is a
+    #: deployment's decision. It exists because a host can be blocked on one
+    #: family only — measured on the dev host, Groq answers this host's IPv4
+    #: with 403 "Access denied. Please check your network settings." and serves
+    #: the same request over IPv6, which reads as a bad API key rather than a
+    #: network fault. `/etc/gai.conf` is not an option (it does not reorder, and
+    #: cannot be tested from inside the container); see
+    #: ``app/services/http_transport.py`` for the full account.
+    llm_prefer_ipv6: bool = False
     #: Base URL of the Ollama server. The default suits a host-native worker;
     #: a containerized worker must point at the host, e.g.
     #: ``http://host.docker.internal:11434``.
