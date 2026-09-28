@@ -16,6 +16,33 @@ const PORT = 5173;
  *   suite runs via `make test-e2e` inside the sandbox. Nothing here downloads
  *   anything — the runtime user is non-root with no sudo and cannot install
  *   Chromium's system libraries.
+ *
+ * Why `localhost` here is safe on a dual-stack host
+ * -------------------------------------------------
+ * `baseURL` and `webServer.url` both name `localhost`, and on this host that
+ * resolves to `::1` first (RFC 6724). That is exactly the setup that made
+ * `http://localhost:5173` fail in #282, when Vite bound `0.0.0.0` and nothing
+ * listened on `[::1]`. The e2e suite was never affected, and the reason is
+ * worth keeping in mind rather than rediscovering:
+ *
+ * - The readiness poll is Playwright's own client, not Node's default. Its
+ *   `httpRequest()` spreads `happyEyeballsOptions`, whose `dualStackLookup`
+ *   returns *both* families interleaved (v6 first) and sets
+ *   `autoSelectFamily: true`, so Node races them (RFC 8305).
+ * - The navigation is Chromium, which implements Happy Eyeballs natively.
+ *
+ * Both fall back from the refused `::1` to `127.0.0.1` immediately, because a
+ * refused connect is instant rather than a timeout. Measured here against a
+ * deliberately IPv4-only listener: poll returned `true` in 20ms, Chromium
+ * returned HTTP 200 in 50ms. So #282's fix is still worth having (the URLs the
+ * stack prints in its own banner are advertised to humans and tools alike), but
+ * the e2e suite was relying on Happy Eyeballs, not on luck.
+ *
+ * This is also why the suite never reproduced the worker-side failure in
+ * #274/#279: that one is a Python/httpcore path, and httpcore has no Happy
+ * Eyeballs, so it dials only the first address and a blocked family looks
+ * exactly like a bad API key. Locked by
+ * `backend/tests/test_dev_sandbox_playwright.py::TestLocalhostDualStack`.
  */
 export default defineConfig({
   testDir: "./e2e",
