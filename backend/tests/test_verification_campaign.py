@@ -56,7 +56,11 @@ CASE_BY_ID = {case["id"]: case for case in CASES}
 
 
 def test_matrix_covers_every_row_of_the_issue():
-    assert sorted(case["row"] for case in CASES) == [1, 2, 3, 4, 5, 6, 7, 8]
+    # Rows 1-8 are the issue's matrix. Rows 9-10 were added in #268 to prove the
+    # JavaScript and TypeScript runner claims on the local provider, because
+    # those claims are about our own runner and were hostage to a third party's
+    # WAF while only Groq could make them.
+    assert sorted(case["row"] for case in CASES) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 
 def test_rows_one_to_three_are_the_keyless_baseline():
@@ -98,6 +102,30 @@ def test_row_eight_is_the_free_keyless_real_model_path():
     # "completed", not a score band. A 1.5B model is still small; a 0-100 band
     # would pass even when the run silently did nothing.
     assert case["expect"] == {"kind": "completed"}
+
+
+def test_rows_nine_and_ten_prove_the_runners_without_a_keyed_provider():
+    """The local JS/TS rows exist to de-risk rows 5 and 6 off Groq.
+
+    Their whole value is being the *same* test against a different provider, so
+    the invariant worth locking is that the test code is byte-identical to the
+    Groq row's. If someone "improves" one and not the other, the pair stops
+    being comparable and the row silently stops proving what it claims.
+    """
+    for local_id, groq_id in (
+        ("local-ollama-javascript", "groq-javascript"),
+        ("local-ollama-typescript", "groq-typescript"),
+    ):
+        local, groq = CASE_BY_ID[local_id], CASE_BY_ID[groq_id]
+        assert local["provider"] == "ollama"
+        assert local["model"] == "qwen2.5-coder:1.5b"
+        assert local["language"] == groq["language"]
+        assert local["challenge"]["test_code"] == groq["challenge"]["test_code"]
+        assert local["challenge"]["prompt"] == groq["challenge"]["prompt"]
+        # No key, and nothing to fall back to if the local server is down.
+        assert local["api_key"] is None and local["api_key_env"] is None
+        # "completed" for row 8's reason: a band passes even when nothing ran.
+        assert local["expect"] == {"kind": "completed"}
 
 
 def test_every_case_states_what_it_proves():
