@@ -8,9 +8,9 @@ re-run a case to refresh its row, or delete `evidence.jsonl` to start over.
 | 1 | `demo-python-strong` | demo | python | completed | 100.0 | 3/3 | — | PASS |
 | 2 | `demo-python-mid` | demo | python | completed | 75.0 | 3/4 | — | PASS |
 | 3 | `demo-python-zero` | demo | python | completed | 0.0 | 0/1 | — | PASS |
-| 4 | `groq-python` | groq | python | not run | — | — | — | — |
-| 5 | `groq-javascript` | groq | javascript | not run | — | — | — | — |
-| 6 | `groq-typescript` | groq | typescript | not run | — | — | — | — |
+| 4 | `groq-python` | groq | python | completed | 100.0 | 3/3 | — | PASS |
+| 5 | `groq-javascript` | groq | javascript | completed | 100.0 | 3/3 | — | PASS |
+| 6 | `groq-typescript` | groq | typescript | completed | 100.0 | 3/3 | — | PASS |
 | 7 | `fallback-tinyllama` | groq | python | completed | 0.0 | 0/0 | yes | PASS |
 | 8 | `local-ollama-python` | ollama | python | completed | 100.0 | 3/3 | — | PASS |
 | 9 | `local-ollama-javascript` | ollama | javascript | completed | 100.0 | 3/3 | — | PASS |
@@ -173,7 +173,40 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 - **Proves:** A real provider generates code the sandbox actually runs and scores.
 - **Precondition:** Operator exports GROQ_API_KEY; worker restarted with it (see #233).
 - **Expectation:** `{"kind": "score_band", "min": 80.0, "max": 100.0}`
-- **Result:** not run
+- **Result:** PASS — score 100.0 in band {'kind': 'score_band', 'min': 80.0, 'max': 100.0} (3/3 tests)
+- **Submission:** `eac7291e-4da7-4abf-b819-6b76d3fc4432`
+- **Challenge:** `0494de46-0564-4dc2-b668-c01ed9974384`
+- **Provider / model:** groq / openai/gpt-oss-20b
+- **Attempts:** 1
+- **Run at:** 2026-09-28T04:09:46+00:00
+
+> All 3 tests passed.
+
+Passed tests: test_returns_first_matching_pair, test_finds_pair_not_at_the_start, test_returns_empty_when_no_pair
+
+Raw output (tail):
+...                                                                      [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED test_solution.py::test_returns_first_matching_pair
+PASSED test_solution.py::test_finds_pair_not_at_the_start
+PASSED test_solution.py::test_returns_empty_when_no_pair
+3 passed in 0.01s
+
+
+<details><summary>log tail</summary>
+
+```
+...                                                                      [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED test_solution.py::test_returns_first_matching_pair
+PASSED test_solution.py::test_finds_pair_not_at_the_start
+PASSED test_solution.py::test_returns_empty_when_no_pair
+3 passed in 0.01s
+```
+
+</details>
 
 ### Row 5 — Real model: Groq on JavaScript
 
@@ -181,7 +214,79 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 - **Proves:** The node --test runner and its output parser work on real generated code.
 - **Precondition:** Operator exports GROQ_API_KEY; worker restarted with it (see #233).
 - **Expectation:** `{"kind": "score_band", "min": 80.0, "max": 100.0}`
-- **Result:** not run
+- **Result:** PASS — score 100.0 in band {'kind': 'score_band', 'min': 80.0, 'max': 100.0} (3/3 tests)
+- **Submission:** `f44aeea2-1cca-4b08-82fe-b55e90510c49`
+- **Challenge:** `848ced7c-22c5-4ac0-97e3-a673c7823adf`
+- **Provider / model:** groq / openai/gpt-oss-20b
+- **Attempts:** 3
+- **Run at:** 2026-09-28T04:12:16+00:00
+
+> All 3 tests passed.
+
+Passed tests: rejects small numbers, accepts small primes, rejects composites
+
+Raw output (tail):
+TAP version 13
+# Subtest: rejects small numbers
+ok 1 - rejects small numbers
+  ---
+  duration_ms: 1.24551
+  type: 'test'
+  ...
+# Subtest: accepts small primes
+ok 2 - accepts small primes
+  ---
+  duration_ms: 0.140754
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.129678
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114.611721
+
+
+<details><summary>log tail</summary>
+
+```
+  ---
+  duration_ms: 1.24551
+  type: 'test'
+  ...
+# Subtest: accepts small primes
+ok 2 - accepts small primes
+  ---
+  duration_ms: 0.140754
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.129678
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114.611721
+```
+
+</details>
 
 ### Row 6 — Real model: Groq on TypeScript
 
@@ -189,7 +294,79 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 - **Proves:** The tsx --test runner and its TAP parser work on real generated code.
 - **Precondition:** Operator exports GROQ_API_KEY. This row is the one fixture that could not be executed during authoring (no tsx on the authoring host), so treat its first run as a spec check as well as a score check.
 - **Expectation:** `{"kind": "score_band", "min": 80.0, "max": 100.0}`
-- **Result:** not run
+- **Result:** PASS — score 100.0 in band {'kind': 'score_band', 'min': 80.0, 'max': 100.0} (3/3 tests)
+- **Submission:** `56e5b314-4260-4c18-a0e3-50ae9b49dca3`
+- **Challenge:** `c51930c2-e0be-476b-8311-10d682d6bd8b`
+- **Provider / model:** groq / openai/gpt-oss-20b
+- **Attempts:** 1
+- **Run at:** 2026-09-28T04:13:41+00:00
+
+> All 3 tests passed.
+
+Passed tests: rejects numbers below two, accepts primes, rejects composites
+
+Raw output (tail):
+TAP version 13
+# Subtest: rejects numbers below two
+ok 1 - rejects numbers below two
+  ---
+  duration_ms: 0.952507
+  type: 'test'
+  ...
+# Subtest: accepts primes
+ok 2 - accepts primes
+  ---
+  duration_ms: 0.212649
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.117198
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 588.579694
+
+
+<details><summary>log tail</summary>
+
+```
+  ---
+  duration_ms: 0.952507
+  type: 'test'
+  ...
+# Subtest: accepts primes
+ok 2 - accepts primes
+  ---
+  duration_ms: 0.212649
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.117198
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 588.579694
+```
+
+</details>
 
 ### Row 7 — Fallback drill: primary forced to fail, TinyLlama must answer
 

@@ -99,8 +99,10 @@ What it needs is the fallback leg *configured*; see the last section.
 
 The practical consequence: the entire "our execution path works" story — all five
 languages' runners, the parsers, the sandbox, the scoring — is provable with no
-API key at all. The rows that remain blocked are the ones whose subject *is* a
-third party's API.
+API key at all. The rows that *do* need a key are the ones whose subject is a
+third party's API. All of them now run, but they remain the fragile ones: a
+provider's edge, quota or model catalog is outside this repository, and the last
+two blocks in this campaign were both exactly that.
 
 ## Which provider to test with
 
@@ -140,37 +142,89 @@ collected, no error was recorded, and a numeric score came back.
 fallback records no such key, so its absence is not treated as failure (see
 #264). The score is reported and not asserted.
 
-## Legs that cannot be exercised yet
+## Blocks that were cleared, and how each one was identified
 
-Recorded here rather than quietly omitted, per the issue's acceptance criteria.
-**Only rows 4, 5 and 6 are still blocked.** Row 7 and row 10 were blocked when
-this section was written and are now recorded passing; their setup is kept below
-because it is the recipe for reproducing them, and because *how* the block was
-identified is the part worth keeping.
+Recorded here rather than quietly deleted, per the issue's acceptance criteria.
+**No row is blocked any more** — all ten pass in `evidence.jsonl`. The setups are
+kept below because each is the recipe for reproducing its row, and because *how*
+the block was identified is the part worth keeping. Every one of these was
+configuration or environment before it was code, and only the last needed a code
+change at all.
 
-**Rows 4, 5 and 6 are blocked by a pre-auth 403 from Groq's edge.** The catalog
-is no longer the obstacle — the running stack exposes `llama-3.1-8b-instant`,
-`llama-3.3-70b-versatile` and `qwen/qwen3-32b`, so the submissions are accepted
-and the failure happens at generation time. From the dev sandbox `api.groq.com`
-answers `403 Access denied. Please check your network settings.`
-(`server: cloudflare`) for *any* path, including an unauthenticated
-`GET /openai/v1/models` — a pre-auth rejection, so a valid key cannot change the
-outcome. General egress is fine (`api.github.com` returns 200 from the same
-shell).
+**Rows 4, 5 and 6 were blocked by a pre-auth 403 from Groq's edge, and it was
+never a key problem or a catalog problem.** The 403 read
+`Access denied. Please check your network settings.` (`server: cloudflare`) for
+*any* path, including an unauthenticated `GET /openai/v1/models`, while general
+egress was fine (`api.github.com` returns 200 from the same shell). Two facts
+settled it:
+
+- **401 vs 403 is the entire network diagnosis, and it needs no key.** Over IPv6
+  the same request answers `401` — it reached authentication. Over IPv4 it answers
+  `403`. Groq refuses this host's **IPv4 egress** and serves the same request over
+  IPv6 (`x-groq-region: dls`).
+- **The IPv4 connect *succeeds*.** It is answered with an HTTP error, not a
+  transport error, so every signal a retry can watch says "the network worked": no
+  connect error, no timeout, no retryable exception. **No client-side fallback can
+  ever reach the other family**, and a 403 is indistinguishable from a bad API key
+  from the worker's side — which is exactly why it read as a key problem. The
+  address family has to be chosen explicitly.
+
+`/etc/gai.conf` was tried first and **refuted**: with the whole table installed
+(`::/0 40` ranked above `::ffff:0:0/96 10`), `getaddrinfo('api.groq.com')` still
+returned `v4 v4 v6 v6` — the un-sorted order — for every dual-stack name, contrary
+to glibc 2.41's documented behaviour. The fix is `PreferIPv6Transport`
+(`app/services/http_transport.py`): it dials the AAAA, keeps `Host`, and sets
+httpcore's `sni_hostname` so that TLS SNI *and* certificate verification still use
+the name. It is opt-in via `LLM_PREFER_IPV6` (default off), and it falls back to
+the default transport on `ConnectError`/`ConnectTimeout`. `dev` and `celery` set it.
+
+**Probe with the library the worker uses, not with `curl`.** `curl` does Happy
+Eyeballs and races both families; httpcore does not. In this very container `curl`
+answered 401 over IPv6 while httpx returned 403 five times out of five, so a
+working `curl` is *not* evidence about the worker:
+
+```bash
+cd backend && uv run python - <<'PY'
+import os, httpx
+from app.services.http_transport import PreferIPv6Transport
+with httpx.Client(timeout=30.0, transport=PreferIPv6Transport()) as c:
+    r = c.get("https://api.groq.com/openai/v1/models",
+              headers={"Authorization": "Bearer " + os.environ["GROQ_API_KEY"]})
+    print(r.status_code, r.headers.get("x-groq-region"), len(r.json().get("data", [])))
+PY
+# 200 dls 11  -> reachable, and the id you are about to use is live
+# 401         -> reached auth: a key problem
+# 403         -> still the wrong address family
+# 404 on a call that authenticated -> the model id was retired, re-probe the list
+```
 
 **Whose network matters:** the worker makes the provider call, so it is the
 *container's* egress that Groq judges — not the network of whatever machine
-submits the run. Reaching the API from elsewhere (a tunnel, a second machine) only
-creates the submission; it cannot unblock the generation. So a host-side
-`curl` that succeeds while the row fails is expected, and is not a workaround.
-To unblock these rows, give the worker's egress a route Groq accepts (a proxy in
-the worker's environment, or the stack running on such a network) and check it
-from *inside the worker* before spending a run:
+submitted the run. Reaching the API from elsewhere (a tunnel, a second machine)
+only creates the submission; it cannot unblock the generation.
 
-```bash
-docker compose exec celery curl -s -o /dev/null -w '%{http_code}\n' \
-  https://api.groq.com/openai/v1/models   # 403 = still blocked; 401 = reached
-```
+**A second, separate block was sitting behind the first.** With IPv6 forced, the
+403 became a **404 model-not-found**: all three ids the catalog exposed
+(`llama-3.1-8b-instant`, `llama-3.3-70b-versatile`, `qwen/qwen3-32b`) had been
+retired. A retired id is invisible locally — it still validates against our
+catalog, so the only symptom is a silent zero score — and it is pinned by
+`TestRetiredModelIds`. The live catalog now returns 11 models, the shipped ones
+being the `openai/gpt-oss-*` and `qwen/qwen3.8-27b` family; these three rows use
+`openai/gpt-oss-20b`.
+
+**Only `make dev-restart` was needed** — the fix is pure Python on the bind mount
+and `LLM_PREFER_IPV6` is read into the settings singleton at start-up.
+
+Recorded result: all three rows `completed` on the `docker` backend with **3/3
+tests and a 100.0** score, with `fallback_used: false` and `primary_error: null`.
+The no-fallback half matters as much as the score: a fallback would have scored
+0.0 here and hidden the egress bug behind TinyLlama prose.
+
+Row 5 took **3 attempts** (`0/1` → `0/3` → `3/3`) and that is the repair loop, not
+a flaky provider. Attempt 1's code was prose *after* its markdown fence, so
+`solution.js` carried a `SyntaxError` at line 10, and `node --test` reported it
+with the TAP output parsed correctly. So the runner demonstrably works on a clean
+pass **and** on a genuine syntax error.
 
 **Row 7 needed one config line, not code, and now passes.** Its key is
 intentionally invalid and the primary is *supposed* to fail, so no working key is
