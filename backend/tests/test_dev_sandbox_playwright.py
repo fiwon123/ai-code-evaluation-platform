@@ -319,3 +319,94 @@ class TestE2ETargetWiring:
         assert "CHROMIUM_SANDBOX" in dockerfile, (
             "the image's launch check no longer honours the same opt-in as the config"
         )
+
+
+# Probes Playwright's own readiness client the way `webServer.url` uses it: an
+# IPv4-only listener, then `isURLAvailable` against `localhost`. That is the
+# exact fixture from #282 (Vite bound `0.0.0.0`, so `[::1]` was refused) and the
+# exact call the `webServer` plugin makes. The control request proves the
+# fixture still reproduces the defect, so a pass cannot come from the asymmetry
+# having gone away — otherwise this test would quietly stop testing anything.
+_DUAL_STACK_PROBE = """
+import http from "node:http";
+import { createRequire } from "node:module";
+// Anchored to the file itself: playwright-core's `exports` map does not expose
+// lib/coreBundle.js, so requiring it by package subpath is ERR_PACKAGE_PATH_NOT_EXPORTED.
+const bundle = process.cwd() + "/node_modules/playwright-core/lib/coreBundle.js";
+const { isURLAvailable } = createRequire(bundle)(bundle).utils;
+
+const server = http.createServer((_, res) => res.end("ok"));
+server.listen(0, "0.0.0.0", async () => {
+  const { port } = server.address();
+  const probe = (opts) => new Promise((resolve) => {
+    const req = http.get(opts, (res) => { res.resume(); resolve("HTTP " + res.statusCode); });
+    req.on("error", (e) => resolve(e.code));
+    req.setTimeout(5000, () => { req.destroy(); resolve("ETIMEDOUT"); });
+  });
+
+  // Control: the IPv6 half of the fixture must genuinely be refused.
+  const control = await probe({ host: "::1", port, path: "/" });
+
+  // The thing under test: the poll the `webServer` plugin actually performs.
+  let available = null, error = null;
+  try {
+    available = await isURLAvailable(new URL("http://localhost:" + port + "/"), false);
+  } catch (e) { error = String(e && e.message || e); }
+
+  server.close();
+  console.log("RESULT " + JSON.stringify({ control, available, error }));
+});
+"""
+
+
+class TestLocalhostDualStack:
+    """`localhost` in the e2e config survives a v6-first resolver (#282).
+
+    The config names `localhost` in both `use.baseURL` and `webServer.url`, and
+    on this host that resolves to `::1` first. #282 was exactly that asymmetry
+    breaking a server bound to `0.0.0.0`, so this looks like a latent e2e flake.
+
+    It is not, and the reason is a property of Playwright rather than of this
+    repo: its readiness client races both address families (RFC 8305). If a
+    Playwright upgrade ever drops that, `make test-e2e` would start hanging on
+    a refused `::1` with no error pointing at the cause — so the property is
+    asserted here, where the failure can name it.
+    """
+
+    @pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
+    def test_poll_reaches_an_ipv4_only_server_via_localhost(self):
+        if not (FRONTEND_DIR / "node_modules" / "playwright-core").is_dir():
+            pytest.skip("frontend deps not installed")
+
+        proc = subprocess.run(  # noqa: S603 - fixed argv, literal script
+            ["node", "-e", _DUAL_STACK_PROBE],
+            cwd=FRONTEND_DIR,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert proc.returncode == 0, (
+            f"probe did not run: {proc.stderr.strip() or 'no stderr'}"
+        )
+
+        line = next(
+            (ln for ln in proc.stdout.splitlines() if ln.startswith("RESULT ")), ""
+        )
+        assert line, f"probe printed no result: {proc.stdout.strip()!r}"
+        result = json.loads(line[len("RESULT ") :])
+
+        assert result["error"] is None, f"isURLAvailable threw: {result['error']}"
+        assert result["control"] == "ECONNREFUSED", (
+            "the IPv4-only fixture is no longer reproducing #282 "
+            f"(control got {result['control']!r}, expected ECONNREFUSED), so this "
+            "test would pass without proving anything about dual-stack fallback"
+        )
+        assert result["available"] is True, (
+            "Playwright's readiness poll could not reach an IPv4-only server via "
+            "`localhost`. It resolved to `::1`, got ECONNREFUSED, and did not fall "
+            "back to `127.0.0.1` — so `webServer.url` in playwright.config.ts would "
+            "hang until its 60s timeout and `make test-e2e` would fail for a reason "
+            "that points at neither the config nor the server. Playwright's HTTP "
+            "client appears to have lost its Happy Eyeballs support"
+        )
