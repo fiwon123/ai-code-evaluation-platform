@@ -313,6 +313,27 @@ row **passes**: `completed`, `docker` backend, 3/3, 100.0. The raised cap is the
 whole difference between the two evidence rows, which is the point of recording
 the failure mode precisely instead of "the TS row is flaky".
 
+### The real budget a local row has to fit inside
+
+The generation cap is **not** the ceiling on a local row. One attempt is
+generation + tests, and the worker enforces its own limit on top:
+
+| Quantity | Value | Source |
+| --- | --- | --- |
+| one generation, worst case | 300s | `OLLAMA_TIMEOUT` (`ollama_timeout`) |
+| one test run, worst case | ~90s | per-language budget; java/go get extra compile headroom |
+| **task soft limit** | **390s** | `ATTEMPT_BUDGET_S` — derived, not fixed |
+| task hard limit | 420s | soft + 30s to unwind and persist |
+
+The soft limit was previously a flat **240s**, below the 300s generation cap.
+On a host where Ollama legitimately used the cap, the worker killed the task
+while the provider was still working, and — because the soft limit arrives as an
+ordinary `Exception` — the row was recorded as an opaque provider error with
+nothing pointing at the budget. Fixed in #272: the budget is now derived from
+`ollama_timeout`, so raising the cap can no longer be silently clamped, and a run
+killed by the budget is recorded with `error_kind: task_soft_time_limit` rather
+than a bare `SoftTimeLimitExceeded()`.
+
 **If a local row comes back red and the host was busy, restart the worker and
 re-run it before believing the row** — and check `loadavg` first, because a red
 local row on a loaded host is a statement about the host, not about the runner.
