@@ -105,7 +105,8 @@
         "task": {
           "*": "deny",
           "explore": "allow",
-          "reviewer": "allow"
+          "reviewer": "allow",
+          "visual": "allow"
         },
         "skill": {
           "*": "allow"
@@ -114,7 +115,7 @@
     },
     "plan": {
       "mode": "primary",
-      "model": "opencode/mimo-v2.6-flash-free",
+      "model": "opencode/nemotron-3-ultra-free",
       "prompt": "You are a software architect specializing in Python/FastAPI backends and Docker-based execution environments. Analyze requirements, explore the codebase, and create detailed implementation plans. Do not make any changes. Output: Goal, Files to modify, Dependencies, Risks, Steps.",
       "permission": {
         "edit": "deny",
@@ -234,6 +235,25 @@
         },
         "skill": {
           "*": "allow"
+        }
+      }
+    },
+    "visual": {
+      "description": "Visual QA: inspects screenshots, contact sheets, and video frames (multimodal; reports findings as text)",
+      "mode": "all",
+      "model": "opencode/mimo-v2.6-flash-free",
+      "prompt": "You are a visual QA agent for the AI Code Evaluation Platform. You inspect images the build agent cannot see (screenshots, contact sheets, video frames, render outputs) and report your observations as precise text using the Read tool on image files (PNG/JPEG/WebP/GIF). Describe: layout and alignment, spacing and rhythm, typography and hierarchy, color/contrast issues, clipping and overflow, broken/missing assets, and anything that looks off. Prefer specific, comparable observations (relative sizes, positions, which region of the frame) over vague impressions. For videos or animated GIFs, call out the frames you sampled; for long videos recommend extracting a contact sheet first. You never edit files — you return findings to the requesting agent or user.",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "ls*": "allow"
+        },
+        "task": {
+          "*": "deny"
+        },
+        "skill": {
+          "*": "deny"
         }
       }
     }
