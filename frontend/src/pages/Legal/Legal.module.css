@@ -5,7 +5,7 @@
 }
 
 .header {
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-12);
 }
 
 /* Layout only — size and the gradient come from the shared PageTitle. */

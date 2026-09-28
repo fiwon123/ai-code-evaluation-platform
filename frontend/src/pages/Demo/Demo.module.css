@@ -17,7 +17,7 @@
    landing-page siblings. */
 .title {
   text-align: center;
-  margin-bottom: var(--space-4);
+  margin: var(--space-3) 0 var(--space-4);
 }
 
 .subtitle {

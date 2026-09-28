@@ -424,3 +424,17 @@ xl 20 / 2xl 24 / 3xl 30 / 4xl 36):
 Measured on the live stack: Features `h2` 22.4px → 24px. `font-size: inherit`
 and the component-level literals (`Logo`, `PageTitle`'s responsive clamp) are
 deliberate and untouched.
+## C fix pass — marketing hero spacing (#313, batch 3)
+
+Run `20260928-204840`: **0 findings**. The two remaining measured drifts
+unified:
+
+- **Eyebrow→title gap**: Features/Pricing/Demo/About 0px → **12px**
+  (`margin: var(--space-3) 0 var(--space-4)` on `.title`), matching
+  Contact/Legal.
+- **Hero→content gap**: Legal 32px → **48px** (`space-12`), matching the
+  other five marketing pages.
+
+Measured across features/pricing/about/contact/privacy on the live stack:
+`h1` margin-top 12px, header margin-bottom 48px on every page. All marketing
+heroes now share one title treatment, one eyebrow gap and one close.
