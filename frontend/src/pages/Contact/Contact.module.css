@@ -208,6 +208,9 @@
 }
 
 .infoLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
   font-size: var(--font-size-sm);
   font-weight: 500;
 }

@@ -510,7 +510,9 @@ function Profile() {
               <p className={styles.emptyText}>
                 You haven't run any evaluations yet.
               </p>
-              <Link to="/challenges">Browse challenges</Link>
+              <Link to="/challenges" className={styles.browseLink}>
+                Browse challenges
+              </Link>
             </Card>
           ) : (
             <>

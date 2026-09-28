@@ -28,5 +28,8 @@
 }
 
 .link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
   font-weight: 600;
 }
