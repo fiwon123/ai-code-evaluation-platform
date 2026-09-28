@@ -201,3 +201,23 @@ create-challenge, provider-picker, admin, theme cross-fade, mobile menu, two
 loading states — with captioned stills and four VP8 clips. Its 34 minor
 findings are the same four rule classes above, on the same three shared
 components: nothing new, which is the point of the report.
+
+## P0 fix pass (three audit rules zeroed)
+
+Run `20260928-171951` (`make visual-sweep`, commit on
+`fix/296-p0-audit-fixes`):
+
+| Rule | Baseline `20260928-162223` | After P0 fixes `20260928-171951` |
+|---|---|---|
+| `touch-target-small` | 135 | 135 (untouched — P1 token work in #299) |
+| `text-tiny` | 38 | **0** (#296) |
+| `heading-skip` | 26 | **0** (#297 — footer `<h3>`→`<h2>` and challenge cards `<h3>`→`<h2>`) |
+| `no-h1` | 4 | **0** (#298 — submission-loading skeleton now has an `<h1>`) |
+
+The `text-tiny` fix lands everything sub-12px onto the scale's `xs` step
+(12px): admin `dailyLabel`, `LanguageBadge` symbol, `Features` `reportMeta`,
+and the Features mock chrome that trips the rule whenever that section renders.
+The `--font-size-2xs` token the audit proposed turned out to have **no
+consumer left** once those sat on `xs`, so it was not added (see
+`docs/ux-audit/REPORT.md`). `touch-target-small` is deliberately untouched
+here — that finding is the `--control-height` design decision (issue #299).

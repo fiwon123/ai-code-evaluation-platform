@@ -40,7 +40,7 @@ function Footer() {
           </div>
 
           <div className={styles.col}>
-            <h3 className={styles.colTitle}>Product</h3>
+            <h2 className={styles.colTitle}>Product</h2>
             <ul className={styles.colLinks}>
               {PRODUCT_LINKS.map((link) => (
                 <li key={link.to}>
@@ -53,7 +53,7 @@ function Footer() {
           </div>
 
           <div className={styles.col}>
-            <h3 className={styles.colTitle}>Company</h3>
+            <h2 className={styles.colTitle}>Company</h2>
             <ul className={styles.colLinks}>
               {COMPANY_LINKS.map((link) => (
                 <li key={link.to}>
@@ -66,7 +66,7 @@ function Footer() {
           </div>
 
           <div className={styles.col}>
-            <h3 className={styles.colTitle}>Legal</h3>
+            <h2 className={styles.colTitle}>Legal</h2>
             <ul className={styles.colLinks}>
               {LEGAL_LINKS.map((link) => (
                 <li key={link.to}>
