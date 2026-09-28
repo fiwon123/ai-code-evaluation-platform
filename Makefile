@@ -77,13 +77,13 @@ host-tools: ## Install dev tools on the host via mise (kind/kubectl/kustomize/he
 	@echo "Toolchain installed (see mise.toml — k8s: kind, kubectl, kustomize, helm, devspace)."
 
 run: ## Run the backend dev server on the host
-	cd $(BACKEND_DIR) && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	cd $(BACKEND_DIR) && uv run uvicorn app.main:app --reload --host :: --port 8000
 
 dev-backend: ## Start backend dev server on the host
-	cd $(BACKEND_DIR) && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	cd $(BACKEND_DIR) && uv run uvicorn app.main:app --reload --host :: --port 8000
 
 dev-frontend: ## Start frontend dev server on the host
-	cd $(FRONTEND_DIR) && npm run dev -- --host 0.0.0.0
+	cd $(FRONTEND_DIR) && npm run dev -- --host ::
 
 dev-celery: ## Start celery worker on the host
 	cd $(BACKEND_DIR) && uv run celery -A app.core.celery_app:celery_app worker --loglevel=info
@@ -93,10 +93,10 @@ dev-beat: ## Start celery beat (stale-submission recovery sweep) on the host
 
 dev-all: ## Start backend + celery + beat + frontend on the host (background, /tmp/*.log)
 	@echo "Starting development services..."
-	@cd $(BACKEND_DIR) && nohup uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+	@cd $(BACKEND_DIR) && nohup uv run uvicorn app.main:app --reload --host :: --port 8000 > /tmp/backend.log 2>&1 &
 	@cd $(BACKEND_DIR) && nohup uv run celery -A app.core.celery_app:celery_app worker --loglevel=info > /tmp/celery.log 2>&1 &
 	@cd $(BACKEND_DIR) && nohup uv run celery -A app.core.celery_app:celery_app beat --loglevel=info > /tmp/beat.log 2>&1 &
-	@cd $(FRONTEND_DIR) && nohup npm run dev -- --host 0.0.0.0 > /tmp/frontend.log 2>&1 &
+	@cd $(FRONTEND_DIR) && nohup npm run dev -- --host :: > /tmp/frontend.log 2>&1 &
 	@sleep 2
 	@echo "  Backend:  http://localhost:8000  (logs: /tmp/backend.log)"
 	@echo "  Frontend: http://localhost:5173  (logs: /tmp/frontend.log)"
