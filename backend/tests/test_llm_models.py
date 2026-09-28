@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
 
+from app.services import llm_models
 from app.services.llm_models import (
     MODELS_BY_PROVIDER,
     PROVIDER_DEFAULTS,
@@ -11,6 +14,46 @@ from app.services.llm_models import (
 )
 
 MODELS_URL = "/api/models"
+
+
+#: Groq model ids this catalog listed that upstream has since retired. They
+#: answer 404 "model not found" while still validating here, so nothing local
+#: flags them: the failure only appears as a zero score on a campaign row.
+#: Re-probe `GET https://api.groq.com/openai/v1/models` before removing any of
+#: these — a retired id cannot be distinguished from a typo by reading the list.
+#: Verified against the live catalog on 2026-09-28 (issue #270).
+RETIRED_GROQ_MODELS = (
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "qwen/qwen3-32b",
+)
+
+
+class TestRetiredModelIds:
+    """Ids that were real once and now 404 upstream must not come back.
+
+    The catalog cannot check this itself — it has no network — so the retired
+    list is pinned here. A model id is a promise about a third party's catalog,
+    and the only way to keep it honest is to re-probe that catalog by hand.
+    """
+
+    @pytest.mark.parametrize("model_id", RETIRED_GROQ_MODELS)
+    def test_a_retired_groq_model_is_not_offered(self, model_id: str) -> None:
+        assert not is_known_model(model_id), (
+            f"{model_id} was retired by Groq and answers 404; offering it in the "
+            "UI turns every such submission into a silent zero score"
+        )
+
+    def test_the_retired_list_covers_every_groq_id_we_ever_shipped(self):
+        # If a retired id is dropped from the list above, the test above goes
+        # quiet and the regression becomes invisible again — so the list has to
+        # account for the ids named in the catalog's own comment.
+        comment = Path(llm_models.__file__).read_text()
+        for model_id in RETIRED_GROQ_MODELS:
+            assert model_id in comment, (
+                f"{model_id} is pinned as retired but no longer documented in "
+                "llm_models.py — re-probe the live catalog, then update both"
+            )
 
 
 class TestCatalogInvariants:

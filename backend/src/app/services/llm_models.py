@@ -29,7 +29,7 @@ PROVIDER_DEFAULTS: dict[str, str] = {
     "openai": "gpt-4o-mini",
     "anthropic": "claude-3-5-haiku-latest",
     "gemini": "gemini-2.0-flash",
-    "groq": "llama-3.1-8b-instant",
+    "groq": "openai/gpt-oss-20b",
     "ollama": "qwen2.5-coder:7b",
 }
 
@@ -132,23 +132,30 @@ MODELS_BY_PROVIDER: dict[str, list[LLMModel]] = {
             description="Previous-gen pro model — reliable and widely available.",
         ),
     ],
+    # Verified against `GET https://api.groq.com/openai/v1/models` on 2026-09-28:
+    # every model this catalog listed before (llama-3.1-8b-instant,
+    # llama-3.3-70b-versatile, qwen/qwen3-32b) had been retired and answers 404
+    # "model not found" — an id that resolves locally still has to exist upstream.
+    # There is no offline test for that, so re-probe the live list before trusting
+    # a newly added id; the retired ones are pinned in
+    # tests/test_llm_models.py::TestRetiredModelIds.
     "groq": [
         LLMModel(
-            id="llama-3.1-8b-instant",
+            id="openai/gpt-oss-20b",
             provider="groq",
-            label="Llama 3.1 8B Instant",
-            description="Fastest Groq model — a strong default on the free tier.",
+            label="GPT-OSS 20B",
+            description="Open-weight coding model on Groq — fast on the free tier.",
         ),
         LLMModel(
-            id="llama-3.3-70b-versatile",
+            id="openai/gpt-oss-120b",
             provider="groq",
-            label="Llama 3.3 70B Versatile",
+            label="GPT-OSS 120B",
             description="Much stronger reasoning; a tighter free-tier daily quota.",
         ),
         LLMModel(
-            id="qwen/qwen3-32b",
+            id="qwen/qwen3.8-27b",
             provider="groq",
-            label="Qwen3 32B",
+            label="Qwen3.8 27B",
             description="Recent open-weight model with solid coding ability.",
         ),
     ],

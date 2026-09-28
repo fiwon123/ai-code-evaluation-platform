@@ -130,7 +130,7 @@ class TestFallbackUsed:
         calls, built = _patch_provider(
             monkeypatch, _only_primary_fails("groq", serves="def tiny(): pass")
         )
-        result = generate_code(provider_name="groq", prompt="two sum", model="llama-3.1-8b-instant")
+        result = generate_code(provider_name="groq", prompt="two sum", model="openai/gpt-oss-20b")
 
         assert result.code == "def tiny(): pass"
         assert result.provider == "ollama"
@@ -265,7 +265,7 @@ class TestGroqProvider:
         assert seen["auth"] == "Bearer gsk-test"
         body = seen["body"]
         assert isinstance(body, dict)
-        assert body["model"] == "llama-3.1-8b-instant"
+        assert body["model"] == "openai/gpt-oss-20b"
         assert body["messages"][0]["role"] == "system"
         provider.close()
 
@@ -303,7 +303,7 @@ class TestGroqProvider:
         monkeypatch.setenv("GROQ_API_KEY", "gsk-env")
         provider = get_llm_provider("groq")
         assert isinstance(provider, GroqProvider)
-        assert provider._model == "llama-3.1-8b-instant"
+        assert provider._model == "openai/gpt-oss-20b"
         provider.close()
 
     def test_registry_requires_a_key(self, monkeypatch):
@@ -313,8 +313,8 @@ class TestGroqProvider:
 
     def test_registry_forwards_the_model(self, monkeypatch):
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        provider = get_llm_provider("groq", api_key="gsk-call", model="qwen/qwen3-32b")
-        assert provider._model == "qwen/qwen3-32b"
+        provider = get_llm_provider("groq", api_key="gsk-call", model="qwen/qwen3.8-27b")
+        assert provider._model == "qwen/qwen3.8-27b"
         provider.close()
 
     def test_mock_provider_close_is_a_no_op(self):
@@ -371,7 +371,7 @@ class TestBlockedPrimaryFallsBack:
             if str(name) == "groq":
                 return GroqProvider(
                     api_key=api_key or "gsk-key-that-never-gets-checked",
-                    model=model or "llama-3.1-8b-instant",
+                    model=model or "openai/gpt-oss-20b",
                     transport=httpx.MockTransport(blocked),
                 )
             return OllamaProvider(
