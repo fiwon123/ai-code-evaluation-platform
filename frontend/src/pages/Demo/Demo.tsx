@@ -225,8 +225,8 @@ function Demo() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">Demo</span>
-        <PageTitle size="lg" className={styles.pageTitle}>See how it works</PageTitle>
-        <p className={styles.pageSubtitle}>
+        <PageTitle size="lg" className={styles.title}>See how it works</PageTitle>
+        <p className={styles.subtitle}>
           A guided walkthrough of the evaluation pipeline, plus a live demo you
           can try right now.
         </p>

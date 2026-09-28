@@ -166,7 +166,7 @@ function AdminUsers() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <PageTitle size="sm" className={styles.title}>Users</PageTitle>
+        <PageTitle size="md" className={styles.title}>Users</PageTitle>
         <p className={styles.subtitle}>
           Manage accounts: promote admins, deactivate or restore, and delete
           users.

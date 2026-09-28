@@ -11,7 +11,7 @@
 
 /* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .subtitle {

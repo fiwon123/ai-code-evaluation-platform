@@ -86,7 +86,7 @@ export default function CreateChallenge() {
           <span aria-hidden="true">/</span>
           <span aria-current="page">New challenge</span>
         </nav>
-        <PageTitle>Create a challenge</PageTitle>
+        <PageTitle className={styles.title}>Create a challenge</PageTitle>
         <p className={styles.subtitle}>
           Define a coding task, the prompt your LLM will see, and the tests used
           to grade the generated solution.

@@ -111,7 +111,7 @@ function AdminChallenges() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <PageTitle size="sm" className={styles.title}>Challenges</PageTitle>
+        <PageTitle size="md" className={styles.title}>Challenges</PageTitle>
         <p className={styles.subtitle}>Review and remove challenges.</p>
       </div>
 
