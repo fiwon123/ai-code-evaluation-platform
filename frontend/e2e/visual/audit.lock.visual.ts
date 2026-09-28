@@ -136,6 +136,20 @@ test.describe("a correct page produces no findings at all", () => {
     expect(findings.map((f) => `${f.rule}: ${f.detail}`)).toEqual([]);
   });
 
+  test("a labelled radio is measured by its chip, not the raw input", async ({ page }) => {
+    // A radio inside a styled chip-label measures raw as ~13x13; clicking the
+    // label activates it, so the target is the chip. The rule measures the
+    // union of the control and its labels — this fixture must audit clean.
+    await page.setContent(
+      page_(`<h1>Pick one</h1>
+        <label style="display: inline-flex; align-items: center; min-height: 44px; gap: 8px; padding: 0 16px; border: 1px solid #888; border-radius: 8px">
+          <input id="difficulty" type="radio" name="difficulty" value="easy" /> Easy
+        </label>`),
+    );
+    const findings = await auditFrame(page, CTX);
+    expect(findings.map((f) => f.rule)).not.toContain("touch-target-small");
+  });
+
   test("a screen-reader-only block is not a defect", async ({ page }) => {
     // The classic false positive: `.sr-only` text is *supposed* to be 1px and
     // invisible. An audit that reports it is reporting its own ignorance, and a
