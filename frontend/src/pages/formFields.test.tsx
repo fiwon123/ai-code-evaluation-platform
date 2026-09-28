@@ -201,7 +201,9 @@ const CASES: Array<[string, string, boolean, () => React.ReactElement]> = [
     () => <EditChallenge />,
   ],
   ["/profile", "/profile", true, () => <Profile />],
-  ["/demo", "/demo", false, () => <Demo />],
+  // The Demo page's only form control (the challenge picker) belongs to the
+  // signed-in live runner; a guest sees the sign-in wall, which has no fields.
+  ["/demo", "/demo", true, () => <Demo />],
   ["/admin/users", "/admin/users", true, () => <AdminUsers />],
   ["/admin/challenges", "/admin/challenges", true, () => <AdminChallenges />],
   [

@@ -171,13 +171,40 @@ afterEach(() => {
     expect(screen.getAllByText("test_solution.py").length).toBeGreaterThan(0);
     expect(screen.getByText("solution.py")).toBeInTheDocument();
 
-    // The login wall is still there for actually running.
+    // Guests get the sign-in wall instead of the runner controls — the
+    // honest replacement for the old silent bounce to /register.
     expect(
-      screen.getByText(/You'll need a free account/, { exact: false }),
+      screen.getByRole("heading", { name: "Sign in to run the live demo" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Generate & evaluate/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Sign in" }),
+    ).toHaveAttribute("href", "/login");
+  });
+
+  it("does not flash the sign-in wall while the session is initializing", async () => {
+    mockUseAuth.mockReturnValue({
+      ...loggedInAuth(),
+      user: null,
+      initializing: true,
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    // Auth is unresolved, so the runner controls are shown (button disabled)
+    // rather than a wall that would vanish a moment later.
+    expect(
+      screen.queryByRole("heading", { name: "Sign in to run the live demo" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Generate & evaluate/ }),
+    ).toBeDisabled();
   });
 
   it("updates the preview when a different language is selected", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
     renderPage();
     await screen.findByRole("heading", { name: "What will run" });
 
@@ -195,6 +222,7 @@ afterEach(() => {
   });
 
   it("moves the preview when a keyword chip is clicked", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
     renderPage();
     await screen.findByRole("heading", { name: "What will run" });
 
@@ -208,18 +236,16 @@ afterEach(() => {
     expect(screen.queryByText("pytest")).not.toBeInTheDocument();
   });
 
-  it("routes logged-out visitors to sign up when they try to run", async () => {
+  it("sends guests to the demo page after they sign in from the wall", async () => {
     renderPage();
     const heading = await screen.findByRole("heading", {
-      name: "What will run",
+      name: "Sign in to run the live demo",
     });
     expect(heading).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+    fireEvent.click(screen.getByRole("link", { name: "Sign in" }));
 
-    expect(
-      await screen.findByText("Register page"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Login page")).toBeInTheDocument();
   });
 
   it("tells a logged-in user how long the run takes while generating", async () => {
