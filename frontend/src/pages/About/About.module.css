@@ -10,11 +10,11 @@
 }
 
 /* Layout only — size and the gradient come from the shared PageTitle. */
-.pageTitle {
+.title {
   margin-bottom: var(--space-4);
 }
 
-.tagline {
+.subtitle {
   color: var(--color-text-secondary);
   font-size: var(--font-size-lg);
   max-width: 600px;

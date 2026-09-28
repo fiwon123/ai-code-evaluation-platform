@@ -290,7 +290,7 @@ function Profile() {
       <Card className={styles.profileCard}>
         <div className={styles.avatar}>{user.username.charAt(0).toUpperCase()}</div>
         <div className={styles.identity}>
-          <PageTitle size="sm" className={styles.name}>{user.username}</PageTitle>
+          <PageTitle size="md" className={styles.name}>{user.username}</PageTitle>
           <p className={styles.email}>{user.email}</p>
           <p className={styles.memberSince}>
             Member since{" "}

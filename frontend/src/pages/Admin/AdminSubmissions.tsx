@@ -77,7 +77,7 @@ function AdminSubmissions() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <PageTitle size="sm" className={styles.title}>Submissions</PageTitle>
+        <PageTitle size="md" className={styles.title}>Submissions</PageTitle>
         <p className={styles.subtitle}>Every evaluation run across the platform.</p>
       </div>
 

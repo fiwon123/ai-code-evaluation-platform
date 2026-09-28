@@ -28,10 +28,10 @@ export function LegalShell({ document }: LegalShellProps) {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">Legal</span>
-        <PageTitle size="lg" className={styles.pageTitle}>
+        <PageTitle size="lg" className={styles.title}>
           {document.title}
         </PageTitle>
-        <p className={styles.summary}>{document.summary}</p>
+        <p className={styles.subtitle}>{document.summary}</p>
         <p className={styles.revision}>
           Last updated:{" "}
           <time dateTime={document.lastUpdated}>{document.lastUpdated}</time>

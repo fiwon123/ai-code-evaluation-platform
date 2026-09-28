@@ -89,8 +89,8 @@ function Pricing() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">Pricing</span>
-        <PageTitle size="lg" className={styles.pageTitle}>Simple, transparent pricing</PageTitle>
-        <p className={styles.pageSubtitle}>
+        <PageTitle size="lg" className={styles.title}>Simple, transparent pricing</PageTitle>
+        <p className={styles.subtitle}>
           Start free and scale as your evaluation volume grows.
         </p>
       </header>

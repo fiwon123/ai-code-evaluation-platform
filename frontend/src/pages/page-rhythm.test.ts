@@ -239,27 +239,25 @@ describe("marketing hero", () => {
   /**
    * Marketing pages that genuinely have no hero paragraph.
    *
-   * `Legal` is a documents shell — it renders whatever `content.ts` holds and
-   * opens straight into the first document — so there is nothing to measure.
-   * Named rather than skipped silently, so a page that loses its hero is a
-   * failing test instead of a quiet pass.
+   * The list is empty: every marketing page now renders the hero subtitle.
+   * Kept as an explicit (empty) set rather than deleted so that the guard
+   * below — a page that loses its hero must fail loudly — keeps its shape.
    */
-  const NO_HERO = ["Legal/Legal.module.css"];
+  const NO_HERO: string[] = [];
 
   /**
-   * The hero subtitle rule, however the page chose to name it.
+   * The hero subtitle rule.
    *
-   * `About` calls it `.tagline`, `Pricing` calls it `.pageSubtitle`, and the
-   * rest call it `.subtitle`. Reading one name would have covered two thirds of
-   * the marketing pages and quietly tested nothing on the third, so all three
-   * are tried and a miss is reported rather than tolerated.
+   * The role used to be named `.subtitle`, `.pageSubtitle`, `.tagline` and
+   * `.summary` across the marketing pages; the v0.21.0 harmonization pass
+   * renamed them all to `.subtitle` (issue #307), so one name is read and a
+   * page that reintroduces a variation fails.
    */
   function heroRule(page: string): { selector: string; body: string } | null {
     const css = stripComments(MODULES[`./${page}`] ?? "");
-    const match =
-      /([^{}]*)\.(subtitle|pageSubtitle|tagline)\s*\{([^}]*)\}/.exec(css);
+    const match = /([^{}]*)\.subtitle\s*\{([^}]*)\}/.exec(css);
     if (!match) return null;
-    return { selector: match[2], body: match[3] };
+    return { selector: "subtitle", body: match[2] };
   }
 
   it("finds a hero subtitle on every marketing page that has one", () => {

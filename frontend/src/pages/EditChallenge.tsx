@@ -160,7 +160,7 @@ export default function EditChallenge() {
           <span aria-hidden="true">/</span>
           <span aria-current="page">Edit</span>
         </nav>
-        <PageTitle>Edit challenge</PageTitle>
+        <PageTitle className={styles.title}>Edit challenge</PageTitle>
         <p className={styles.subtitle}>
           Update the task description, the prompt your LLM will see, or the
           tests used to grade the generated solution.

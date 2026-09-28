@@ -9,14 +9,14 @@
 }
 
 /* Layout only — size and the gradient come from the shared PageTitle. */
-.pageTitle {
+.title {
   margin: var(--space-3) 0 var(--space-4);
 }
 
-.summary {
+.subtitle {
   color: var(--color-text-secondary);
   font-size: var(--font-size-lg);
-  max-width: 640px;
+  max-width: 600px;
 }
 
 /* The revision date is deliberately a separate line, styled as metadata, so
