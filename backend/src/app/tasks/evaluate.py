@@ -4,12 +4,15 @@ A submission is evaluated in one or more *attempts*. Attempt 1 is the initial
 generation; if its tests fail, the failure is fed back to the provider and a
 new attempt runs, up to ``settings.evaluation_max_attempts``.
 
-Each attempt runs in its own Celery task rather than as a loop inside one:
-``task_time_limit`` is 300s, while a single attempt can spend up to 60s in a
-hosted provider's LLM call (``ollama_timeout`` allows 300s for a local model)
-plus up to ~90s running tests, so three attempts would be killed mid-flight
-as one task. Chaining also means a worker restart between attempts loses only
-the attempt in progress — the state it needs is in the database.
+Each attempt runs in its own Celery task rather than as a loop inside one: the
+task budget is ``ATTEMPT_BUDGET_S`` (``app.core.celery_app``) -- one generation
+at its worst case plus a test run -- so three attempts would be killed
+mid-flight as one task. That budget is *derived* from ``ollama_timeout`` rather
+than fixed, because a flat limit silently clamps the generation cap: a 300s
+Ollama generation inside the old 240s soft limit was killed while the provider
+was still legitimately working, and was recorded as an ordinary provider error
+(#272). Chaining also means a worker restart between attempts loses only the
+attempt in progress — the state it needs is in the database.
 
 What is persisted, and where:
 
@@ -40,6 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
+from billiard.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -92,6 +96,26 @@ def _elapsed_ms(started: float) -> int:
     negative or absurd duration in a persisted metric.
     """
     return int((time.monotonic() - started) * 1000)
+
+
+def _error_kind(exc: BaseException) -> str | None:
+    """A stable, matchable classification for a run that failed outright.
+
+    The ``error`` metric carries a human message, and a provider message is the
+    right thing to show a user -- but it is not something to match on. The soft
+    task limit is the case that needs naming (#272): it is raised *inside* the
+    generation call, and because the task catches ``Exception`` broadly it used
+    to land as an opaque ``SoftTimeLimitExceeded()`` metric that looked exactly
+    like a provider outage. With ``generation_ms`` also recorded, the signature
+    to look for was "full elapsed generation time plus a bare soft-limit error";
+    a stable ``error_kind`` makes it a query instead of a guess.
+
+    Returns ``None`` for failures that are not classified, and the key is then
+    omitted rather than stored as a null, so the report renders no empty field.
+    """
+    if isinstance(exc, SoftTimeLimitExceeded):
+        return "task_soft_time_limit"
+    return None
 
 
 def _settle_after_duplicate(session: Session, submission_id: UUID) -> None:
@@ -399,18 +423,24 @@ def _run_submission_evaluation(
         # that timed out and one that returned instantly are different bugs.
         # When the failure came from the sandbox, generation already returned,
         # so the measured value stands and test time is excluded.
+        error_metrics = {
+            "error": message,
+            "generation_ms": (
+                generation_ms if generation_ms is not None else _elapsed_ms(generation_started)
+            ),
+            "attempt": attempt,
+        }
+        # Named, not just described: a run killed by the task budget is a
+        # different bug from a provider that failed to answer (#272).
+        kind = _error_kind(exc)
+        if kind is not None:
+            error_metrics["error_kind"] = kind
         error_outcome = EvaluationOutcome(
             passed=0,
             total=0,
             score=0.0,
             logs=f"Evaluation error: {message}",
-            metrics={
-                "error": message,
-                "generation_ms": (
-                    generation_ms if generation_ms is not None else _elapsed_ms(generation_started)
-                ),
-                "attempt": attempt,
-            },
+            metrics=error_metrics,
         )
         summary = _record_attempt(
             session, submission, attempt, submission.code or "", error_outcome, api_key

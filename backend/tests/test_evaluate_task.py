@@ -581,6 +581,53 @@ class TestFallbackProvenance:
         assert session.get(Submission, submission_id).status == "failed"
 
 
+    def test_a_soft_time_limit_is_named_in_the_result_metrics(self, monkeypatch):
+        """A run killed by the task budget must not look like a provider outage.
+
+        The soft limit arrives as an ordinary ``Exception`` and is caught by the
+        broad handler, so before #272 it was recorded as a bare
+        ``SoftTimeLimitExceeded()`` -- indistinguishable from a provider that
+        failed to answer, which is the wrong bug to go looking for.
+        """
+        from billiard.exceptions import SoftTimeLimitExceeded
+
+        def fake_get(name, api_key=None, model=None):
+            return _fake_provider(
+                generate_code=_always_fails(SoftTimeLimitExceeded(390,))
+            )
+
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get)
+
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        outcome = _run_submission_evaluation(session, submission_id)
+
+        assert outcome["status"] == "failed"
+        session.expire_all()
+        result = session.query(EvaluationResult).filter_by(submission_id=submission_id).one()
+        assert result.metrics["error_kind"] == "task_soft_time_limit"
+        # The human message is still there for the UI; the kind is for matching.
+        assert "SoftTimeLimitExceeded" in result.metrics["error"]
+
+    def test_an_ordinary_provider_error_carries_no_error_kind(self, monkeypatch):
+        """Only classified failures get the key, so it never renders as a null."""
+        def fake_get(name, api_key=None, model=None):
+            return _fake_provider(generate_code=_always_fails(RuntimeError("403 denied")))
+
+        monkeypatch.setattr("app.services.llm_fallback.get_llm_provider", fake_get)
+
+        session = _make_sync_session()
+        submission_id = _seed(session)
+
+        _run_submission_evaluation(session, submission_id)
+
+        session.expire_all()
+        result = session.query(EvaluationResult).filter_by(submission_id=submission_id).one()
+        assert "error_kind" not in result.metrics
+        assert "403 denied" in result.metrics["error"]
+
+
 class _SteppedClock:
     """Monotonic stand-in that jumps by a fixed step on every read.
 
