@@ -31,7 +31,13 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 5173,
-    host: "0.0.0.0",
+    // "::" not "0.0.0.0": "localhost" resolves to ::1 first, and an IPv4-only
+    // listener is refused there, so localhost:5173 failed while 127.0.0.1:5173
+    // worked. bindv6only is 0, so IPv4 is still accepted and the published port
+    // is unaffected. dev-entrypoint.sh passes --host on the CLI, which overrides
+    // this; both are changed. Locked by
+    // backend/tests/test_dev_sandbox_dual_stack.py. See #282.
+    host: "::",
   },
   test: {
     globals: true,

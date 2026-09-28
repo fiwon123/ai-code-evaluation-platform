@@ -58,11 +58,16 @@ echo "[dev] Running database migrations (alembic upgrade head)..."
 (cd "$BACKEND_DIR" && "$BACKEND_VENV/bin/alembic" upgrade head)
 
 # --- Start both dev servers ---
+# Bind "::", not "0.0.0.0": "localhost" resolves to ::1 first on a dual-stack host
+# (RFC 6724), and an IPv4-only listener is refused there — so `localhost:5173`
+# failed while `127.0.0.1:5173` worked. net.ipv6.bindv6only is 0, so a "::"
+# socket also accepts IPv4 as v4-mapped and the published ports keep working.
+# Locked by backend/tests/test_dev_sandbox_dual_stack.py. See #282.
 echo "[dev] Starting backend on http://localhost:8000 ..."
-(cd "$BACKEND_DIR" && exec "$BACKEND_VENV/bin/uvicorn" app.main:app --reload --host 0.0.0.0 --port 8000) &
+(cd "$BACKEND_DIR" && exec "$BACKEND_VENV/bin/uvicorn" app.main:app --reload --host :: --port 8000) &
 
 echo "[dev] Starting frontend on http://localhost:5173 ..."
-(cd "$FRONTEND_DIR" && exec npm run dev -- --host 0.0.0.0 --port 5173) &
+(cd "$FRONTEND_DIR" && exec npm run dev -- --host :: --port 5173) &
 
 # Forward termination signals to the children (docker stop sends SIGTERM).
 trap 'kill $(jobs -p) 2>/dev/null || true; exit 0' TERM INT
