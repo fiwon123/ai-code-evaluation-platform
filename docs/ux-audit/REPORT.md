@@ -188,10 +188,12 @@ report route (`h1` "Evaluation report").
 a **guest** on the Demo live runner is silently bounced to `/register`. The
 Demo page promises guests a run ("Try it live — no API keys needed"), but
 `POST /api/submissions` requires a JWT (reads are public, writes are
-owner-scoped by design) — clicking "Generate & evaluate" signed out 401s and
-the session redirect dumps the user on the register page with no explanation
-and no return path. Filed as the open question below; the fix direction is a
-product decision (anonymous demo quota vs honest sign-in wall).
+owner-scoped by design) — a live visit confirmed that clicking
+"Generate & evaluate" signed out navigates straight to `/register` with no
+explanation and no return path (the runner's own guest guard does the
+bounce; the HTTP layer never sees the attempt). Fixed in #305 with an
+honest sign-in wall on the Demo page (guests see the wall, the runner
+controls stay signed-in-only) plus a working post-login return to `/demo`.
 
 ## Reproducing
 
