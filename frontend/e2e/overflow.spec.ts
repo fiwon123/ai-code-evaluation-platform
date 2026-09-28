@@ -151,6 +151,24 @@ test.describe("Result output stays inside its box", () => {
     expect(api.calls()).toBeGreaterThan(0);
   });
 
+  test("a long status stays in the Status card when fonts run wide", async ({ page }) => {
+    // CI caught this where the sandbox cannot: the runner's font metrics render
+    // "completed" ~16px wider than the dev image's, so the word exceeded its
+    // stat column and pushed every card past the page. Font metrics are never
+    // the sandbox's, so the breaker has to be an *unbreakable token* that is
+    // renderer-independent: `CCC…` is long enough to exceed the ~126px column
+    // on any font scale, and short enough that the header Badge (a much smaller
+    // type size) is never involved — the CI failure was the stat card alone.
+    await mockAuthenticatedSubmission(page, {
+      ...pathologicalSubmission(SUBMISSION_ID),
+      status: "CCC".repeat(4),
+    } as never);
+    await page.goto(`/submissions/${SUBMISSION_ID}`);
+    await expect(testBreakdown(page)).toBeVisible();
+
+    expect(await overflowingElements(page)).toEqual([]);
+  });
+
   test("a long test name wraps instead of stretching its row", async ({ page }) => {
     await mockAuthenticatedSubmission(page, pathologicalSubmission(SUBMISSION_ID) as never);
     await page.goto(`/submissions/${SUBMISSION_ID}`);
