@@ -120,7 +120,19 @@ pass:
 | P0 | Define `--font-size-2xs` (the app already uses it) and put `LanguageBadge`/`Features` ad-hoc sizes on the scale | `globals.css`, 2 modules | F2 is one missing token + two stragglers; cheapest correctness win | **Merged** (#296 → PR #301) — the undefined var dropped, all sub-12px text raised onto the scale's `xs` floor; `text-tiny` 0 |
 | P0 | Footer column titles `<h3>` → `<h2>` | `Footer.tsx` | F3: one line, every page with a footer | **Merged** (#297 → PR #301) — `heading-skip` 0 |
 | P0 | Give the submission-loading skeleton a top-level heading | `SubmissionDetail.tsx` | F4: pages need an `<h1>` at all times | **Merged** (#298 → PR #301) — `no-h1` 0 |
-| P1 | Introduce a `--control-height` token at 44 px and ratchet the 17 sites onto it | global + ~17 modules | F1 is a coherent design decision, so decide it in one place; see sweep F1 for the two inline-action caveats | Open — #299 |
+| P1 | Introduce a `--control-height` token at 44 px and ratchet the 17 sites onto it | global + ~17 modules | F1 is a coherent design decision, so decide it in one place; see sweep F1 for the two inline-action caveats | **Merged** (#299) — token in `globals.css`, 21 modules ratcheted; sweep `touch-target-small` 135 → **0** |
+
+The P1 row grew beyond the original 17 sites: with the 4-per-frame cap on the
+sweep's report budget, zeroing the first 17 surfaced the *next* under-44
+elements (header/footer brand, user-menu button, breadcrumbs, contact/Legal
+links, guide and raw-output summaries, profile title links), and the last two
+sweeps caught the close button and the narrow "Log in" link. An uncapped probe
+over the same routes counted 446 raw instances of 34 distinct elements while
+the sweep reported 135 (the cap) — the 135→0 number below is the sweep metric.
+Two instrument notes: labelled inputs (the difficulty-chip radios) are now
+measured by the union of input + labels, since the label is the activation
+region (see `docs/visual-sweep/REPORT.md` → "P1 fix pass"); links inside
+prose/table cells and footer nav are still exempt by the rule's design.
 | P2 | Field error messages through `aria-describedby`/`aria-invalid` on inputs | `TextInput`/`Field` | From the sweep's "not covered" list: the message exists but is not announced with the field — worth a rule and a fix | Open — #300 |
 
 The P0 row nominally says "define `--font-size-2xs`", but once the admin

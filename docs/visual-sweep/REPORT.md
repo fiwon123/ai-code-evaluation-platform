@@ -221,3 +221,44 @@ The `--font-size-2xs` token the audit proposed turned out to have **no
 consumer left** once those sat on `xs`, so it was not added (see
 `docs/ux-audit/REPORT.md`). `touch-target-small` is deliberately untouched
 here — that finding is the `--control-height` design decision (issue #299).
+
+## P1 fix pass (touch targets zeroed)
+
+Run `20260928-182132` (`make visual-sweep`, branch `feat/299-control-height-token`,
+squash of #299):
+
+| Rule | After P0 `20260928-171951` | After #299 `20260928-182132` |
+|---|---|---|
+| `touch-target-small` | 135 | **0** |
+| `text-tiny` | 0 | 0 |
+| `heading-skip` | 0 | 0 |
+| `no-h1` | 0 | 0 |
+
+What happened, in three sweeps:
+
+- **`20260928-174421`**: the first 9 sites ratcheted onto
+  `--control-height` (theme toggle, menu toggle, input, button, attempt
+  timeline summary, copy button, not-found action, demo chip, pagination).
+  The count stayed 135 because the 4-per-frame report budget had been hiding
+  the *next* elements — the header/footer brand and user-menu button, footer
+  GitHub link, breadcrumbs, contact/Legal links, guide/raw-output summaries,
+  profile title links, and the difficulty radios (measured raw as 13×13).
+- **`20260928-181234`**: the full 34-element sweep of fixes brought 135 → 51,
+  the last two being the toast close button (19×26, under the 24px AA floor —
+  a MAJOR finding) and the guest "Log in" link (37×44 — padded so its box
+  clears 44).
+- **`20260928-182132`**: final two fixes (`.colAction` padding, dropdown-item
+  min-height); **136 → 0** counted across two more sweeps.
+
+One instrument change shipped with this pass: **labelled inputs are measured
+by the union of the input and its labels.** A radio inside a styled
+chip-label measures raw as ~13×13, but clicking the label activates it — the
+chip is the target. The rule now takes the union box (a labelled radio's
+chip is 44px), which is also what the audit's own `fix` text recommends for
+radios. Unlabelled controls are measured exactly as before; the union can
+only grow the box. Locked by a new fixture in `audit.lock.visual.ts`.
+
+The uncapped probe used to find the hidden elements is gone (it was a
+throwaway), but its count — 446 raw instances of 34 distinct elements across
+the 25 routes — is the honest scale of the finding; the sweep reports the
+same work as 135 capped findings and, now, 0.

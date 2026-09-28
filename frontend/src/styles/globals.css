@@ -212,6 +212,12 @@
   --space-16: 4rem;
   --space-20: 5rem;
 
+  /* Interactive control height — WCAG 2.5.5 AAA touch target (44px).
+   * The app's controls ran 36-42px before this token existed (audit F1, 135
+   * instances across 17 elements); every button, input, select, chip and
+   * link-action now sits on this one step. */
+  --control-height: 2.75rem;
+
   /* Border radius */
   --radius-sm: 4px;
   --radius-md: 8px;

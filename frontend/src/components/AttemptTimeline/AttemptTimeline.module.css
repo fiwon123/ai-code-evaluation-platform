@@ -86,6 +86,9 @@
 }
 
 .disclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
   padding: var(--space-2) var(--space-4);
   cursor: pointer;
   color: var(--color-text-secondary);

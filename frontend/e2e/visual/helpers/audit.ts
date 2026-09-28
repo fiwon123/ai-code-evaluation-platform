@@ -453,8 +453,30 @@ function collect(options: { atRest: boolean }): RawFinding[] {
 
   for (const el of Array.from(document.querySelectorAll<HTMLElement>(INTERACTIVE))) {
     if (!visible(el)) continue;
-    const r = rect(el);
+    let r = rect(el);
     if (r.width <= 0 || r.height <= 0) continue;
+    // A labelled control's target is its whole activation region — clicking the
+    // label activates the control. A radio inside a styled chip-label measures
+    // raw as ~13x13 while the chip is the real 44px target, so measure the
+    // union of the control and its labels, exactly the box a click can land
+    // on. Unlabelled controls (and inputs whose labels live elsewhere in the
+    // page, like a text field with a label above it) are measured raw as
+    // before — the union only ever grows the box.
+    const labelled = (el as HTMLInputElement).labels;
+    if (labelled && labelled.length > 0) {
+      let top = r.top;
+      let left = r.left;
+      let bottom = r.bottom;
+      let right = r.right;
+      for (const lb of labelled) {
+        const lr = rect(lb);
+        top = Math.min(top, lr.top);
+        left = Math.min(left, lr.left);
+        bottom = Math.max(bottom, lr.bottom);
+        right = Math.max(right, lr.right);
+      }
+      r = new DOMRect(left, top, right - left, bottom - top);
+    }
     if (r.bottom < 0 || r.top > viewportHeight) continue;
     if ((el as HTMLInputElement).disabled) continue;
     // Inline links in a sentence are exempt from target size: the criterion is

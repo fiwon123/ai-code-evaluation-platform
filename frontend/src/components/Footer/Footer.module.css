@@ -26,6 +26,12 @@
   align-items: flex-start;
 }
 
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+}
+
 .brand:hover {
   text-decoration: none;
 }
@@ -80,6 +86,7 @@
 .github {
   display: inline-flex;
   align-items: center;
+  min-height: var(--control-height);
   gap: var(--space-2);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);

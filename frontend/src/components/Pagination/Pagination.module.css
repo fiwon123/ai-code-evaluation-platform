@@ -24,8 +24,8 @@
 
 .control,
 .page {
-  min-width: 36px;
-  height: 36px;
+  min-width: var(--control-height);
+  height: var(--control-height);
   padding: 0 var(--space-2);
   display: inline-flex;
   align-items: center;

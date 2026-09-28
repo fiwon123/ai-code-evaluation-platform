@@ -201,6 +201,9 @@
 }
 
 .disclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
   cursor: pointer;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);

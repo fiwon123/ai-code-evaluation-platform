@@ -59,6 +59,11 @@
 
 .close {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-height);
+  min-height: var(--control-height);
   background: none;
   border: none;
   cursor: pointer;
