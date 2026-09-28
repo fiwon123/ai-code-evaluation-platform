@@ -204,11 +204,15 @@ RUN chsh -s /usr/bin/zsh devuser 2>/dev/null || true
 # an IPv6 *address* exist in the first place — without it the container has no
 # v6 route and `[Errno 101] Network is unreachable` is the only possible result.
 # This layer is the other half: a container holding both addresses still dials
-# whichever getaddrinfo returns first, and Debian's /etc/gai.conf ships
+# whichever getaddrinfo returns first, and httpcore has no Happy Eyeballs, so
+# there is no second attempt on the other family. Debian's /etc/gai.conf ships
 # `precedence ::ffff:0:0/96 100`, which sorts IPv4 first. Groq's edge answers
 # 403 over IPv4 and 401 (i.e. reaches auth) over IPv6, so the default order sent
 # every generation request to the family that refuses it, and the failure was
 # indistinguishable from a wrong API key.
+#
+# NB `curl` reaching auth here proves nothing about the worker: curl races both
+# families and wins on v6. Reproduce with httpx, or read getaddrinfo's order.
 #
 # The file carries the reasoning; keep the two in step. It is applied to the dev
 # image only — the air-gapped eval sandbox (backend/Dockerfile.sandbox) must

@@ -351,12 +351,12 @@ networks:
   # measured working (the container gained fd00:1157::6 and IPv6 stopped failing
   # with [Errno 101] Network is unreachable), yet the worker still got 403,
   # because a container holding both addresses dials whichever getaddrinfo
-  # returns FIRST, and the image's /etc/gai.conf sorts IPv4 first
-  # (`precedence ::ffff:0:0/96 100`). The host's gai.conf is all comments, so
-  # unflagged curl there already preferred IPv6 — which is why the host could
-  # not reproduce the worker's failure. The other half of the fix is the
-  # gai.conf COPY in the Dockerfile; these two are one change. Locked by
-  # backend/tests/test_provider_host_reachability.py.
+  # returns FIRST (httpcore has no Happy Eyeballs) and the image's /etc/gai.conf
+  # sorts IPv4 first (`precedence ::ffff:0:0/96 100`). The host's gai.conf is all
+  # comments, so glibc's own default prefers IPv6 and unflagged curl there
+  # reached 401 — which is why the host could not reproduce the worker's failure.
+  # The other half of the fix is the gai.conf COPY in the Dockerfile; these two
+  # are one change. Locked by backend/tests/test_provider_host_reachability.py.
   default:
     enable_ipv6: true
     ipam:
