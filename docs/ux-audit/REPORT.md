@@ -159,17 +159,39 @@ file fix issues only after the user reviews it.
 merging PR #295, after which the P0 issues #296/#297/#298 were filed, fixed in
 PR #301 and merged. P1 (#299) and P2 (#300) remain open.
 
-## The one thing this audit could not photograph
+## The one thing this audit could not photograph — now witnessed (2026-09-28)
 
 A **real evaluation run — prompt → code generation → sandboxed test execution →
-scored report — against the live stack. All journeys mock the API surface on
-purpose (offline, deterministic, fast). The `submissions` list, the report
-page and the skeleton are real components, but fed fixtures: the deepest
-end-to-end claim (`docs/visual-sweep` ran the same way) is still unwitnessed
-by this review. The demo-provider evaluation path itself is straight — POST a
-submission, poll, render `WireSubmission` — but needs the Celery worker
-running on the host (out of the sandbox's reach) before a journey can walk it
-for real.
+scored report — against the live stack**, walked twice with the API and once
+with the real UI.
+
+**API journey** (fresh user, challenge, submission via `curl`, poll to done):
+
+1. `POST /api/auth/register` → token; `POST /api/challenges` (Python
+   "Two Sum (audit witness)") with `test_code` opening `from solution import two_sum`;
+   `POST /api/submissions {provider: "demo"}` → `pending`.
+2. Poll: `pending → processing → completed` in ~10 s.
+3. Report: **score 100.0, 3/3 tests passed**, per-test results, `metrics` show
+   **`backend: "docker"`** — the Celery worker spawned a real
+   `eval-sandbox:latest` container through the host Docker socket
+   (duration 1151 ms incl. cold start, returncode 0, generation 0 ms).
+4. `POST /api/submissions/:id/share` → token serves the public report
+   (`GET /api/results/:token` 200) — the payload `WireSubmission` renders.
+
+**UI journey** (Playwright, real Chromium, against `localhost:5173` +
+`localhost:8000`): login via the real form → Demo page → select the audit
+challenge → "Generate & evaluate" → the live card renders **3/3 passed**,
+per-test breakdown, generated code, and "View full report" opens the real
+report route (`h1` "Evaluation report").
+
+**New finding the witness exposed (never visible in the mocked journeys):**
+a **guest** on the Demo live runner is silently bounced to `/register`. The
+Demo page promises guests a run ("Try it live — no API keys needed"), but
+`POST /api/submissions` requires a JWT (reads are public, writes are
+owner-scoped by design) — clicking "Generate & evaluate" signed out 401s and
+the session redirect dumps the user on the register page with no explanation
+and no return path. Filed as the open question below; the fix direction is a
+product decision (anonymous demo quota vs honest sign-in wall).
 
 ## Reproducing
 
