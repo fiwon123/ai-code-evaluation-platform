@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Field, SelectInput, TextAreaInput, TextInput } from "./Input.tsx";
+import { Field, FieldGroup, SelectInput, TextAreaInput, TextInput } from "./Input.tsx";
 
 describe("Input components", () => {
   it("Field associates the label and shows an error", () => {
@@ -11,6 +11,42 @@ describe("Input components", () => {
     );
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByText("Required")).toBeInTheDocument();
+  });
+
+  it("Field wires aria-invalid and aria-describedby to an erroring control", () => {
+    render(
+      <Field label="Email" id="email" error="Required">
+        <TextInput id="email" />
+      </Field>,
+    );
+    const input = screen.getByLabelText("Email");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-describedby", "email-error");
+    // The announcement target is the actual error message, not a phantom id.
+    expect(screen.getByText("Required")).toHaveAttribute("id", "email-error");
+  });
+
+  it("Field leaves a valid control without aria-error noise", () => {
+    render(
+      <Field label="Email" id="email">
+        <TextInput id="email" />
+      </Field>,
+    );
+    const input = screen.getByLabelText("Email");
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(input.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("FieldGroup announces a group error on the role=group wrapper", () => {
+    render(
+      <FieldGroup label="Start from an example" id="examples" error="Pick one">
+        <button type="button">Two Sum</button>
+      </FieldGroup>,
+    );
+    const group = screen.getByRole("group");
+    expect(group).toHaveAttribute("aria-labelledby", "examples");
+    expect(group).toHaveAttribute("aria-describedby", "examples-error");
+    expect(screen.getByText("Pick one")).toHaveAttribute("id", "examples-error");
   });
 
   it("TextInput applies the error class when invalid", () => {
