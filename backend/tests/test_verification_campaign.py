@@ -345,6 +345,24 @@ def test_extract_observation_surfaces_the_execution_backend():
     assert observation["backend"] == "docker"
 
 
+def test_extract_observation_surfaces_generation_cost_and_result_attempt():
+    # duration_ms covers the whole run, so on its own the evidence cannot say
+    # whether a slow row was a slow provider or a slow sandbox.
+    observation = runner.extract_observation(
+        _completed_detail(metrics={"generation_ms": 4210, "attempt": 1})
+    )
+    assert observation["generation_ms"] == 4210
+    assert observation["attempt"] == 1
+
+
+def test_extract_observation_leaves_generation_absent_for_older_results():
+    # Rows recorded before the metric existed must extract to None, not 0 —
+    # "0 ms" would read as an instant generation.
+    observation = runner.extract_observation(_completed_detail())
+    assert observation["generation_ms"] is None
+    assert observation["attempt"] is None
+
+
 @pytest.mark.parametrize("backend", ["docker", None, "subprocess"])
 def test_completed_row_passes_on_either_execution_path(backend):
     # Both real paths matter, and they are not symmetric: the Docker sandbox
@@ -485,6 +503,34 @@ def test_report_is_regenerated_not_appended():
     second = runner.render_report(CASES, [entry])
     assert first == second
     assert first.count("### Row 1 —") == 1
+
+
+def test_report_shows_generation_time_when_the_result_carries_it():
+    detail = _detail()
+    detail["evaluation_result"]["metrics"] = {"generation_ms": 4210, "attempt": 2}
+    entry = {
+        "case_id": "demo-python-strong",
+        "row": 1,
+        "verdict": "pass",
+        "reason": "ok",
+        "run_at": "2026-01-01T00:00:00+00:00",
+        "observation": runner.extract_observation(detail),
+    }
+    assert "**Generation:** 4210 ms (result from attempt 2)" in runner.render_report(CASES, [entry])
+
+
+def test_report_omits_generation_time_for_results_predating_the_metric():
+    # The committed ledger holds rows recorded before it existed; a "None ms"
+    # line would be noise the reader cannot act on.
+    entry = {
+        "case_id": "demo-python-strong",
+        "row": 1,
+        "verdict": "pass",
+        "reason": "ok",
+        "run_at": "2026-01-01T00:00:00+00:00",
+        "observation": runner.extract_observation(_detail()),
+    }
+    assert "**Generation:**" not in runner.render_report(CASES, [entry])
 
 
 def test_load_ledger_rejects_corrupt_lines(tmp_path):
