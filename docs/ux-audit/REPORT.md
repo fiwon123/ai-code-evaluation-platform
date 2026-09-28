@@ -133,7 +133,19 @@ Two instrument notes: labelled inputs (the difficulty-chip radios) are now
 measured by the union of input + labels, since the label is the activation
 region (see `docs/visual-sweep/REPORT.md` → "P1 fix pass"); links inside
 prose/table cells and footer nav are still exempt by the rule's design.
-| P2 | Field error messages through `aria-describedby`/`aria-invalid` on inputs | `TextInput`/`Field` | From the sweep's "not covered" list: the message exists but is not announced with the field — worth a rule and a fix | Open — #300 |
+| P2 | Field error messages through `aria-describedby`/`aria-invalid` on inputs | `TextInput`/`Field` | From the sweep's "not covered" list: the message exists but is not announced with the field — worth a rule and a fix | **Merged** (#300) — `Field`/`FieldGroup` wire `aria-invalid` + `aria-describedby` to the message; new `field-error-announced` audit rule; sweep 0 |
+
+**P2 implementation notes:** `Field` clones `aria-invalid` and
+`aria-describedby` onto its single child control (callers pass the control as
+`children`, so the attributes are merged in, never overwritten — a caller-set
+attribute on the child still wins); `FieldGroup` (a caption over several
+controls) instead puts `aria-describedby` on its `role="group"` wrapper. The
+inputs themselves also emit `aria-invalid` from their `invalid` prop when
+used outside a `Field`. The new `field-error-announced` audit rule is
+structural — `aria-invalid="true"` without a `aria-describedby` that names a
+visible element gets reported — locked by a fixture in
+`audit.lock.visual.ts`. Verified by vitest (`Field`/`FieldGroup`/`TextInput`
+cases) and by the sweep's existing `login-field-errors` state.
 
 The P0 row nominally says "define `--font-size-2xs`", but once the admin
 `dailyLabel` and the `Features` mock chrome sat on the scale's existing `xs`

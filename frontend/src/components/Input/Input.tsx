@@ -1,4 +1,14 @@
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import {
+  cloneElement,
+  forwardRef,
+  isValidElement,
+  useId,
+  type InputHTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from "react";
 import styles from "./Input.module.css";
 
 interface FieldProps {
@@ -8,14 +18,53 @@ interface FieldProps {
   id: string;
 }
 
+/**
+ * Wires an error message to its control for assistive tech.
+ *
+ * The error message is rendered as a sibling of the child control, so on its
+ * own it is orphaned text: a screen reader announces the field's label but
+ * nothing about its error. The child control (an `input`, `select` or
+ * `textarea`) gets `aria-invalid` (says the value is wrong) and
+ * `aria-describedby` pointing at the message, so the message is announced
+ * when the control is focused.
+ *
+ * The child is cloned to carry those two attributes because `Field` does not
+ * own the control — callers pass it as `children`. Attributes the caller set
+ * on the child win (clone merges, it does not overwrite), and when there is
+ * no `error` the child is left untouched, so a valid field carries no
+ * aria-noise. `FieldGroup` (a caption over several controls) instead puts
+ * `aria-describedby` on the group's `role="group"` wrapper, where the error
+ * belongs as a description of the group.
+ */
+function wireError(
+  children: ReactNode,
+  error: string | undefined,
+  errorId: string,
+  viaChild: boolean,
+): ReactNode {
+  if (!error) return children;
+  if (viaChild && isValidElement(children)) {
+    return cloneElement(children as ReactElement<Record<string, unknown>>, {
+      "aria-invalid": true,
+      "aria-describedby": errorId,
+    });
+  }
+  return children;
+}
+
 export function Field({ label, error, children, id }: FieldProps) {
+  const errorId = `${id}-error`;
   return (
     <div className={styles.field}>
       <label className={styles.label} htmlFor={id}>
         {label}
       </label>
-      {children}
-      {error && <span className={styles.errorText}>{error}</span>}
+      {wireError(children, error, errorId, true)}
+      {error && (
+        <span id={errorId} className={styles.errorText}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -39,13 +88,23 @@ export function FieldGroup({
   children,
   id,
 }: FieldProps) {
+  const errorId = `${id}-error`;
   return (
-    <div className={styles.field} role="group" aria-labelledby={id}>
+    <div
+      className={styles.field}
+      role="group"
+      aria-labelledby={id}
+      aria-describedby={error ? errorId : undefined}
+    >
       <span className={styles.label} id={id}>
         {label}
       </span>
       {children}
-      {error && <span className={styles.errorText}>{error}</span>}
+      {error && (
+        <span id={errorId} className={styles.errorText}>
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -53,21 +112,24 @@ export function FieldGroup({
 export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
   function TextInput({ invalid, className = "", ...props }, ref) {
     const classes = [styles.input, invalid && styles.error, className].filter(Boolean).join(" ");
-    return <input ref={ref} className={classes} {...props} />;
+    const aria = invalid ? { "aria-invalid": true } : {};
+    return <input ref={ref} className={classes} {...aria} {...props} />;
   },
 );
 
 export const SelectInput = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(
   function SelectInput({ invalid, className = "", ...props }, ref) {
     const classes = [styles.select, invalid && styles.error, className].filter(Boolean).join(" ");
-    return <select ref={ref} className={classes} {...props} />;
+    const aria = invalid ? { "aria-invalid": true } : {};
+    return <select ref={ref} className={classes} {...aria} {...props} />;
   },
 );
 
 export const TextAreaInput = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(
   function TextAreaInput({ invalid, className = "", ...props }, ref) {
     const classes = [styles.textarea, invalid && styles.error, className].filter(Boolean).join(" ");
-    return <textarea ref={ref} className={classes} {...props} />;
+    const aria = invalid ? { "aria-invalid": true } : {};
+    return <textarea ref={ref} className={classes} {...aria} {...props} />;
   },
 );
 

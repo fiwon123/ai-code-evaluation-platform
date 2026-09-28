@@ -262,3 +262,34 @@ The uncapped probe used to find the hidden elements is gone (it was a
 throwaway), but its count — 446 raw instances of 34 distinct elements across
 the 25 routes — is the honest scale of the finding; the sweep reports the
 same work as 135 capped findings and, now, 0.
+
+## P2 fix pass (field errors announced)
+
+Run `20260928-185447` (`make visual-sweep`, branch `feat/300-aria-field-errors`):
+
+| Rule | After #299 `20260928-182132` | After #300 `20260928-185447` |
+|---|---|---|
+| `touch-target-small` | 0 | 0 |
+| `field-error-announced` *(new)* | — | **0** |
+| `text-tiny` / `heading-skip` / `no-h1` | 0 | 0 |
+
+The P2 finding was that `Field`'s error message was orphaned: the field was
+labelled (so `control-unlabelled` passed) but a screen reader announced no
+error with it. The fix ships a new audit rule plus the wiring:
+
+- **`field-error-announced` rule** — any `[aria-invalid="true"]` control
+  whose `aria-describedby` does not name a visible element is reported. The
+  rule is structural, so a future input that styles red without announcing
+  gets caught by the next sweep.
+- **`Field`** clones `aria-invalid` and `aria-describedby` onto its child
+  control (pointing at the `id`-derived error message element);
+  **`FieldGroup`** puts `aria-describedby` on its `role="group"` wrapper.
+  The three inputs also emit `aria-invalid` from their `invalid` prop when
+  used bare.
+- Lock fixtures: the rule fires on an erroring input with no
+  `aria-describedby`, and audits clean on one that references a real
+  message; vitest cases cover `Field`, `FieldGroup` and the valid
+  noise-free path.
+
+The sweep's `login-field-errors` state exercises the wiring on a real page:
+0 `field-error-announced` findings.
