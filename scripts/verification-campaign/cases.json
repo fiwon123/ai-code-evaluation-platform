@@ -229,7 +229,7 @@
       "expect": {
         "kind": "completed"
       },
-      "precondition": "Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 6, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly. This row is currently recorded as failing for that reason - see the README before reading anything into it.",
+      "precondition": "Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 6, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly. This row was recorded as failing for that reason until the generation cap was raised to 300s (#266) and the worker restarted; it now passes at 3/3 on the docker backend - see the README for the forensics.",
       "proves": "The tsx --test runner and its TAP parser work on real generated code - the same claim row 6 makes, proven without a keyed provider. As row 9: a band would pass even when the run did nothing, so this row asserts completed and reports the score."
     }
   ]

@@ -8,13 +8,13 @@ re-run a case to refresh its row, or delete `evidence.jsonl` to start over.
 | 1 | `demo-python-strong` | demo | python | completed | 100.0 | 3/3 | — | PASS |
 | 2 | `demo-python-mid` | demo | python | completed | 75.0 | 3/4 | — | PASS |
 | 3 | `demo-python-zero` | demo | python | completed | 0.0 | 0/1 | — | PASS |
-| 4 | `groq-python` | groq | python | not run | — | — | — | — |
-| 5 | `groq-javascript` | groq | javascript | not run | — | — | — | — |
-| 6 | `groq-typescript` | groq | typescript | not run | — | — | — | — |
-| 7 | `fallback-tinyllama` | groq | python | not run | — | — | — | — |
+| 4 | `groq-python` | groq | python | completed | 100.0 | 3/3 | — | PASS |
+| 5 | `groq-javascript` | groq | javascript | completed | 100.0 | 3/3 | — | PASS |
+| 6 | `groq-typescript` | groq | typescript | completed | 100.0 | 3/3 | — | PASS |
+| 7 | `fallback-tinyllama` | groq | python | completed | 0.0 | 0/0 | yes | PASS |
 | 8 | `local-ollama-python` | ollama | python | completed | 100.0 | 3/3 | — | PASS |
 | 9 | `local-ollama-javascript` | ollama | javascript | completed | 100.0 | 3/3 | — | PASS |
-| 10 | `local-ollama-typescript` | ollama | typescript | failed | 0.0 | 0/0 | — | FAIL |
+| 10 | `local-ollama-typescript` | ollama | typescript | completed | 100.0 | 3/3 | — | PASS |
 
 ## Cases
 
@@ -173,7 +173,40 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 - **Proves:** A real provider generates code the sandbox actually runs and scores.
 - **Precondition:** Operator exports GROQ_API_KEY; worker restarted with it (see #233).
 - **Expectation:** `{"kind": "score_band", "min": 80.0, "max": 100.0}`
-- **Result:** not run
+- **Result:** PASS — score 100.0 in band {'kind': 'score_band', 'min': 80.0, 'max': 100.0} (3/3 tests)
+- **Submission:** `eac7291e-4da7-4abf-b819-6b76d3fc4432`
+- **Challenge:** `0494de46-0564-4dc2-b668-c01ed9974384`
+- **Provider / model:** groq / openai/gpt-oss-20b
+- **Attempts:** 1
+- **Run at:** 2026-09-28T04:09:46+00:00
+
+> All 3 tests passed.
+
+Passed tests: test_returns_first_matching_pair, test_finds_pair_not_at_the_start, test_returns_empty_when_no_pair
+
+Raw output (tail):
+...                                                                      [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED test_solution.py::test_returns_first_matching_pair
+PASSED test_solution.py::test_finds_pair_not_at_the_start
+PASSED test_solution.py::test_returns_empty_when_no_pair
+3 passed in 0.01s
+
+
+<details><summary>log tail</summary>
+
+```
+...                                                                      [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED test_solution.py::test_returns_first_matching_pair
+PASSED test_solution.py::test_finds_pair_not_at_the_start
+PASSED test_solution.py::test_returns_empty_when_no_pair
+3 passed in 0.01s
+```
+
+</details>
 
 ### Row 5 — Real model: Groq on JavaScript
 
@@ -181,7 +214,79 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 - **Proves:** The node --test runner and its output parser work on real generated code.
 - **Precondition:** Operator exports GROQ_API_KEY; worker restarted with it (see #233).
 - **Expectation:** `{"kind": "score_band", "min": 80.0, "max": 100.0}`
-- **Result:** not run
+- **Result:** PASS — score 100.0 in band {'kind': 'score_band', 'min': 80.0, 'max': 100.0} (3/3 tests)
+- **Submission:** `f44aeea2-1cca-4b08-82fe-b55e90510c49`
+- **Challenge:** `848ced7c-22c5-4ac0-97e3-a673c7823adf`
+- **Provider / model:** groq / openai/gpt-oss-20b
+- **Attempts:** 3
+- **Run at:** 2026-09-28T04:12:16+00:00
+
+> All 3 tests passed.
+
+Passed tests: rejects small numbers, accepts small primes, rejects composites
+
+Raw output (tail):
+TAP version 13
+# Subtest: rejects small numbers
+ok 1 - rejects small numbers
+  ---
+  duration_ms: 1.24551
+  type: 'test'
+  ...
+# Subtest: accepts small primes
+ok 2 - accepts small primes
+  ---
+  duration_ms: 0.140754
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.129678
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114.611721
+
+
+<details><summary>log tail</summary>
+
+```
+  ---
+  duration_ms: 1.24551
+  type: 'test'
+  ...
+# Subtest: accepts small primes
+ok 2 - accepts small primes
+  ---
+  duration_ms: 0.140754
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.129678
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114.611721
+```
+
+</details>
 
 ### Row 6 — Real model: Groq on TypeScript
 
@@ -189,7 +294,79 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 - **Proves:** The tsx --test runner and its TAP parser work on real generated code.
 - **Precondition:** Operator exports GROQ_API_KEY. This row is the one fixture that could not be executed during authoring (no tsx on the authoring host), so treat its first run as a spec check as well as a score check.
 - **Expectation:** `{"kind": "score_band", "min": 80.0, "max": 100.0}`
-- **Result:** not run
+- **Result:** PASS — score 100.0 in band {'kind': 'score_band', 'min': 80.0, 'max': 100.0} (3/3 tests)
+- **Submission:** `56e5b314-4260-4c18-a0e3-50ae9b49dca3`
+- **Challenge:** `c51930c2-e0be-476b-8311-10d682d6bd8b`
+- **Provider / model:** groq / openai/gpt-oss-20b
+- **Attempts:** 1
+- **Run at:** 2026-09-28T04:13:41+00:00
+
+> All 3 tests passed.
+
+Passed tests: rejects numbers below two, accepts primes, rejects composites
+
+Raw output (tail):
+TAP version 13
+# Subtest: rejects numbers below two
+ok 1 - rejects numbers below two
+  ---
+  duration_ms: 0.952507
+  type: 'test'
+  ...
+# Subtest: accepts primes
+ok 2 - accepts primes
+  ---
+  duration_ms: 0.212649
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.117198
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 588.579694
+
+
+<details><summary>log tail</summary>
+
+```
+  ---
+  duration_ms: 0.952507
+  type: 'test'
+  ...
+# Subtest: accepts primes
+ok 2 - accepts primes
+  ---
+  duration_ms: 0.212649
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.117198
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 588.579694
+```
+
+</details>
 
 ### Row 7 — Fallback drill: primary forced to fail, TinyLlama must answer
 
@@ -197,7 +374,78 @@ FAILED test_solution.py::test_converts_a_valid_numeral - AssertionError: asse...
 - **Proves:** A failing primary falls back to a real TinyLlama generation and the provenance reaches the result metrics. The score itself is informational: a 1.1B model may well fail these tests, and that is not what this row is testing.
 - **Precondition:** Worker has LLM_FALLBACK_PROVIDER=ollama and LLM_FALLBACK_MODEL=tinyllama, host Ollama is running and reachable from celery (Linux: bind 0.0.0.0, not 127.0.0.1). OLLAMA_MAX_PARALLEL=1 and OLLAMA_KEEP_ALIVE=0 are genuine serve-time variables; the thread cap is the platform's OLLAMA_NUM_THREADS setting, since Ollama itself has no such variable - see #266. The submission key is deliberately invalid — that is the point of the row. See #233.
 - **Expectation:** `{"kind": "fallback"}`
-- **Result:** not run
+- **Result:** PASS — fell back to ollama
+- **Submission:** `c7b5776a-f1e6-47ed-8ace-b0bbe2d84656`
+- **Challenge:** `8ee1190c-5523-4522-a57a-fabbfec31116`
+- **Provider / model:** groq / llama-3.1-8b-instant
+- **Attempts:** 3
+- **Run at:** 2026-09-28T00:53:05+00:00
+- **Fallback:** ollama / tinyllama (primary error: HTTPStatusError: Client error '403 Forbidden' for url 'https://api.groq.com/openai/v1/chat/completions' For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403)
+
+> The test suite failed to load — no tests ran (1 collection error).
+
+Raw output (tail):
+…(truncated)
+ttestmodule
+    mod = import_path(
+/usr/local/lib/python3.14/site-packages/_pytest/pathlib.py:596: in import_path
+    importlib.import_module(module_name)
+/usr/local/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1406: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1371: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1342: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:938: in _load_unlocked
+    ???
+/usr/local/lib/python3.14/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+test_solution.py:1: in <module>
+    from solution import reverse_string
+E     File "/code/solution.py", line 1
+E       To produce a corrected solution for the problem described in the prompt, you need to follow these steps:
+E          ^^^^^^^
+E   SyntaxError: invalid syntax
+=========================== short test summary info ============================
+ERROR test_solution.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.38s
+
+
+<details><summary>log tail</summary>
+
+```
+/usr/local/lib/python3.14/site-packages/_pytest/pathlib.py:596: in import_path
+    importlib.import_module(module_name)
+/usr/local/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1406: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1371: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1342: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:938: in _load_unlocked
+    ???
+/usr/local/lib/python3.14/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+test_solution.py:1: in <module>
+    from solution import reverse_string
+E     File "/code/solution.py", line 1
+E       To produce a corrected solution for the problem described in the prompt, you need to follow these steps:
+E          ^^^^^^^
+E   SyntaxError: invalid syntax
+=========================== short test summary info ============================
+ERROR test_solution.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.38s
+```
+
+</details>
 
 ### Row 8 — Free repeatable path: local Qwen 2.5 Coder 1.5B end to end
 
@@ -244,7 +492,7 @@ PASSED test_solution.py::test_returns_empty_when_no_pair
 
 - **Case:** `local-ollama-javascript`
 - **Proves:** The node --test runner and its output parser work on real generated code - the same claim row 5 makes, proven without a keyed provider. Row 5 is about a *hosted* provider integrating end to end, which is a separate claim; this row is about our runner, and it should not take a third party's WAF to prove that. Asserts completed rather than a score band for row 8's reason: a band passes even when the run did nothing.
-- **Precondition:** Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 5, so the two rows differ only in which provider produced the code.
+- **Precondition:** Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 5, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly.
 - **Expectation:** `{"kind": "completed"}`
 - **Result:** PASS — pipeline completed on the docker backend, score 100.0 (3/3 tests) — score is informational for this row
 - **Submission:** `95b248f0-a025-49c6-b372-ffaa34aecf38`
@@ -324,25 +572,78 @@ ok 3 - rejects composites
 
 - **Case:** `local-ollama-typescript`
 - **Proves:** The tsx --test runner and its TAP parser work on real generated code - the same claim row 6 makes, proven without a keyed provider. As row 9: a band would pass even when the run did nothing, so this row asserts completed and reports the score.
-- **Precondition:** Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 6, so the two rows differ only in which provider produced the code.
+- **Precondition:** Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 6, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly. This row was recorded as failing for that reason until the generation cap was raised to 300s (#266) and the worker restarted; it now passes at 3/3 on the docker backend - see the README for the forensics.
 - **Expectation:** `{"kind": "completed"}`
-- **Result:** FAIL — run did not complete (timed out)
-- **Submission:** `13a1bea1-7e0e-4832-9895-99d81ec6ed69`
-- **Challenge:** `13f394fc-de78-4f9a-9fad-4d84d21fcd2e`
+- **Result:** PASS — pipeline completed on the docker backend, score 100.0 (3/3 tests) — score is informational for this row
+- **Submission:** `aa4116e8-d305-4bb2-85f7-85b6e0024a35`
+- **Challenge:** `93b650de-9c72-4915-a23c-83443c4fa9f1`
 - **Provider / model:** ollama / qwen2.5-coder:1.5b
-- **Attempts:** 1
-- **Run at:** 2026-09-28T00:20:37+00:00
+- **Attempts:** 2
+- **Run at:** 2026-09-28T00:55:30+00:00
 
-> No tests reported a result.
+> All 3 tests passed.
+
+Passed tests: rejects numbers below two, accepts primes, rejects composites
 
 Raw output (tail):
-Evaluation error: timed out
+TAP version 13
+# Subtest: rejects numbers below two
+ok 1 - rejects numbers below two
+  ---
+  duration_ms: 0.998525
+  type: 'test'
+  ...
+# Subtest: accepts primes
+ok 2 - accepts primes
+  ---
+  duration_ms: 0.145917
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.135906
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 519.79068
 
 
 <details><summary>log tail</summary>
 
 ```
-Evaluation error: timed out
+  ---
+  duration_ms: 0.998525
+  type: 'test'
+  ...
+# Subtest: accepts primes
+ok 2 - accepts primes
+  ---
+  duration_ms: 0.145917
+  type: 'test'
+  ...
+# Subtest: rejects composites
+ok 3 - rejects composites
+  ---
+  duration_ms: 0.135906
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 519.79068
 ```
 
 </details>
