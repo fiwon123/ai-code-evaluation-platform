@@ -115,16 +115,25 @@ pass:
 
 ## Recommended fixes (P0 / P1 / P2)
 
-| Priority | Fix | Scope | Because |
-|---|---|---|---|
-| P0 | Define `--font-size-2xs` (the app already uses it) and put `LanguageBadge`/`Features` ad-hoc sizes on the scale | `globals.css`, 2 modules | F2 is one missing token + two stragglers; cheapest correctness win |
-| P0 | Footer column titles `<h3>` → `<h2>` | `Footer.tsx` | F3: one line, every page with a footer |
-| P0 | Give the submission-loading skeleton a top-level heading | `SubmissionDetail.tsx` | F4: pages need an `<h1>` at all times |
-| P1 | Introduce a `--control-height` token at 44 px and ratchet the 17 sites onto it | global + ~17 modules | F1 is a coherent design decision, so decide it in one place; see sweep F1 for the two inline-action caveats |
-| P2 | Field error messages through `aria-describedby`/`aria-invalid` on inputs | `TextInput`/`Field` | From the sweep's "not covered" list: the message exists but is not announced with the field — worth a rule and a fix |
+| Priority | Fix | Scope | Because | Status |
+|---|---|---|---|---|
+| P0 | Define `--font-size-2xs` (the app already uses it) and put `LanguageBadge`/`Features` ad-hoc sizes on the scale | `globals.css`, 2 modules | F2 is one missing token + two stragglers; cheapest correctness win | **Merged** (#296 → PR #301) — the undefined var dropped, all sub-12px text raised onto the scale's `xs` floor; `text-tiny` 0 |
+| P0 | Footer column titles `<h3>` → `<h2>` | `Footer.tsx` | F3: one line, every page with a footer | **Merged** (#297 → PR #301) — `heading-skip` 0 |
+| P0 | Give the submission-loading skeleton a top-level heading | `SubmissionDetail.tsx` | F4: pages need an `<h1>` at all times | **Merged** (#298 → PR #301) — `no-h1` 0 |
+| P1 | Introduce a `--control-height` token at 44 px and ratchet the 17 sites onto it | global + ~17 modules | F1 is a coherent design decision, so decide it in one place; see sweep F1 for the two inline-action caveats | Open — #299 |
+| P2 | Field error messages through `aria-describedby`/`aria-invalid` on inputs | `TextInput`/`Field` | From the sweep's "not covered" list: the message exists but is not announced with the field — worth a rule and a fix | Open — #300 |
+
+The P0 row nominally says "define `--font-size-2xs`", but once the admin
+`dailyLabel` and the `Features` mock chrome sat on the scale's existing `xs`
+step there was **no consumer left for a 10px token**, so none was added — the
+scale stays flat (12px floor) and the audit rule stops firing.
 
 No P0/P1 issue in this list was created from this report yet; the plan is to
 file fix issues only after the user reviews it.
+
+**Update (fix pass complete):** the user reviewed the report and approved
+merging PR #295, after which the P0 issues #296/#297/#298 were filed, fixed in
+PR #301 and merged. P1 (#299) and P2 (#300) remain open.
 
 ## The one thing this audit could not photograph
 

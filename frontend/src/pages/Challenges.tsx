@@ -242,7 +242,7 @@ function Challenges() {
                     </div>
                     <span className={styles.date}>{formatRelativeTime(challenge.created_at)}</span>
                   </div>
-                  <h3 className={styles.cardTitle}>{challenge.title}</h3>
+                  <h2 className={styles.cardTitle}>{challenge.title}</h2>
                   <p className={`${styles.cardDesc} lineClamp2`}>
                     {challenge.description}
                   </p>

@@ -129,7 +129,7 @@
 }
 
 .mockTitle {
-  font-size: 0.68rem;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -179,7 +179,7 @@
 }
 
 .providerBadge {
-  font-size: 0.66rem;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 999px;
@@ -232,7 +232,7 @@
 .editorFile {
   margin-left: var(--space-2);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   color: var(--color-code-text);
   opacity: 0.9;
 }
@@ -320,7 +320,7 @@
 }
 
 .reportMeta {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   margin-top: 2px;
 }
