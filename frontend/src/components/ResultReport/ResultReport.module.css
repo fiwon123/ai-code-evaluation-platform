@@ -47,7 +47,7 @@
 
 .ringText {
   fill: var(--color-text);
-  font-size: 22px;
+  font-size: var(--font-size-2xl);
   font-weight: 700;
 }
 
