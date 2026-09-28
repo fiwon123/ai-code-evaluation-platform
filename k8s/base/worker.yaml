@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-eval-worker
+  labels:
+    app.kubernetes.io/name: ai-evaluation-platform
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-evaluation-platform
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: worker
+          # Same image as the backend — runs the Celery worker entrypoint.
+          image: eval-backend:dev
+          imagePullPolicy: IfNotPresent
+          command: ["celery"]
+          args: ["-A", "app.core.celery_app:celery_app", "worker", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: ai-eval-config
+            - secretRef:
+                name: ai-eval-secrets
+          # The worker has no HTTP endpoint, so no readiness/liveness probes.
+          # Redelivers on worker loss via task_acks_late/task_reject_on_worker_lost.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

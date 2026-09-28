@@ -1,4 +1,5 @@
 import Card from "../../components/Card/Card.tsx";
+import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import styles from "./About.module.css";
 
 const STACK = [
@@ -16,10 +17,13 @@ const STACK = [
 function About() {
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>About this project</h1>
-      <p className={styles.tagline}>
-        An open-source platform for automatically verifying AI-generated code.
-      </p>
+      <header className={styles.header}>
+        <span className="eyebrow">About</span>
+        <PageTitle size="lg" className={styles.pageTitle}>About this project</PageTitle>
+        <p className={styles.tagline}>
+          An open-source platform for automatically verifying AI-generated code.
+        </p>
+      </header>
 
       <div className={styles.grid}>
         <Card>
@@ -52,11 +56,11 @@ function About() {
         <Card>
           <h2 className={styles.sectionTitle}>How it works</h2>
           <p className={styles.text}>
-            Users create challenges consisting of an LLM prompt and a pytest
-            test suite. Submissions are queued through Redis and processed by a
-            Celery worker, which calls the selected LLM provider, writes the
-            generated code to an isolated workspace, runs the tests with a
-            timeout, and stores the results.
+            Users create challenges consisting of an LLM prompt and a test
+            suite in the language they want evaluated. Submissions are queued
+            through Redis and processed by a Celery worker, which calls the
+            selected LLM provider, writes the generated code to an isolated
+            workspace, runs the tests with a timeout, and stores the results.
           </p>
           <p className={styles.text}>
             Every evaluation records pass/fail counts, a score, execution logs,
@@ -68,9 +72,11 @@ function About() {
           <h2 className={styles.sectionTitle}>Project status</h2>
           <p className={styles.text}>
             This is an active open-source prototype. The core evaluation
-            pipeline, authentication, challenge management, and a free demo
-            provider are functional. Docker sandbox execution, self-hosting,
-            and enterprise features are on the roadmap.
+            pipeline, authentication, challenge management, Docker sandbox
+            execution, self-hosting, thirteen language runtimes, and a free
+            demo provider are functional. Billing, multi-factor
+            authentication, and self-service account management are on the
+            roadmap.
           </p>
         </Card>
       </div>

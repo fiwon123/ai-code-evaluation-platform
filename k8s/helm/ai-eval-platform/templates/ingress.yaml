@@ -1,0 +1,39 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ai-eval-platform.fullname" . }}-ingress
+  labels:
+    {{- include "ai-eval-platform.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  # TLS terminates at the ingress. Pair with cert-manager via
+  # ingress.annotations (e.g. cert-manager.io/cluster-issuer) and a tls entry
+  # whose secretName holds the issued certificate.
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ai-eval-platform.fullname" . }}-backend
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ai-eval-platform.fullname" . }}-frontend
+                port:
+                  number: 80
+{{- end }}

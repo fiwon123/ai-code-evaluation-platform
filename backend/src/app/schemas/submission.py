@@ -2,7 +2,15 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.config import settings
+from app.services.llm_models import model_belongs_to_provider
+
+# Providers that require an API key to generate code. Mirrors the UI provider
+# list in frontend/src/pages/ChallengeDetail.tsx (requiresKey) and the env-var
+# mapping in app/services/llm.py (KEYED_PROVIDERS) — keep all three in sync.
+KEY_REQUIRED_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "groq"})
 
 
 class SubmissionCreate(BaseModel):
@@ -10,6 +18,36 @@ class SubmissionCreate(BaseModel):
 
     challenge_id: UUID
     provider: str | None = Field(default=None, max_length=50)
+    api_key: str | None = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "Per-run LLM API key. Used only for this submission's code "
+            "generation and never stored, returned, or logged."
+        ),
+    )
+    model: str | None = Field(
+        default=None,
+        max_length=100,
+        description=(
+            "Catalog model id (see GET /api/models). Omitted → the provider's "
+            "default model is used."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_api_key_for_keyed_providers(self):
+        if self.provider in KEY_REQUIRED_PROVIDERS and not self.api_key:
+            raise ValueError(f"An API key is required for provider '{self.provider}'")
+        return self
+
+    @model_validator(mode="after")
+    def validate_model_for_provider(self):
+        if self.model:
+            provider = self.provider or settings.llm_provider or "demo"
+            if not model_belongs_to_provider(self.model, provider):
+                raise ValueError(f"Model '{self.model}' is not available for provider '{provider}'")
+        return self
 
 
 class SubmissionUpdate(BaseModel):
@@ -28,12 +66,118 @@ class EvaluationResultRead(BaseModel):
     total_tests: int
     score: float
     logs: str
+    #: Readable digest of ``logs`` — which tests failed and why. Empty on rows
+    #: written before summaries existed.
+    logs_summary: str = ""
     metrics: dict[str, Any]
+    #: Per-test-case breakdown returned when the runner produced one.
+    test_results: list[dict[str, Any]] | None = None
+    #: Public share token — visible only to the owner (submission reads are
+    #: owner-scoped) so the dashboard can show shared state.
+    share_token: str | None = None
     created_at: datetime
 
 
+class EvaluationAttemptRead(BaseModel):
+    """One generate-and-test attempt within a submission's history."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    #: 1-based; attempt 1 is the initial generation.
+    attempt_number: int
+    #: The code this attempt ran — the timeline needs it to show what changed.
+    code: str
+    passed_tests: int
+    total_tests: int
+    score: float
+    logs: str
+    logs_summary: str
+    metrics: dict[str, Any]
+    test_results: list[dict[str, Any]] | None = None
+    created_at: datetime
+
+
+class ProviderComparisonEntry(BaseModel):
+    """Aggregated evaluation stats for one provider on a challenge."""
+
+    provider: str
+    runs: int
+    score: float
+    passed_tests: float
+    total_tests: float
+    duration_ms: float
+    last_run_at: datetime
+
+
+class ProviderComparisonRead(BaseModel):
+    """Per-provider comparison of the current user's evaluations."""
+
+    challenge_id: UUID
+    entries: list[ProviderComparisonEntry]
+
+
+class ShareResultRead(BaseModel):
+    """Share token for a completed evaluation report."""
+
+    share_token: str
+
+
+class SharedResultRead(BaseModel):
+    """Public, unauthenticated view of a shared evaluation report.
+
+    Includes just enough challenge context for a viewer to understand what
+    was evaluated, plus the full report (code, tests, metrics). Never
+    includes the sharing user's identity or the raw submission record.
+    """
+
+    challenge_id: UUID
+    challenge_title: str
+    challenge_prompt: str
+    language: str
+    provider: str
+    status: str
+    created_at: datetime
+    code: str | None
+    score: float
+    passed_tests: int
+    total_tests: int
+    logs: str
+    #: Readable rendering of the run, so a shared link is as legible as the
+    #: owner's view. Null for reports written before v0.14.
+    logs_summary: str | None = None
+    metrics: dict[str, Any]
+    test_results: list[dict[str, Any]] | None = None
+
+
+class ChallengeStatsItem(BaseModel):
+    """Per-challenge evaluation stats for the current user."""
+
+    challenge_id: UUID
+    challenge_title: str
+    language: str
+    total_runs: int
+    completed_runs: int
+    failed_runs: int
+    avg_score: float | None
+    best_score: float | None
+    last_run_at: datetime
+
+
+class SubmissionStatsRead(BaseModel):
+    """The user's evaluation history grouped by challenge."""
+
+    items: list[ChallengeStatsItem]
+
+
 class SubmissionRead(BaseModel):
-    """Submission representation with optional nested evaluation result."""
+    """Submission representation with optional nested evaluation result.
+
+    Deliberately excludes attempt history: this schema also backs the list,
+    comparison and admin endpoints, where per-attempt rows would multiply the
+    payload for no reader. :class:`SubmissionDetailRead` adds them for the
+    single-submission view.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,9 +185,53 @@ class SubmissionRead(BaseModel):
     user_id: UUID
     challenge_id: UUID
     status: str
+    #: Pipeline phase while processing: ``"generating"``, ``"testing"`` or
+    #: ``"repairing"``; None when pending or terminal.
+    phase: str | None = None
+    #: When evaluation began (status → processing); None while queued.
+    started_at: datetime | None = None
     provider: str | None
+    model: str | None = None
+    language: str | None
     code: str | None
     score: float | None
     created_at: datetime
     updated_at: datetime
     evaluation_result: EvaluationResultRead | None = None
+
+
+class SubmissionDetailRead(SubmissionRead):
+    """Single-submission view: adds the attempt history and the repair budget.
+
+    ``max_attempts`` comes from worker configuration so the UI can say
+    "attempt 2 of 3" instead of guessing a denominator.
+    """
+
+    #: Oldest first. One entry per generate-and-test attempt; the last entry
+    #: mirrors ``evaluation_result``.
+    attempts: list[EvaluationAttemptRead] = Field(default_factory=list)
+    max_attempts: int = 1
+
+    @classmethod
+    def from_submission(cls, submission) -> SubmissionDetailRead:
+        """Build the detail payload from an ORM row.
+
+        Validates the ORM object directly — routing through ``SubmissionRead``
+        would drop ``attempts``, since that schema has no such field, and the
+        history would silently come back empty.
+
+        ``max_attempts`` is not a column: it is the worker's repair budget,
+        which the UI needs to render "attempt 2 of 3". Shared by the detail
+        route and the WebSocket's snapshot/terminal payloads so both agree.
+        """
+        return cls.model_validate(submission).model_copy(
+            update={"max_attempts": max(1, settings.evaluation_max_attempts)}
+        )
+
+
+class AdminSubmissionRead(SubmissionRead):
+    """Admin submission view — SubmissionRead plus the owner's username and
+    the challenge title (resolved via joins in the admin router)."""
+
+    username: str
+    challenge_title: str

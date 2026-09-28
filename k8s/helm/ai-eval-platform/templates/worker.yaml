@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-eval-platform.fullname" . }}-worker
+  labels:
+    {{- include "ai-eval-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "ai-eval-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "ai-eval-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name | default (include "ai-eval-platform.fullname" .) }}
+      {{- end }}
+      containers:
+        - name: worker
+          # Same image as the backend — runs the Celery worker entrypoint.
+          image: "{{ .Values.image.repository }}:{{ .Values.image.backendTag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery"]
+          args: ["-A", "app.core.celery_app:celery_app", "worker", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "ai-eval-platform.fullname" . }}-config
+            - secretRef:
+                name: {{ include "ai-eval-platform.fullname" . }}-secrets
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}

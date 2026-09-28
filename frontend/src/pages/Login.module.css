@@ -1,41 +1,33 @@
+/* Only used while the auth context is still resolving, where the page renders
+   this placeholder instead of the layout. It reserves roughly the height the
+   card will take so the sign-in form does not jump when the user lands. */
 .page {
   min-height: 60vh;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: var(--space-16) var(--space-6) var(--space-20);
-  background: var(--color-bg-gradient);
-}
-
-.card {
-  width: 100%;
-  max-width: 420px;
-  box-shadow: var(--shadow-lg);
-}
-
-.header {
-  text-align: center;
-  margin-bottom: var(--space-8);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.title {
-  font-size: var(--font-size-2xl);
-  margin-top: var(--space-2);
-}
-
-.subtitle {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
 }
 
 .form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-1) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
 }
 
 .error {

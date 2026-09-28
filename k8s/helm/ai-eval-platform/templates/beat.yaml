@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-eval-platform.fullname" . }}-beat
+  labels:
+    {{- include "ai-eval-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: beat
+spec:
+  replicas: {{ .Values.beat.replicas }}
+  selector:
+    matchLabels:
+      {{- include "ai-eval-platform.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: beat
+  template:
+    metadata:
+      labels:
+        {{- include "ai-eval-platform.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: beat
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name | default (include "ai-eval-platform.fullname" .) }}
+      {{- end }}
+      containers:
+        - name: beat
+          # Same image as the backend — runs the Celery beat (periodic
+          # scheduler) entrypoint, which drives the stale-submission recovery
+          # sweep every minute.
+          image: "{{ .Values.image.repository }}:{{ .Values.image.backendTag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery"]
+          args: ["-A", "app.core.celery_app:celery_app", "beat", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "ai-eval-platform.fullname" . }}-config
+            - secretRef:
+                name: {{ include "ai-eval-platform.fullname" . }}-secrets
+          # Beat persists its schedule to /tmp/celerybeat-schedule* (shelve
+          # db), written at startup and every ~3 min while ticking
+          # (sync_every). A liveness probe fails when the file goes stale,
+          # catching a wedged scheduler whose loop stalled — which would
+          # otherwise silently stop the recovery sweep.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - test -n "$(find /tmp -maxdepth 1 -name 'celerybeat-schedule*' -mmin -5 2>/dev/null)"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.beat.resources | nindent 12 }}

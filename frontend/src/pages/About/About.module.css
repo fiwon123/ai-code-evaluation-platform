@@ -4,8 +4,13 @@
   margin: 0 auto;
 }
 
+.header {
+  text-align: center;
+  margin-bottom: var(--space-12);
+}
+
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .pageTitle {
-  font-size: var(--font-size-4xl);
   margin-bottom: var(--space-4);
 }
 
@@ -13,7 +18,9 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-lg);
   max-width: 600px;
-  margin-bottom: var(--space-12);
+  /* The box is narrower than .page, so it needs explicit auto margins to
+     center under the heading — text-align alone only centers the glyphs. */
+  margin: 0 auto;
 }
 
 .grid {

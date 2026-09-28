@@ -27,10 +27,17 @@
   margin-bottom: var(--space-6);
 }
 
+.headerBadges {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
   margin: 0;
-  font-size: var(--font-size-3xl);
-  line-height: 1.2;
 }
 
 .layout {
@@ -139,6 +146,46 @@
   width: 100%;
 }
 
+/* Per-run API key */
+.apiKeyGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+}
+
+.apiKeyLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.apiKeyInput {
+  /* `outline: none` plus a 1px border-colour change is not a focus indicator —
+   * a 1px colour change with no area change fails WCAG 2.4.11, and this is the
+   * field a user most needs to be certain they are typing into. */
+  composes: focusRingField from "../styles/focus.css";
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  transition: border-color var(--transition-fast);
+}
+
+
+
+.apiKeyInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.apiKeyHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
 .errorText {
   color: var(--color-danger);
   font-size: var(--font-size-sm);
@@ -162,24 +209,21 @@
   align-items: stretch;
 }
 
-.deleteButton {
+.ownerActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
   margin-top: var(--space-6);
-  background: none;
-  border: none;
-  color: var(--color-danger);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  padding: 0;
-  text-align: left;
 }
 
-.deleteButton:hover {
-  text-decoration: underline;
+.editLink {
+  display: block;
+  text-decoration: none;
 }
 
-.deleteButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.deleteButton {
+  width: 100%;
 }
 
 @media (max-width: 900px) {
@@ -190,4 +234,138 @@
   .sideCol {
     position: static;
   }
+}
+/* --- provider comparison --- */
+
+.comparison {
+  margin-top: var(--space-6);
+}
+
+.comparisonHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.leaderboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.providerCard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.providerCard:hover {
+  border-color: var(--color-border-hover);
+}
+
+.providerRunning {
+  border-color: var(--color-primary);
+}
+
+.runningMeta {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.noResultText {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.providerCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.providerCardName {
+  font-weight: 700;
+}
+
+.providerCardDesc {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.providerCardStats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.providerScore {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+}
+
+.scoreSuccess {
+  color: var(--color-success);
+}
+
+.scoreWarning {
+  color: var(--color-warning);
+}
+
+.scoreDanger {
+  color: var(--color-danger);
+}
+
+.providerStatLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.providerStatDetail {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.runnerKeyInput {
+  composes: focusRingField from "../styles/focus.css";
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+
+
+/* A provider card with no history yet is a *slot*, not an empty page, so it
+   takes the shared empty state's dashed edge at a fraction of the padding.
+   Without this the line read as a stray muted sentence. */
+.emptySlot {
+  align-items: flex-start;
+  gap: 0;
+  padding: var(--space-4);
+  text-align: left;
+  background: transparent;
+  width: 100%;
+}
+
+/* Reach the shared component's heading by element, not by its hashed class:
+   `as="p"` renders a real <p>, and a size/weight override here is what makes
+   the slot read as a caption rather than a section title. */
+.emptySlot p {
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  color: var(--color-text-muted);
 }

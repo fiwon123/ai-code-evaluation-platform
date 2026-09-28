@@ -128,6 +128,10 @@ activemq-data/
 
 # Environments
 .env
+# .env.local / .env.production / ... would otherwise be committable; the
+# negation keeps backend/.env.example tracked (it holds placeholders only).
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -201,6 +205,17 @@ dist/
 dist-ssr/
 *.tsbuildinfo
 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Visual sweep output — 70 MB per run. The findings worth keeping are written up
+# in docs/visual-sweep/REPORT.md, which *is* committed, precisely because a
+# report left in here dies with the machine. `make visual-sweep` prunes to the
+# newest few runs (see VISUAL_SWEEP_KEEP).
+frontend/visual-sweeps/
+
 # Docker
 docker-compose.override.yml
 
@@ -212,6 +227,8 @@ docker-compose.override.yml
 
 # OpenCode
 .opencode/node_modules/
+# OpenCode session memory — agent-local progress file, never committed.
+.opencode/progress.md
 
 # Evaluation platform specific
 /tmp/evaluations/

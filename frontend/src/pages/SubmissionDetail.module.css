@@ -11,19 +11,35 @@
   margin-bottom: var(--space-6);
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
   margin: 0;
-  font-size: var(--font-3xl);
 }
 
 .progressText {
-  font-size: var(--font-lg);
+  font-size: var(--font-size-lg);
   margin: 0 0 var(--space-2);
 }
 
+.estimate {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-2);
+  line-height: 1.5;
+}
+
+.delayed {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
 .muted {
-  color: var(--color-muted);
-  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .report {
@@ -32,43 +48,34 @@
   gap: var(--space-4);
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+.attempts {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
 }
 
-.statLabel {
-  color: var(--color-muted);
-  font-size: var(--font-sm);
-  margin: 0 0 var(--space-1);
-}
-
-.statValue {
-  font-size: var(--font-2xl);
-  font-weight: 700;
+.attemptsTitle {
   margin: 0;
-}
-
-.sectionTitle {
-  margin: 0 0 var(--space-3);
-  font-size: var(--font-xl);
-}
-
-.metrics {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.metricKey {
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
 }
 
 .errorText {
-  color: var(--color-error, #dc2626);
+  color: var(--color-danger);
   margin: 0;
+}
+
+.retry {
+  margin-top: var(--space-4);
+}
+/* The not-found branch is a full page, so it gets the page rhythm rather than
+   sitting flush against the header. */
+.notFound {
+  padding: var(--space-12) var(--space-6) var(--space-16);
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+.notFoundLink {
+  font-weight: 600;
 }

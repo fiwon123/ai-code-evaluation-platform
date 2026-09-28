@@ -1,0 +1,164 @@
+# Default values for ai-eval-platform.
+# Override per environment with values-dev.yaml / values-production.yaml
+# or `helm install --set key=value`.
+
+# Image registry/namespace/pullPolicy. The Kind workflow builds local images
+# (eval-backend:dev / eval-frontend:dev) and loads them into the cluster, so
+# override image.repository/tag accordingly (`make k8s-setup`).
+image:
+  repository: eval-backend
+  backendTag: dev
+  frontendTag: dev
+  pullPolicy: IfNotPresent
+
+backend:
+  replicas: 1
+  service:
+    port: 80
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  livenessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+frontend:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+worker:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# Beat is a singleton by design: multiple beat schedulers would double-dispatch
+# the recovery sweep. Do not scale replicas above 1 (production included).
+beat:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: "0.5"
+      memory: 256Mi
+
+postgres:
+  enabled: true
+  image: pgvector/pgvector:pg16
+  storage: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+redis:
+  enabled: true
+  image: redis:7
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Application configuration (mirrors k8s/base/configmap.yaml).
+config:
+  environment: development
+  corsOrigins: '["http://localhost:5173","http://localhost:8000"]'
+  # Blank by default — the configmap falls back to the in-chart redis Service
+  # ({{ fullname }}-redis via the redisServiceName helper), mirroring how the
+  # kustomize base names its redis (ai-eval-redis). Set explicitly to point at
+  # a managed/external Redis.
+  redisUrl: ""
+  llmProvider: demo
+  accessTokenExpireMinutes: "1440"
+  evaluation:
+    timeout: "30"
+    dir: "/tmp/evaluations"
+    dockerEnabled: "false"
+    image: "eval-sandbox:latest"
+    memoryLimit: "128m"
+    cpuLimit: "0.5"
+    timeoutSeconds: "30"
+    networkDisabled: "true"
+    readonlyRootfs: "true"
+    maxOutputBytes: "65536"
+  rateLimit:
+    enabled: "true"
+    anonymousLimit: "60"
+    authenticatedLimit: "120"
+    windowSeconds: "60"
+
+# Secrets come from the generated Secret; override with --set secrets.* or
+# wire in external-secrets. DEV DEFAULTS ONLY — production MUST override.
+# `databaseUrl`/`postgresPassword` are also blank by default: the templates
+# fall back to the in-chart postgres Service (see _helpers.tpl) when unset,
+# so the managed-PG escape hatch is `secrets.databaseUrl=...` at install time.
+secrets:
+  databaseUrl: ""
+  postgresPassword: "postgres"
+  jwtSecretKey: "dev-secret-key-change-in-production"
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  geminiApiKey: ""
+  # GitHub OAuth2 — inert until client credentials are supplied.
+  githubClientId: ""
+  githubClientSecret: ""
+  # Ollama needs NO secret (keyless by design, see ollama_provider.py).
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  # Optional worker HPA — disabled by default; tune on a busy evaluation
+  # cluster. Renders a second HorizontalPodAutoscaler for the Celery worker.
+  worker:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ai-eval.local
+  annotations: {}
+  # TLS terminates at the ingress. Typically combined with cert-manager via
+  # annotations, e.g.:
+  #   annotations:
+  #     cert-manager.io/cluster-issuer: letsencrypt-prod
+  #   tls:
+  #     - hosts: [eval.example.com]
+  #       secretName: ai-eval-tls
+  tls: []
+
+serviceAccount:
+  # Creates a dedicated ServiceAccount (fullname) and attaches it to every
+  # workload when true. With false (default), pods run under the namespace's
+  # default account — fine unless you need Role/RoleBinding scoping.
+  create: false
+  name: ""

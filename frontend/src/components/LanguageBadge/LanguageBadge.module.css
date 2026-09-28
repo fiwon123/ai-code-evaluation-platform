@@ -1,0 +1,29 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--lang-color) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lang-color) 28%, transparent);
+  color: var(--lang-color);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: var(--lang-color);
+  color: var(--color-on-accent);
+  font-size: calc(var(--font-size-xs) - 1px);
+  font-weight: 700;
+  line-height: 1.5;
+}

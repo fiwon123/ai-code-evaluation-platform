@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import httpx
 
-from app.services.llm_providers.base import LLMProvider, strip_code_fences
-
-SYSTEM_PROMPT = (
-    "You are a coding assistant. Write a complete, correct Python solution "
-    "for the problem described by the user. Output ONLY the source code with "
-    "no markdown fences, no explanations, and no tests."
+from app.services.llm_providers.base import (
+    LLMProvider,
+    build_user_message,
+    get_system_prompt,
+    strip_code_fences,
 )
 
 
@@ -35,15 +34,17 @@ class AnthropicProvider(LLMProvider):
             },
         )
 
-    def generate_code(self, prompt: str, language: str = "python") -> str:
+    def generate_code(
+        self, prompt: str, language: str = "python", feedback: str | None = None
+    ) -> str:
         self.validate_language(language)
         response = self._client.post(
             "/v1/messages",
             json={
                 "model": self._model,
                 "max_tokens": 2048,
-                "system": SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": prompt}],
+                "system": get_system_prompt(language),
+                "messages": [{"role": "user", "content": build_user_message(prompt, feedback)}],
             },
         )
         response.raise_for_status()

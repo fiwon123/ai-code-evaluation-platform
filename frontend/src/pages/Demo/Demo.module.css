@@ -4,18 +4,28 @@
   margin: 0 auto;
 }
 
+.header {
+  text-align: center;
+  margin-bottom: var(--space-12);
+}
+
+/* Layout only — size and the gradient come from the shared PageTitle.
+   No light-mode override on purpose: `--gradient-title` is built from the
+   per-theme primary tokens, so the gradient is legible on the light background
+   too (#1d4ed8 -> #1e40af on #eef2f7, 5.9:1 and 7.8:1). The old override
+   traded the gradient for solid text and made this page disagree with its
+   landing-page siblings. */
 .pageTitle {
   text-align: center;
-  font-size: var(--font-size-4xl);
   margin-bottom: var(--space-4);
 }
 
 .pageSubtitle {
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   font-size: var(--font-size-lg);
   max-width: 600px;
-  margin: 0 auto var(--space-16);
+  margin: 0 auto;
 }
 
 /* Walkthrough */
@@ -127,9 +137,79 @@
   min-width: 220px;
 }
 
+/* Preview: what will actually execute for the selected challenge */
+.preview {
+  margin-top: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.previewTitle {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  margin: 0;
+}
+
+.previewDescription {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  margin: 0 0 var(--space-3);
+}
+
+.previewSection {
+  margin-bottom: var(--space-3);
+}
+
+.previewLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-2);
+}
+
+.previewCode {
+  max-height: 300px;
+  overflow: auto;
+  border-radius: var(--radius-md);
+}
+
+.previewEmpty {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.previewMeta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 0;
+}
+
+.previewMeta code {
+  font-size: inherit;
+  color: var(--color-text-secondary);
+}
+
+/* An inline note inside the runner panel, so it stays inline — but it borrows
+   the dashed edge the shared EmptyState uses, so "nothing to run yet" reads as
+   the same kind of moment as every other empty slot in the app. */
 .runnerEmpty {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
 }
 
 .loginNote {
@@ -230,4 +310,37 @@
   .step {
     grid-template-columns: 1fr;
   }
+}
+
+.phaseText {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.testBreakdown {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.testRowPass,
+.testRowFail {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.testRowPass {
+  color: var(--color-success);
+}
+
+.testRowFail {
+  color: var(--color-danger);
 }

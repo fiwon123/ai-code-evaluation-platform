@@ -1,0 +1,43 @@
+# Kind cluster configuration for local development.
+#
+# Kind is the local cluster choice for this project (lighter than minikube,
+# no VM). This config creates a single control-plane node that is
+# ingress-ready so the production manifests can be exercised end-to-end
+# against a local Ingress-NGINX controller.
+#
+# Port mappings (host -> node):
+#   80/443  ->  ingress controller (nginx-ingress / ingress-nginx)
+#   8000    ->  backend API (kubectl port-forward fallback / direct node port)
+#   5173    ->  frontend dev server (vite) when running `make k8s-dev`
+#
+# The fixed host ports make the mapping reproducible between cluster
+# recreations and are widely used by devtools (DevSpace port forwarding).
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ai-eval
+
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # Ingress controller (HTTP + HTTPS)
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+      # Backend API (direct access without port-forwarding)
+      - containerPort: 8000
+        hostPort: 8000
+        protocol: TCP
+      # Frontend dev server (vite dev / DevSpace hot reload)
+      - containerPort: 5173
+        hostPort: 5173
+        protocol: TCP
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"

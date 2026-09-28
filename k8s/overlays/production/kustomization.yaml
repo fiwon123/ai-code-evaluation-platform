@@ -1,0 +1,87 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production overlay — HA replica counts, generous resources, HPA scaling,
+# and production image tags. Secrets MUST come from a proper source
+# (sealed-secrets / SOPS / external-secrets) before deploying.
+resources:
+  - ../../base
+
+images:
+  - name: eval-backend
+    newTag: latest
+  - name: eval-frontend
+    newTag: latest
+
+patches:
+  - target:
+      group: apps
+      kind: Deployment
+      name: ai-eval-backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: 250m
+          memory: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "2"
+          memory: 2Gi
+  - target:
+      group: apps
+      kind: Deployment
+      name: ai-eval-frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      group: apps
+      kind: Deployment
+      name: ai-eval-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: ai-eval-postgres
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 50Gi
+  - target:
+      group: autoscaling
+      kind: HorizontalPodAutoscaler
+      name: ai-eval-backend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10
+
+configMapGenerator:
+  - name: ai-eval-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=production
+
+secretGenerator:
+  - name: ai-eval-secrets
+    behavior: merge
+    literals:
+      # MUST be overridden by sealed-secrets / SOPS / external-secrets.
+      - JWT_SECRET_KEY=change-me-production
+      # OAuth + provider keys — production values MUST come from the secrets
+      # manager (sealed-secrets / SOPS / external-secrets), never from this file.
+      - GITHUB_CLIENT_ID=change-me-production
+      - GITHUB_CLIENT_SECRET=change-me-production
+      - GEMINI_API_KEY=change-me-production

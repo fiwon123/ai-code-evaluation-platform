@@ -1,0 +1,82 @@
+# DevSpace configuration for the Kubernetes inner dev loop (v2beta1 schema).
+#
+# DevSpace is the choice for local Kubernetes development over Skaffold:
+#   - bidirectional file sync of backend/src + frontend/src into the cluster
+#   - port forwarding (8000 backend, 5173 frontend)
+#   - integrated terminal for the hot-reload loop (uvicorn --reload / vite dev)
+#   - deploys through the existing Kustomize overlay (single source of truth)
+#
+# Prereq: `make k8s-setup` (Kind cluster + images loaded), then:
+#   devspace dev            # interactive dev loop (sync + ports + terminal)
+#   devspace deploy         # deploy without the dev loop
+#   devspace dev --profile production   # prod overlay, no dev loop
+#
+# See PROJECT_CONTEXT.md "DevSpace vs Skaffold" for the rationale.
+
+version: v2beta1
+name: ai-eval-platform
+
+# Image tag is loaded into the Kind cluster by scripts/k8s-setup.sh.
+vars:
+  IMAGE_TAG: dev
+
+images:
+  backend:
+    image: eval-backend:${IMAGE_TAG}
+    dockerfile: backend/Dockerfile
+    context: backend
+  frontend:
+    image: eval-frontend:${IMAGE_TAG}
+    dockerfile: frontend/Dockerfile
+    context: frontend
+
+deployments:
+  ai-eval:
+    kubectl:
+      # Reuse the Kustomize overlay — manifests are not duplicated.
+      kustomize: true
+      manifests:
+        - k8s/overlays/dev
+
+dev:
+  # Backend hot-reload loop: sync source, expose :8000, run uvicorn --reload.
+  backend:
+    imageSelector: eval-backend:${IMAGE_TAG}
+    sync:
+      - path: ./backend/src:/app/src
+        excludePaths:
+          - __pycache__
+          - "*.pyc"
+    ports:
+      - port: "8000:8000"
+    terminal:
+      command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  # Frontend hot-reload loop: sync source, expose :5173, run vite dev.
+  frontend:
+    imageSelector: eval-frontend:${IMAGE_TAG}
+    sync:
+      - path: ./frontend/src:/app/src
+        excludePaths:
+          - node_modules
+          - dist
+    ports:
+      - port: "5173:5173"
+    terminal:
+      command: npm run dev -- --host 0.0.0.0
+
+profiles:
+  # Production-like: prod overlay + latest images, no dev loop.
+  - name: production
+    patches:
+      - op: replace
+        path: deployments.ai-eval.kubectl.manifests
+        value:
+          - k8s/overlays/production
+      - op: replace
+        path: images.backend.image
+        value: eval-backend:latest
+      - op: replace
+        path: images.frontend.image
+        value: eval-frontend:latest
+      - op: remove
+        path: dev

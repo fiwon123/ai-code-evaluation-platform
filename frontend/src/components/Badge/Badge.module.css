@@ -16,6 +16,15 @@
   color: var(--color-primary);
 }
 
+/* Light mode: calm neutral tag — the blue-on-pale-blue pill blended into the
+   whitish hero background and added blue noise; a gray pill is readable in
+   both the hero and on colored cards. Dark mode keeps the blue accent. */
+:global([data-theme="light"]) .primary {
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
 .success {
   background: var(--color-success-light);
   color: var(--color-success);
@@ -23,7 +32,7 @@
 
 .warning {
   background: var(--color-warning-light);
-  color: #b45309;
+  color: var(--color-warning-strong);
 }
 
 .danger {

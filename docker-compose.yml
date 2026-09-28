@@ -1,0 +1,382 @@
+# Dev-sandbox Compose file (repo root) — lightweight Docker-based development.
+#
+# Replaces the old VS Code Dev Containers setup (`.devcontainer/`): a single
+# prebuilt `dev` container (bind-mounted source, deps baked at image build)
+# runs uvicorn + vite in the foreground, a `celery` service runs the
+# evaluation worker, a `beat` service runs the periodic stale-submission
+# recovery sweep, and `postgres` / `redis` provide infra. The `sandbox`
+# service builds the air-gapped eval-sandbox image used to isolate untrusted
+# code evaluation. Use `docker compose up dev` (or push `infra-up`).
+#
+# name is pinned so project volumes/networks keep the ai-eval_* prefix
+# regardless of the repo directory name or where the compose file lives.
+name: ai-eval
+
+# Resource limits on every service prevent runaway processes from exhausting
+# the host machine (e.g., heavy evaluations, build spikes). Ceilings are
+# intentionally generous so normal dev workflows (uv sync, npm install,
+# uvicorn, Vite) run comfortably while still bounding resource use.
+# Note: limits apply to running containers with `docker compose up` (Compose v2).
+#
+# --- Host identity ------------------------------------------------------------
+# `user: "${HOST_UID}:${HOST_GID}"` makes the dev/celery/beat services run as
+# the host user, so files written into the bind-mounted workspace keep the
+# host's ownership instead of landing as root:root (which shows up "locked" in
+# the host editor and breaks git with "dubious ownership"). The Makefile
+# exports HOST_UID/HOST_GID from `id -u`/`id -g` — override them explicitly when
+# running `docker compose` by hand (the defaults below keep plain
+# `docker compose up` working for a 1000:1000 host).
+#
+# `group_add: ["${DOCKER_GID}"]` grants access to the host Docker socket
+# (root:docker 0660) for the non-root user — required by the evaluation worker
+# (it spawns isolated eval-sandbox containers) and by the sandboxed agent.
+# DOCKER_GID comes from `stat -c %g /var/run/docker.sock` in the Makefile and
+# defaults to 0 (root group) for platforms where the socket is root-owned.
+services:
+  # Dev sandbox — the coding/runtime environment. Source is bind-mounted for
+  # hot reload; backend deps are baked into /opt/backend-venv; node_modules is
+  # shared with the host and bootstrapped via npm ci when missing.
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Keep the runtime user aligned with the `user:` directive below.
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    # Run as the host user so bind-mounted files stay host-owned (see header).
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Docker socket group (host) — keep evaluation container spawning working.
+    group_add:
+      - "${DOCKER_GID:-0}"
+    command: ["/sandbox/ai-code-evaluation-platform/dev-entrypoint.sh"]
+    # Friendly hostname so prompts (`%n@%m`) and `hostname` clearly show you're
+    # inside the sandbox (containers otherwise get a random hex ID).
+    hostname: ai-eval-sandbox
+    volumes:
+      - .:/sandbox/ai-code-evaluation-platform:cached
+      # Mount the host Docker socket so evaluations can spawn isolated
+      # eval-sandbox containers (docker_sandbox uses the Python SDK).
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Share the host gh CLI auth with the dev sandbox (read-only). The
+      # container runs as the host user, so the target home is the
+      # non-root user's (/home/devuser), not /root.
+      - ${HOME}/.config/gh:/home/devuser/.config/gh:ro
+      # Sandboxed AI coding agent: mount the host opencode binary + config and
+      # git identity read-only so `opencode` can run INSIDE the dev container
+      # (same trusted-agent model as gh: workspace bind mount + docker socket
+      # are shared by design). `make dev-up` pre-creates ${HOME}/.config/opencode
+      # and ${HOME}/.gitconfig so these mounts never fail on a fresh machine.
+      - ${HOME}/.opencode/bin/opencode:/usr/local/bin/opencode:ro
+      - ${HOME}/.config/opencode:/home/devuser/.config/opencode:ro
+      - ${HOME}/.gitconfig:/home/devuser/.gitconfig:ro
+    # Same gateway alias as celery: Ollama on the host is reachable as
+    # host.docker.internal, and the dev container's own localhost is itself.
+    # Declared on both services that may call a local model (dev runs scripts and
+    # ad-hoc provider calls, celery does the real evaluation work).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+      - "5173:5173"
+    environment:
+      # HOME/USER/LOGNAME for the non-root runtime user (npm, uv, gh, git all
+      # resolve their config/cache from HOME).
+      - HOME=/home/devuser
+      - USER=devuser
+      - LOGNAME=devuser
+      - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - DOCKER_ENABLED=true
+      - DOCKER_IMAGE=eval-sandbox:latest
+      # Import the app package from the live bind-mounted source, never from a
+      # baked editable install: `uv sync` at image build pins the editable
+      # path at build time (previously /workspace/backend/src before the #129
+      # workspace rename), so a stale image silently runs pre-merge code
+      # (e.g. the worker discarding the recovery sweep as "unregistered").
+      # PYTHONPATH precedes site-packages in sys.path and shadows that .pth.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
+      # LLM provider keys (host-interpolated, `:-` keeps the sandbox runnable
+      # without them). Mirrors k8s/base/secrets.yaml — same env names, no
+      # drift. Ollama is keyless and needs nothing here.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      # Same address-family choice the worker makes, so a submission created in
+      # the UI reaches the provider the same way the worker will (issue #270).
+      - LLM_PREFER_IPV6=${LLM_PREFER_IPV6:-true}
+      # GitHub OAuth2 — inert until client credentials are supplied.
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      # Forward the host GITHUB_TOKEN into the dev sandbox so `gh` (which the
+      # agent uses for issues/PRs) actually works INSIDE the container: the
+      # read-only ~/.config/gh mount only carries an invalid/stale stored token,
+      # and gh prefers GH_TOKEN over that stored credential store. The token is
+      # exported under both names — GH_TOKEN (what gh checks first) and
+      # GITHUB_TOKEN (the GitHub Actions convention other tooling reads) — so
+      # scripts inside the sandbox work regardless of which name they check.
+      # The value is read from the host shell at compose-up time (interpolation
+      # only — never written to the file), matching the existing trusted-agent
+      # model (same trust as the ro gh config mount + bind-mounted workspace).
+      - GH_TOKEN=${GH_TOKEN:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    depends_on:
+      # Celery runs with the dev sandbox by default (`docker compose up dev`)
+      # so evaluations work out of the box; beat runs the stale-submission
+      # recovery sweep on the same schedule. Celery must be *healthy* (pings
+      # back on its control queue) — `service_started` alone would let the
+      # sandbox come up next to a crash-looping worker and queue submissions
+      # that nobody consumes.
+      celery:
+        condition: service_healthy
+      beat:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sandbox:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  # Celery worker — consumes evaluation tasks from Redis and runs LLM code
+  # generation + sandboxed test execution. A managed Compose service (not a
+  # background process) so it restarts automatically if it crashes. The
+  # healthcheck pings the worker's control queue so `dev` (depends_on
+  # service_healthy) never comes up against a dead/crash-looping consumer.
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Keep the runtime user aligned with the `user:` directive below.
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    # Run as the host user so bind-mounted files (e.g. the __pycache__ dirs the
+    # worker writes under the bind-mounted PYTHONPATH) stay host-owned.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Docker socket group (host) — the worker creates isolated eval-sandbox
+    # containers for code evaluation, so it needs socket access as non-root.
+    group_add:
+      - "${DOCKER_GID:-0}"
+    # Re-sync the baked venv only when it's missing (same guard as
+    # dev-entrypoint.sh) so an image predating a pyproject change can't
+    # crash-loop the worker at import time.
+    command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && { [[ -x /opt/backend-venv/bin/celery ]] || uv sync; } && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app worker --loglevel=info'
+    volumes:
+      - .:/sandbox/ai-code-evaluation-platform:cached
+      # Mount the host Docker socket so the Celery worker can create
+      # isolated eval-sandbox containers for code evaluation.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # HOME/USER/LOGNAME for the non-root runtime user (uv cache/config).
+      - HOME=/home/devuser
+      - USER=devuser
+      - LOGNAME=devuser
+      - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - DOCKER_ENABLED=true
+      - DOCKER_IMAGE=eval-sandbox:latest
+      # Live source (see dev service): stale images must not run baked code.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
+      # LLM provider keys — the worker GENERATES the code, so it needs the
+      # same key surface as the dev sandbox (mirrors k8s/base/secrets.yaml).
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      # Generation fallback: when the primary provider raises (rate limit,
+      # quota, network), retry once with this provider/model before failing
+      # the run. Left empty it is off, which is the pre-existing behaviour.
+      # Intended pairing: LLM_FALLBACK_PROVIDER=ollama with
+      # LLM_FALLBACK_MODEL=tinyllama (small enough for a CPU-only host).
+      - LLM_FALLBACK_PROVIDER=${LLM_FALLBACK_PROVIDER:-}
+      - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-}
+      # Address family for provider calls (issue #270). On by default here, and
+      # only here: this host's IPv4 egress is blocked by Groq's edge (403 "Access
+      # denied. Please check your network settings.") while IPv6 serves the same
+      # request, and a blocked family reads as a bad API key. The resolver will
+      # not pick IPv6 on its own — see the dual-stack network block at the bottom
+      # of this file — so the choice is made per request, falling back to IPv4
+      # whenever IPv6 cannot connect. Set LLM_PREFER_IPV6=false to restore the
+      # platform default.
+      - LLM_PREFER_IPV6=${LLM_PREFER_IPV6:-true}
+      # A container's own localhost is the container, so Ollama running on the
+      # HOST needs the gateway alias (extra_hosts below). Override when Ollama
+      # runs in a different container or on another machine.
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    # `host-gateway` resolves host.docker.internal to the host bridge address
+    # (Docker 20.10+). Without it the name does not resolve at all, and the
+    # fallback leg dies with a DNS error instead of a connection refusal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sandbox:
+        condition: service_completed_successfully
+    healthcheck:
+      # Pings *this* worker's control queue; fails while the worker is
+      # starting (start_period) or when it's wedged/restarting.
+      test: ["CMD-SHELL", "/opt/backend-venv/bin/celery -A app.core.celery_app:celery_app inspect ping -d celery@$${HOSTNAME} --timeout 5"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # Celery beat — periodic scheduler. Runs the stale-submission recovery
+  # sweep every minute so rows stranded in pending/processing (lost broker
+  # messages, expired tasks, killed workers) self-heal instead of being stuck
+  # forever. A dedicated service (worker -B is deprecated in Celery >= 5);
+  # the schedule state file lives in /tmp so it never pollutes the repo.
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Keep the runtime user aligned with the `user:` directive below.
+        USER_ID: ${HOST_UID:-1000}
+        GROUP_ID: ${HOST_GID:-1000}
+    # Run as the host user so bind-mounted files stay host-owned.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Same venv guard as celery: sync only when the baked venv is missing so
+    # an image predating a pyproject change can't crash-loop beat at import.
+    command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && { [[ -x /opt/backend-venv/bin/celery ]] || uv sync; } && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app beat --loglevel=info'
+    volumes:
+      - .:/sandbox/ai-code-evaluation-platform:cached
+    environment:
+      # HOME/USER/LOGNAME for the non-root runtime user (uv cache/config).
+      - HOME=/home/devuser
+      - USER=devuser
+      - LOGNAME=devuser
+      - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres:5432/postgres
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      # Live source (see dev service): stale images must not run baked code.
+      - PYTHONPATH=/sandbox/ai-code-evaluation-platform/backend/src
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Beat persists its schedule to /tmp/celerybeat-schedule* (shelve db):
+      # written at startup and every 3 min while ticking (Celery sync_every),
+      # so a deadlocked or wedged beat stops refreshing the file. Failing the
+      # check when the newest schedule file is older than 5 min catches a
+      # process that is alive but no longer ticking — which otherwise silently
+      # stops the stale-submission recovery sweep.
+      test: ["CMD-SHELL", "test -n \"$(find /tmp -maxdepth 1 -name 'celerybeat-schedule*' -mmin -5 2>/dev/null)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # Builds the eval-sandbox image (multi-language runtimes) used to isolate
+  # untrusted code execution. One-shot: builds the image, then exits.
+  sandbox:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.sandbox
+    image: eval-sandbox:latest
+    command: ["true"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    # Named volume so the Celery broker queue survives `docker compose down`
+    # (data kept across dev-restart, like postgres_data). Tasks queued but not
+    # yet acked are redelivered when the worker reconnects after a restart.
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+networks:
+  # Dual-stack (IPv4 + IPv6) so containerised providers get the same address
+  # family the host uses. This is not cosmetic: Groq's edge answers on IPv6 and
+  # returns 403 to the same request over IPv4, and an IPv4-only bridge network
+  # forces every container onto the rejected family. Measured on the dev host
+  # (issue #270): `curl -4 https://api.groq.com/.../models` → 403, `curl -6`
+  # and unflagged `curl` → 401 (reached, credentials only), so the fix is to
+  # give the worker an IPv6 route rather than to change the key.
+  #
+  # A ULA (fc00::/7) subnet is required for user-defined networks: Docker
+  # cannot derive a prefix on its own, and containers need an address to be
+  # reachable on. Outbound IPv6 from that subnet is NAT66-masqueraded to the
+  # host, so no Docker daemon configuration is needed. IPv4 is unaffected —
+  # Docker allocates a v4 subnet for the network as before.
+  #
+  # NECESSARY BUT NOT SUFFICIENT — verified on 2026-09-28. This block was
+  # measured working (the container gained fd00:1157::6 and IPv6 stopped failing
+  # with [Errno 101] Network is unreachable), yet the worker still got 403:
+  # a container holding both addresses dials whichever getaddrinfo returns
+  # FIRST, and httpcore has no Happy Eyeballs, so there is no second attempt on
+  # the other family. An /etc/gai.conf was tried for the selection half and
+  # removed: it did not reorder anything, and it cannot be tested from inside
+  # the container (/etc is not writable, unshare is denied, no strace). The
+  # selection half is now made in application code — see the LLM_PREFER_IPV6
+  # entries in the dev and celery services above, and
+  # backend/src/app/services/http_transport.py. Locked by
+  # backend/tests/test_provider_host_reachability.py.
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:1157::/64
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,5 +1,5 @@
 .block {
-  background: #0f172a;
+  background: var(--color-code-bg);
   border-radius: var(--radius-md);
   overflow: hidden;
   margin: var(--space-4) 0;
@@ -10,11 +10,11 @@
   justify-content: space-between;
   align-items: center;
   padding: var(--space-2) var(--space-4);
-  background: #1e293b;
+  background: var(--color-code-header);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--color-code-border);
 }
 
 .copyButton {
@@ -30,8 +30,8 @@
 }
 
 .copyButton:hover {
-  color: #fff;
-  background: #334155;
+  color: var(--color-code-text);
+  background: var(--color-code-border);
 }
 
 .copied {
@@ -41,10 +41,86 @@
 .code {
   overflow-x: auto;
   padding: var(--space-4);
-  color: #e2e8f0;
+  color: var(--color-code-text);
   font-size: var(--font-size-sm);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
+}
+
+/* Log view. A multi-thousand-line run must not stretch the page, so the body
+   scrolls inside its own capped box instead of growing the document. */
+.scroller {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+/* One row per line, with the number in its own column. A grid (rather than a
+   CSS counter) keeps the number aligned to the first visual line of a row even
+   when that row wraps, which pre-wrap makes routine in long tracebacks. The
+   gutter is `max-content`, not a fixed width, so a five-digit line number in a
+   10k-line log widens it instead of clipping into the text. */
+.line {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-3);
+}
+
+.lineNumber {
+  color: var(--color-code-muted);
+  opacity: 0.6;
+  text-align: right;
+  border-right: 1px solid var(--color-code-gutter);
+  user-select: none;
+}
+
+.lineText {
+  min-width: 0;
+}
+
+.lineError .lineText {
+  color: var(--color-code-error);
+  font-weight: 600;
+}
+
+.lineWarning .lineText {
+  color: var(--color-code-warn);
+}
+
+.lineSuccess .lineText {
+  color: var(--color-code-ok);
+}
+
+.lineTrace .lineText {
+  color: var(--color-code-muted);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-code-header);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  border-top: 1px solid var(--color-code-border);
+}
+
+.footerButton {
+  background: transparent;
+  border: 1px solid var(--color-code-border);
+  color: var(--color-code-text);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.footerButton:hover {
+  background: var(--color-code-border);
 }

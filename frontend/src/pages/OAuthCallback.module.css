@@ -1,0 +1,32 @@
+/* Only used while the auth context is still resolving, where the page renders
+   this placeholder instead of the layout. */
+.page {
+  min-height: 60vh;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.status {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  background: var(--color-danger-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.link {
+  font-weight: 600;
+}

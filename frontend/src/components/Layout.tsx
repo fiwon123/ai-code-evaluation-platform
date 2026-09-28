@@ -54,12 +54,27 @@ function Layout() {
                   Pricing
                 </NavLink>
               </li>
+              <li>
+                <NavLink to="/about" className={navLinkClass} onClick={closeMenus}>
+                  About
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="/contact" className={navLinkClass} onClick={closeMenus}>
+                  Contact
+                </NavLink>
+              </li>
               <li className={styles.mobileAuth}>
                 {user ? (
                   <>
                     <Link to="/profile" className={styles.link} onClick={closeMenus}>
                       Profile
                     </Link>
+                    {user.is_admin && (
+                      <Link to="/admin" className={styles.link} onClick={closeMenus}>
+                        Admin
+                      </Link>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -76,9 +91,13 @@ function Layout() {
                     <NavLink to="/login" className={navLinkClass} onClick={closeMenus}>
                       Log in
                     </NavLink>
-                    <Link to="/register" onClick={closeMenus}>
-                      <Button size="sm">Sign up</Button>
-                    </Link>
+                    <Button
+                      to="/register"
+                      onClick={closeMenus}
+                      size="sm"
+                    >
+                      Sign up
+                    </Button>
                   </>
                 )}
               </li>
@@ -123,6 +142,16 @@ function Layout() {
                     >
                       Profile
                     </Link>
+                    {user.is_admin && (
+                      <Link
+                        to="/admin"
+                        className={styles.dropdownItem}
+                        role="menuitem"
+                        onClick={closeMenus}
+                      >
+                        Admin
+                      </Link>
+                    )}
                     <Link
                       to="/challenges/new"
                       className={styles.dropdownItem}
@@ -148,13 +177,9 @@ function Layout() {
             ) : (
               <div className={styles.authActions}>
                 <NavLink to="/login" className={navLinkClass}>
-                  <Button variant="ghost" size="sm">
-                    Log in
-                  </Button>
+                  Log in
                 </NavLink>
-                <Link to="/register">
-                  <Button size="sm">Sign up</Button>
-                </Link>
+                <Button to="/register" size="sm">Sign up</Button>
               </div>
             )}
           </div>

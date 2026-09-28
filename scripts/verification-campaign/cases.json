@@ -1,0 +1,236 @@
+{
+  "issue": 235,
+  "cases": [
+    {
+      "id": "demo-python-strong",
+      "row": 1,
+      "title": "Deterministic baseline: strong prompt, good tests",
+      "provider": "demo",
+      "model": null,
+      "api_key": null,
+      "api_key_env": null,
+      "language": "python",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Two Sum",
+        "description": "Return the indices of the two numbers adding up to a target.",
+        "prompt": "Implement a function `two_sum(nums, target)` that returns the indices of the two numbers in `nums` which add up to `target`.\n- `nums` is a list of integers, `target` is an integer.\n- Return the two indices as a list `[i, j]` with `i < j`.\n- Return `[]` when no pair adds up to `target`.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import two_sum\n\n\ndef test_returns_first_matching_pair():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]\n\n\ndef test_finds_pair_not_at_the_start():\n    assert two_sum([3, 2, 4], 6) == [1, 2]\n\n\ndef test_returns_empty_when_no_pair():\n    assert two_sum([1, 2], 99) == []\n"
+      },
+      "expect": {
+        "kind": "score_band",
+        "min": 80.0,
+        "max": 100.0
+      },
+      "precondition": "none \u2014 runs on the keyless `demo` provider, no network needed",
+      "proves": "The full pipeline works end to end: a correct answer scores at the top of the scale."
+    },
+    {
+      "id": "demo-python-mid",
+      "row": 2,
+      "title": "Deterministic baseline: partially failing tests land mid-scale",
+      "provider": "demo",
+      "model": null,
+      "api_key": null,
+      "api_key_env": null,
+      "language": "python",
+      "difficulty": "medium",
+      "challenge": {
+        "title": "Fibonacci sequence",
+        "description": "Return the first n Fibonacci numbers as a list.",
+        "prompt": "Implement a function `fibonacci(n)` that returns the first `n` numbers of the Fibonacci sequence as a list, starting `0, 1, 1, 2, ...`.\n- `fibonacci(0)` returns `[]` and `fibonacci(1)` returns `[0]`.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import fibonacci\n\n\ndef test_empty_for_zero():\n    assert fibonacci(0) == []\n\n\ndef test_single_element_for_one():\n    assert fibonacci(1) == [0]\n\n\ndef test_full_sequence():\n    assert fibonacci(7) == [0, 1, 1, 2, 3, 5, 8]\n\n\ndef test_two_elements():\n    # Deliberately wrong: fibonacci(2) is [0, 1]. This row exists to prove a\n    # partial failure lands in the middle of the scale, not at 0 or 100.\n    assert fibonacci(2) == [0, 1, 1]\n"
+      },
+      "expect": {
+        "kind": "score_band",
+        "min": 20.0,
+        "max": 80.0
+      },
+      "precondition": "none \u2014 runs on the keyless `demo` provider, no network needed",
+      "proves": "Scoring is proportional, not pass/fail \u2014 a 3-of-4 run must not report 0 or 100."
+    },
+    {
+      "id": "demo-python-zero",
+      "row": 3,
+      "title": "Deterministic baseline: an unsolvable prompt scores 0",
+      "provider": "demo",
+      "model": null,
+      "api_key": null,
+      "api_key_env": null,
+      "language": "python",
+      "difficulty": "hard",
+      "challenge": {
+        "title": "Roman numeral to integer",
+        "description": "Convert Roman numeral symbols into their integer value.",
+        "prompt": "Implement a function that converts a string of Roman numeral symbols into its integer value, raising an error on invalid input.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import solution\n\n\ndef test_converts_a_valid_numeral():\n    assert solution('XIV') == 14\n"
+      },
+      "expect": {
+        "kind": "score_band",
+        "equals": 0.0
+      },
+      "precondition": "none \u2014 runs on the keyless `demo` provider, no network needed",
+      "proves": "A genuinely wrong answer scores 0 and the run terminates instead of hanging."
+    },
+    {
+      "id": "groq-python",
+      "row": 4,
+      "title": "Real model: Groq on Python",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "api_key": null,
+      "api_key_env": "GROQ_API_KEY",
+      "language": "python",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Two Sum",
+        "description": "Return the indices of the two numbers adding up to a target.",
+        "prompt": "Implement a function `two_sum(nums, target)` that returns the indices of the two numbers in `nums` which add up to `target`.\n- `nums` is a list of integers, `target` is an integer.\n- Return the two indices as a list `[i, j]` with `i < j`.\n- Return `[]` when no pair adds up to `target`.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import two_sum\n\n\ndef test_returns_first_matching_pair():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]\n\n\ndef test_finds_pair_not_at_the_start():\n    assert two_sum([3, 2, 4], 6) == [1, 2]\n\n\ndef test_returns_empty_when_no_pair():\n    assert two_sum([1, 2], 99) == []\n"
+      },
+      "expect": {
+        "kind": "score_band",
+        "min": 80.0,
+        "max": 100.0
+      },
+      "precondition": "Operator exports GROQ_API_KEY; worker restarted with it (see #233).",
+      "proves": "A real provider generates code the sandbox actually runs and scores."
+    },
+    {
+      "id": "groq-javascript",
+      "row": 5,
+      "title": "Real model: Groq on JavaScript",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "api_key": null,
+      "api_key_env": "GROQ_API_KEY",
+      "language": "javascript",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Is Prime",
+        "description": "Return whether a number is prime.",
+        "prompt": "Implement a function `isPrime(n)` that returns `true` when `n` is a prime number and `false` otherwise. Numbers below 2 are not prime.\n- Export it with `module.exports = { isPrime }` (CommonJS).\n- Put the code in `solution.js` and do not include tests.",
+        "test_code": "const test = require('node:test');\nconst assert = require('node:assert');\nconst { isPrime } = require('./solution.js');\n\ntest('rejects small numbers', () => {\n  assert.strictEqual(isPrime(0), false);\n  assert.strictEqual(isPrime(1), false);\n});\n\ntest('accepts small primes', () => {\n  assert.strictEqual(isPrime(2), true);\n  assert.strictEqual(isPrime(3), true);\n});\n\ntest('rejects composites', () => {\n  assert.strictEqual(isPrime(9), false);\n  assert.strictEqual(isPrime(100), false);\n});\n"
+      },
+      "expect": {
+        "kind": "score_band",
+        "min": 80.0,
+        "max": 100.0
+      },
+      "precondition": "Operator exports GROQ_API_KEY; worker restarted with it (see #233).",
+      "proves": "The node --test runner and its output parser work on real generated code."
+    },
+    {
+      "id": "groq-typescript",
+      "row": 6,
+      "title": "Real model: Groq on TypeScript",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "api_key": null,
+      "api_key_env": "GROQ_API_KEY",
+      "language": "typescript",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Is Prime",
+        "description": "Return whether a number is prime.",
+        "prompt": "Implement `isPrime` in TypeScript: given a number `n`, return `true` when `n` is a prime number and `false` otherwise. Numbers below 2 are not prime.\n- Export it as `export function isPrime(n: number): boolean`.\n- Put the code in `solution.ts` and do not include tests.",
+        "test_code": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { isPrime } from \"./solution\";\n\ntest(\"rejects numbers below two\", () => {\n  assert.equal(isPrime(0), false);\n  assert.equal(isPrime(1), false);\n});\n\ntest(\"accepts primes\", () => {\n  assert.equal(isPrime(2), true);\n  assert.equal(isPrime(7), true);\n});\n\ntest(\"rejects composites\", () => {\n  assert.equal(isPrime(9), false);\n  assert.equal(isPrime(91), false);\n});\n"
+      },
+      "expect": {
+        "kind": "score_band",
+        "min": 80.0,
+        "max": 100.0
+      },
+      "precondition": "Operator exports GROQ_API_KEY. This row is the one fixture that could not be executed during authoring (no tsx on the authoring host), so treat its first run as a spec check as well as a score check.",
+      "proves": "The tsx --test runner and its TAP parser work on real generated code."
+    },
+    {
+      "id": "fallback-tinyllama",
+      "row": 7,
+      "title": "Fallback drill: primary forced to fail, TinyLlama must answer",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "api_key": "intentionally-invalid-key-for-fallback-drill",
+      "api_key_env": null,
+      "language": "python",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Reverse a string",
+        "description": "Return the input string reversed.",
+        "prompt": "Implement a function `reverse_string(s)` that returns `s` reversed.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import reverse_string\n\n\ndef test_reverses_ascii():\n    assert reverse_string(\"hello\") == \"olleh\"\n\n\ndef test_handles_empty_string():\n    assert reverse_string(\"\") == \"\"\n"
+      },
+      "expect": {
+        "kind": "fallback"
+      },
+      "precondition": "Worker has LLM_FALLBACK_PROVIDER=ollama and LLM_FALLBACK_MODEL=tinyllama, host Ollama is running and reachable from celery (Linux: bind 0.0.0.0, not 127.0.0.1). OLLAMA_MAX_PARALLEL=1 and OLLAMA_KEEP_ALIVE=0 are genuine serve-time variables; the thread cap is the platform's OLLAMA_NUM_THREADS setting, since Ollama itself has no such variable - see #266. The submission key is deliberately invalid \u2014 that is the point of the row. See #233.",
+      "proves": "A failing primary falls back to a real TinyLlama generation and the provenance reaches the result metrics. The score itself is informational: a 1.1B model may well fail these tests, and that is not what this row is testing."
+    },
+    {
+      "id": "local-ollama-python",
+      "row": 8,
+      "title": "Free repeatable path: local Qwen 2.5 Coder 1.5B end to end",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b",
+      "api_key": null,
+      "api_key_env": null,
+      "language": "python",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Two Sum",
+        "description": "Return the indices of the two numbers adding up to a target.",
+        "prompt": "Implement a function `two_sum(nums, target)` that returns the indices of the two numbers in `nums` which add up to `target`.\n- `nums` is a list of integers, `target` is an integer.\n- Return the two indices as a list `[i, j]` with `i < j`.\n- Return `[]` when no pair adds up to `target`.\n- Put the code in `solution.py` and do not include tests.",
+        "test_code": "from solution import two_sum\n\n\ndef test_returns_first_matching_pair():\n    assert two_sum([2, 7, 11, 15], 9) == [0, 1]\n\n\ndef test_finds_pair_not_at_the_start():\n    assert two_sum([3, 2, 4], 6) == [1, 2]\n\n\ndef test_returns_empty_when_no_pair():\n    assert two_sum([1, 2], 99) == []\n"
+      },
+      "expect": {
+        "kind": "completed"
+      },
+      "precondition": "Host Ollama reachable from the worker at http://host.docker.internal:11434 (on Linux the service must bind 0.0.0.0, not the default 127.0.0.1) with `ollama pull qwen2.5-coder:1.5b` done. On a CPU-only host, cap the burst with OLLAMA_NUM_THREADS=2 and OLLAMA_MAX_PARALLEL=1 and let OLLAMA_TIMEOUT cover the slower generation; OLLAMA_KEEP_ALIVE=0 unloads the model afterwards. No API key and no egress to any hosted provider. Note EVALUATION_MAX_ATTEMPTS=1 keeps a multi-minute local run inside the harness wait budget - see #266.",
+      "proves": "The real-model path works from the dev sandbox on a free, unlimited, keyless provider: a genuine generation is executed by the sandbox (a real backend is recorded and tests are collected) and the run terminates. Qwen 2.5 Coder 1.5B is code-tuned and the best quality-per-CPU-second of the local family, but it is still small and its score is deliberately NOT asserted - a 0-100 band here would pass even if the run did nothing at all."
+    },
+    {
+      "id": "local-ollama-javascript",
+      "row": 9,
+      "title": "Free repeatable path: the node --test runner, proven without a keyed provider",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b",
+      "api_key": null,
+      "api_key_env": null,
+      "language": "javascript",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Is Prime",
+        "description": "Return whether a number is prime.",
+        "prompt": "Implement a function `isPrime(n)` that returns `true` when `n` is a prime number and `false` otherwise. Numbers below 2 are not prime.\n- Export it with `module.exports = { isPrime }` (CommonJS).\n- Put the code in `solution.js` and do not include tests.",
+        "test_code": "const test = require('node:test');\nconst assert = require('node:assert');\nconst { isPrime } = require('./solution.js');\n\ntest('rejects small numbers', () => {\n  assert.strictEqual(isPrime(0), false);\n  assert.strictEqual(isPrime(1), false);\n});\n\ntest('accepts small primes', () => {\n  assert.strictEqual(isPrime(2), true);\n  assert.strictEqual(isPrime(3), true);\n});\n\ntest('rejects composites', () => {\n  assert.strictEqual(isPrime(9), false);\n  assert.strictEqual(isPrime(100), false);\n});\n"
+      },
+      "expect": {
+        "kind": "completed"
+      },
+      "precondition": "Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 5, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly.",
+      "proves": "The node --test runner and its output parser work on real generated code - the same claim row 5 makes, proven without a keyed provider. Row 5 is about a *hosted* provider integrating end to end, which is a separate claim; this row is about our runner, and it should not take a third party's WAF to prove that. Asserts completed rather than a score band for row 8's reason: a band passes even when the run did nothing."
+    },
+    {
+      "id": "local-ollama-typescript",
+      "row": 10,
+      "title": "Free repeatable path: the tsx --test runner and its TAP parser, proven without a keyed provider",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:1.5b",
+      "api_key": null,
+      "api_key_env": null,
+      "language": "typescript",
+      "difficulty": "easy",
+      "challenge": {
+        "title": "Is Prime",
+        "description": "Return whether a number is prime.",
+        "prompt": "Implement `isPrime` in TypeScript: given a number `n`, return `true` when `n` is a prime number and `false` otherwise. Numbers below 2 are not prime.\n- Export it as `export function isPrime(n: number): boolean`.\n- Put the code in `solution.ts` and do not include tests.",
+        "test_code": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { isPrime } from \"./solution\";\n\ntest(\"rejects numbers below two\", () => {\n  assert.equal(isPrime(0), false);\n  assert.equal(isPrime(1), false);\n});\n\ntest(\"accepts primes\", () => {\n  assert.equal(isPrime(2), true);\n  assert.equal(isPrime(7), true);\n});\n\ntest(\"rejects composites\", () => {\n  assert.equal(isPrime(9), false);\n  assert.equal(isPrime(91), false);\n});\n"
+      },
+      "expect": {
+        "kind": "completed"
+      },
+      "precondition": "Host Ollama reachable from the worker with `ollama pull qwen2.5-coder:1.5b` done. No API key and no egress to any hosted provider. Same tests as row 6, so the two rows differ only in which provider produced the code. Check `loadavg` first: this row's wall-clock is bounded by the host's spare CPU, and a busy host makes generation outrun the worker's cap, which fails the run outright rather than scoring it badly. This row was recorded as failing for that reason until the generation cap was raised to 300s (#266) and the worker restarted; it now passes at 3/3 on the docker backend - see the README for the forensics.",
+      "proves": "The tsx --test runner and its TAP parser work on real generated code - the same claim row 6 makes, proven without a keyed provider. As row 9: a band would pass even when the run did nothing, so this row asserts completed and reports the score."
+    }
+  ]
+}

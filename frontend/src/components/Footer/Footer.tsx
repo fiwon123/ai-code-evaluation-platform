@@ -16,6 +16,14 @@ const COMPANY_LINKS = [
   { to: "/register", label: "Sign up" },
 ];
 
+/** Legal pages are real routes so they are linkable and shareable. */
+const LEGAL_LINKS = [
+  { to: "/privacy", label: "Privacy Policy" },
+  { to: "/terms", label: "Terms of Service" },
+  { to: "/security", label: "Security" },
+  { to: "/gdpr", label: "GDPR" },
+];
+
 function Footer() {
   return (
     <footer className={styles.footer}>
@@ -48,6 +56,19 @@ function Footer() {
             <h3 className={styles.colTitle}>Company</h3>
             <ul className={styles.colLinks}>
               {COMPANY_LINKS.map((link) => (
+                <li key={link.to}>
+                  <Link to={link.to} className={styles.link}>
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className={styles.col}>
+            <h3 className={styles.colTitle}>Legal</h3>
+            <ul className={styles.colLinks}>
+              {LEGAL_LINKS.map((link) => (
                 <li key={link.to}>
                   <Link to={link.to} className={styles.link}>
                     {link.label}

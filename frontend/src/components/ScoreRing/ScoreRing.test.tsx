@@ -1,0 +1,56 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import ScoreRing from "./ScoreRing";
+
+function ScoreRingFixture() {
+  return <ScoreRing value={72} label="Average score" />;
+}
+
+describe("ScoreRing", () => {
+  it("renders the SVG ring with the score label and value", () => {
+    render(<ScoreRingFixture />);
+    expect(
+      screen.getByRole("img", { name: "Average score 72 / 100" }),
+    ).toBeInTheDocument();
+    // The value is the only in-ring text, vertically centered (no label).
+    const value = screen.getByText("72%");
+    expect(value).toBeInTheDocument();
+    expect(value.getAttribute("dominant-baseline")).toBe("central");
+  });
+
+  it("clamps the value into the 0–100 range", () => {
+    render(<ScoreRing value={-5} label="Under" />);
+    expect(
+      screen.getByRole("img", { name: "Under 0 / 100" }),
+    ).toBeInTheDocument();
+
+    render(<ScoreRing value={120} label="Over" />);
+    expect(
+      screen.getByRole("img", { name: "Over 100 / 100" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the danger variant for low scores", () => {
+    render(<ScoreRing value={25} label="Dangerous" />);
+    const ring = screen.getByRole("img", { name: "Dangerous 25 / 100" });
+    expect(ring).toBeInTheDocument();
+    expect(ring.querySelector(".ringDanger")).toBeInTheDocument();
+  });
+
+  it("shows the success variant for high scores", () => {
+    render(<ScoreRing value={88} label="Great" />);
+    const ring = screen.getByRole("img", { name: "Great 88 / 100" });
+    expect(ring.querySelector(".ringSuccess")).toBeInTheDocument();
+  });
+
+  it("sets the ring-size CSS var and draws the track + progress circles", () => {
+    render(<ScoreRing value={45} label="Half" size={120} />);
+    const ring = screen.getByRole("img", { name: "Half 45 / 100" });
+    expect(ring.style.getPropertyValue("--ring-size")).toBe("120px");
+    expect(ring.querySelector(".ringTrack")).toBeInTheDocument();
+    const progress = ring.querySelector(".ringProgress");
+    expect(progress).toBeInTheDocument();
+    expect(progress?.getAttribute("stroke-dasharray")).not.toBe("");
+    expect(progress?.getAttribute("stroke-linecap")).toBe("round");
+  });
+});

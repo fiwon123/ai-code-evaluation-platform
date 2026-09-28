@@ -1,0 +1,70 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Staging overlay — a pre-production environment: modest replica counts,
+# generated image tags, and staging configuration on top of the base.
+resources:
+  - ../../base
+
+images:
+  - name: eval-backend
+    newTag: staging
+  - name: eval-frontend
+    newTag: staging
+
+patches:
+  - target:
+      group: apps
+      kind: Deployment
+      name: ai-eval-backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "1"
+          memory: 1Gi
+  - target:
+      group: apps
+      kind: Deployment
+      name: ai-eval-frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      group: apps
+      kind: Deployment
+      name: ai-eval-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: ai-eval-postgres
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 5Gi
+
+configMapGenerator:
+  - name: ai-eval-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=staging
+
+secretGenerator:
+  - name: ai-eval-secrets
+    behavior: merge
+    literals:
+      # Replace with real values in CI (e.g. via sealed-secrets / SOPS).
+      - JWT_SECRET_KEY=change-me-staging
+      # OAuth + provider keys — staging defaults are empty; wire real values
+      # via the same mechanism (sealed-secrets / SOPS / external-secrets).
+      - GITHUB_CLIENT_ID=change-me-staging
+      - GITHUB_CLIENT_SECRET=change-me-staging
+      - GEMINI_API_KEY=change-me-staging

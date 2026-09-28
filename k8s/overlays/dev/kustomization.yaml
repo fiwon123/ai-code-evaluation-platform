@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Dev overlay — targets the local Kind cluster (see k8s/kind-config.yaml and
+# scripts/k8s-setup.sh). Single replicas, dev image tags, muted resource limits.
+resources:
+  - ../../base
+
+images:
+  - name: eval-backend
+    newTag: dev
+  - name: eval-frontend
+    newTag: dev
+
+patches:
+  # Keep the HPA min at 1 in dev — no need to scale on a laptop.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: ai-eval-backend
+    patch: |-
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
+
+  # Relax probe timing for local image pulls from the Kind cluster.
+  - target:
+      group: apps
+      kind: Deployment
+      name: ai-eval-backend
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/initialDelaySeconds
+        value: 20
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/initialDelaySeconds
+        value: 30

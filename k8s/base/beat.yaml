@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-eval-beat
+  labels:
+    app.kubernetes.io/name: ai-evaluation-platform
+    app.kubernetes.io/component: beat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: beat
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-evaluation-platform
+        app.kubernetes.io/component: beat
+    spec:
+      containers:
+        - name: beat
+          # Same image as the backend — runs the Celery beat (periodic
+          # scheduler) entrypoint, which drives the stale-submission recovery
+          # sweep every minute.
+          image: eval-backend:dev
+          imagePullPolicy: IfNotPresent
+          command: ["celery"]
+          args: ["-A", "app.core.celery_app:celery_app", "beat", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: ai-eval-config
+            - secretRef:
+                name: ai-eval-secrets
+          # Beat persists its schedule to /tmp/celerybeat-schedule* (shelve
+          # db), written at startup and every ~3 min while ticking
+          # (sync_every). A liveness probe fails when the file goes stale,
+          # catching a wedged scheduler whose loop stalled — which would
+          # otherwise silently stop the recovery sweep.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - test -n "$(find /tmp -maxdepth 1 -name 'celerybeat-schedule*' -mmin -5 2>/dev/null)"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "0.5"
+              memory: 256Mi

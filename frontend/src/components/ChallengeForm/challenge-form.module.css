@@ -1,0 +1,271 @@
+/**
+ * The shared field layout for the Create and Edit challenge forms.
+ *
+ * The two pages duplicated this file line for line — 92 bytes-identical lines
+ * each, differing only in a comment and whichever page-specific rules each one
+ * happened to need. That is not a style preference, it is a drift risk: the
+ * copy that ships is whichever one was edited last, and nothing notices the
+ * other going stale. It is now defined once here and both pages compose it.
+ *
+ * What deliberately stays per-page is the *shell* (`.page`, `.header`, the
+ * breadcrumbs): the page-rhythm lock reads each page's own `.page` padding and
+ * holds Create and Edit to the same `app` rhythm. Moving the shell here would
+ * have deleted what that lock checks, so the two concerns are kept apart —
+ * shell per page, fields shared.
+ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* A rule between sections, but not above the first one — a divider with nothing
+ * before it reads as a stray line at the top of the form. */
+.section + .section {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-6);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sectionHint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.hintRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Title and language sit side by side; the code fields want the full width. */
+.grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-5);
+}
+
+.counter {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  /* Tabular figures so the number does not jitter the layout on every
+   * keystroke, which is what makes a live counter feel cheap. */
+  font-variant-numeric: tabular-nums;
+}
+
+.editor {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Difficulty: a segmented control over a native radio group.
+ *
+ * The radios stay visible rather than being hidden behind the chip. That is
+ * the pattern `ChallengeDetail` already uses for provider selection, and it
+ * means focus lands on a real control and the shared `:focus-visible` ring
+ * applies unchanged — no `:has()` selector and no second copy of the ring
+ * geometry to keep in step with `styles/focus.css`. */
+.difficulty {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.difficultyLegend {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.chip:hover {
+  border-color: var(--color-primary);
+}
+
+.chipSelected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.guide {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-secondary);
+}
+
+.guideSummary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.guideBody {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.guideFacts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.guideFacts dt {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.guideFacts dd {
+  margin: 0;
+}
+
+.guidePre {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  overflow-x: auto;
+  color: var(--color-text);
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-danger-light);
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+}
+
+/* The action bar sits inside the form and sticks to the bottom of the viewport,
+ * so Save is reachable without scrolling back up a long form. It keeps a solid
+ * background because it floats over the fields rather than displacing them. */
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+  padding: var(--space-4) 0 var(--space-2);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.actionButtons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* A compact echo of what is being saved, so the sticky bar is not just two
+ * buttons floating over the form. */
+.summary {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summaryTitle {
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+.summaryMeta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* A sticky bar that wraps to three lines eats the screen on a phone, so the
+   * summary goes and the buttons take the full width. */
+  .summary {
+    display: none;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+}

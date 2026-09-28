@@ -1,0 +1,59 @@
+/* The page shell — see the note in `CreateChallenge.module.css`. The field
+ * layout is shared: `components/ChallengeForm/challenge-form.module.css`. */
+
+.page {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  width: 100%;
+  /* The `app` rhythm — see the note in `CreateChallenge.module.css`. */
+  padding: var(--space-12) var(--space-6) var(--space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  animation: fadeInUp 0.6s ease both;
+}
+
+.header {
+  max-width: 760px;
+  animation: fadeInUp 0.6s ease both;
+}
+
+.crumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.crumbLink {
+  color: var(--color-primary);
+}
+
+.subtitle {
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
+  max-width: 640px;
+}
+
+.card {
+  max-width: 760px;
+}
+
+.status {
+  color: var(--color-text-secondary);
+  padding: var(--space-8) 0;
+}
+
+.notFound {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-8) 0;
+  color: var(--color-text-secondary);
+}
+
+.notFound a {
+  color: var(--color-primary);
+}

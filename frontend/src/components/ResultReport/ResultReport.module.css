@@ -1,0 +1,212 @@
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.ringWrap {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-1) 0;
+}
+
+.ring {
+  display: block;
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 10;
+}
+
+.ringValue {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.ringSuccess {
+  stroke: var(--color-success);
+}
+
+.ringWarning {
+  stroke: var(--color-warning);
+}
+
+.ringDanger {
+  stroke: var(--color-danger);
+}
+
+.ringText {
+  fill: var(--color-text);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.testList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/*
+ * A test row is a flex row of unbreakable content: the name is a pytest/Go/JUnit
+ * identifier (often a parametrized payload in `[]`), and the message is a
+ * failure repr. Flex items default to `min-width: auto`, so a long name used to
+ * set the row's minimum width and push it past the card — `flex-wrap` lets the
+ * message drop to its own line, and `overflow-wrap: anywhere` lets a single
+ * unbreakable token break mid-word. `min-width: 0` is what actually allows the
+ * item to shrink to that.
+ */
+.testRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.testPass {
+  color: var(--color-success);
+  font-weight: 700;
+}
+
+.testFail {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/*
+ * A flex item defaults to `min-width: auto`, so a long test name — a pytest
+ * parametrization, a Go table case, a JUnit display name — used to set this row's
+ * minimum width and push the row past its card. `overflow-wrap: anywhere` is the
+ * whole fix: unlike the older `break-word`, it also reduces the item's
+ * *min-content* contribution, so the flex layout is allowed to shrink it in the
+ * first place. (`flex-wrap` and an explicit `min-width: 0` were tried and
+ * measured as changing nothing — see e2e/overflow.spec.ts.)
+ */
+.testName {
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.testMessage {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.metricTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.metricTable th,
+.metricTable td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  /* Metric values are provider output too — a request id, a primary-provider
+     error, a repr — so both columns must be allowed to break mid-token. */
+  overflow-wrap: anywhere;
+}
+
+.metricTable tr:last-child th,
+.metricTable tr:last-child td {
+  border-bottom: none;
+}
+
+.statLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-1);
+}
+
+/*
+ * A stat holds a verb ("completed") or a number — both short — but CDN font
+ * metrics vary enough between renderers that a single word can exceed its
+ * column (CI's runner rendered "completed" 16px wider than the sandbox does,
+ * spilling out of the Status card). `overflow-wrap` lets a too-long token
+ * break mid-word instead of pushing the card past its column.
+ */
+.statValue {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sectionTitle {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-xl);
+}
+
+/*
+ * The key column is a label, so it used to be `nowrap` to keep short names on
+ * one line. A table cell cannot shrink below its content, though, so one long
+ * key widened the whole table past its card. The `nowrap` is simply gone; the
+ * wrap itself comes from the shared cell rule above.
+ */
+.metricKey {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Shown when the requested provider failed and the fallback produced the code:
+   the score on this page is then another model's work, and the reason has to
+   stay legible. `overflow-wrap` because a provider error can be one long
+   unbroken line. */
+.fallbackNote {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-warning);
+  background: var(--color-warning-light);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* The summary preserves its own line breaks: the failed-test list is one
+   entry per line, and collapsing it into a paragraph would defeat the point
+   of having a summary at all. `pre-line` alone is not enough — it keeps
+   newlines but still refuses to break inside a long token, and a summary is
+   full of paths and assertion reprs with no spaces to wrap at. */
+.summary {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+}
+
+.disclosure > summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  user-select: none;
+}
+
+.disclosure > summary:hover {
+  color: var(--color-text);
+}

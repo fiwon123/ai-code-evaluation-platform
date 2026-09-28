@@ -1,0 +1,28 @@
+apiVersion: v2
+name: ai-eval-platform
+description: >-
+  AI Code Evaluation Platform — HTTP API (FastAPI), React frontend (nginx),
+  Celery worker + beat (periodic stale-submission recovery), PostgreSQL
+  (StatefulSet) and Redis.
+type: application
+version: 0.7.0
+appVersion: "0.6.0"
+kubeVersion: ">=1.28.0"
+
+# Kustomize is the DEFAULT manifest strategy (k8s/overlays); this chart is the
+# expansion path for complex deployments (HA, custom domains, external
+# secrets, per-env tuning) — see values.yaml and README section in
+# PROJECT_CONTEXT.md "When to prefer Helm over Kustomize".
+
+keywords:
+  - ai
+  - code-evaluation
+  - fastapi
+  - react
+  - postgres
+  - redis
+  - celery
+
+maintainers:
+  - name: fiwon123
+    email: 40900330+fiwon123@users.noreply.github.com

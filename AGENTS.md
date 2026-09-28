@@ -25,7 +25,26 @@ Build a platform where users can submit coding prompts, generate code using mult
 - Background jobs: Celery (with Redis broker)
 - Authentication: JWT tokens (OAuth2 planned for future)
 - AI: Multiple LLM providers (OpenAI, Anthropic, local models)
-- Development: Docker and Dev Containers
+- Development: Docker + Compose (dev sandbox) with host-native Makefile loop
+- Kubernetes (optional): Kind + Kustomize (default) + Helm (expansion) + DevSpace (dev loop)
+
+### Supported Languages (Multi-Language Evaluation)
+
+The sandbox image (`backend/Dockerfile.sandbox`) ships five runtimes; generated
+code and its test harness run in an air-gapped, resource-limited container:
+
+| Language   | Test runner                    | Entry file       |
+|------------|--------------------------------|------------------|
+| Python     | pytest                         | solution.py      |
+| JavaScript | node --test                    | solution.js      |
+| TypeScript | tsx --test                     | solution.ts      |
+| Java       | javac + JUnit Platform console | Solution.java    |
+| Go         | go test -v                     | solution.go     |
+
+- The container gets no network access at runtime (`GOPROXY` disabled, module
+  cache redirected to tmpfs).
+- Docker sandbox is safely bypassed with a subprocess fallback when Docker is
+  unavailable (see backend `services/docker_sandbox.py`).
 
 ### Core Architecture
 
@@ -56,7 +75,12 @@ Evaluation Result (score, logs, metrics)
 ```
 backend/       # FastAPI app, Celery workers, evaluation logic
 frontend/      # React 19, Vite 8, TypeScript
-.devcontainer/ # Docker Compose dev environment
+docker-compose.yml  # Dev sandbox + infra (dev, celery, postgres, redis, sandbox)
+Dockerfile     # Dev image (python:3.14-slim + gh + uv + Node 22)
+dev-entrypoint.sh  # Starts uvicorn + vite in the dev sandbox
+k8s/           # Kind config + Kustomize base/overlays + Helm chart (optional)
+scripts/       # k8s-setup.sh / k8s-deploy.sh / k8s-dev.sh / k8s-teardown.sh / setup-host-tools.sh
+devspace.yaml  # Kubernetes inner dev loop (optional)
 ```
 
 ## Development Commands
@@ -80,41 +104,126 @@ npm run build        # Build for production
 npm run lint         # Lint code
 ```
 
-### Docker Compose (Full Stack)
+### Dev Sandbox (Docker Compose)
+
+The primary dev path is a lightweight Docker "dev sandbox" (no VS Code Dev
+Containers): `docker compose up dev` runs uvicorn + vite in a prebuilt
+container with the source bind-mounted; `celery` runs the evaluation worker;
+`postgres`/`redis`/`sandbox` provide infra. Dependency-free host-native
+targets (`make dev-*`) remain the fastest alternative. See `DEVELOPMENT.md`
+for the daily-loop cheatsheet (up/down, AI-in-sandbox, manual coding).
 
 ```bash
-docker compose up -d         # Start all services
-docker compose down          # Stop all services
-docker compose logs -f       # View logs
+make infra-up               # postgres + redis + sandbox image (compose, detached)
+make dev-up                 # build image + run dev sandbox + celery in the foreground (logs)
+make dev-down               # stop dev container + celery
+make dev-log                # tail dev + celery logs
+docker compose run --rm --entrypoint zsh dev   # interactive shell inside the sandbox (zsh default)
+scripts/open-in-sandbox.sh  # shell in the sandbox with opencode (sandboxed agent)
+make check                  # full local gate (host toolchain)
+make test-e2e               # Playwright e2e (Chromium is baked into the dev image)
 ```
+
+### Sandboxed AI agent (opencode inside the dev sandbox)
+
+By default opencode runs on the **host** (this agent). For an isolated coding
+environment — without Dev Containers — run opencode **inside** the `dev`
+container: it inherits the container runtime (filesystem, baked toolchain,
+resource caps) while sharing the workspace bind mount.
+
+```bash
+make dev-up                         # dev image mounts the host opencode binary
+scripts/open-in-sandbox.sh          # → interactive zsh in the dev container ([SANDBOX] badge)
+cd /sandbox/ai-code-evaluation-platform && opencode     # the AI coding agent, sandboxed
+```
+
+The dev image mounts (all read-only): the host opencode binary
+(`${HOME}/.opencode/bin/opencode` → `/usr/local/bin/opencode`), opencode
+config (`${HOME}/.config/opencode`) and git identity (`${HOME}/.gitconfig`);
+`make dev-up` pre-creates the config paths and errors if opencode is missing.
+
+**Ownership**: `dev`, `celery` and `beat` run as the **host user** (`user:` +
+`group_add:` in `docker-compose.yml`, fed by `HOST_UID`/`HOST_GID`/`DOCKER_GID`
+exported from the `Makefile`; the image bakes a matching `devuser` via
+`USER_ID`/`GROUP_ID` build args). Files an agent or service writes into the
+bind-mounted workspace therefore keep the host's ownership — never `root:root`,
+which would leave the host user unable to edit them. Start the stack with the
+Makefile so those variables are passed; a bare `docker compose up` falls back to
+1000:1000. `make dev-build` rebuilds **all three** workspace images (they share
+the Dockerfile but each has its own image). See DEVELOPMENT.md → "File
+ownership".
+
+**Trusted-agent model by design**: the dev container also mounts the workspace
+and the Docker socket, so an agent running inside it can write the repo and
+spawn eval-sandbox containers. That is the same trust granted to opencode on
+the host. For stricter confinement (agent without Docker control) use a
+dedicated service; for kernel-level isolation (microVM, e.g. E2B/sbx) treat it
+as a separate future experiment.
+
+### Kubernetes (optional — requires Docker on the host)
+
+```bash
+make k8s-setup               # Kind cluster + build/load images
+make k8s-deploy OVERLAY=dev  # kustomize build | kubectl apply (dev/staging/production)
+make k8s-dev                 # DevSpace inner dev loop (sync + ports + terminals)
+make k8s-status              # Nodes + pods
+make k8s-teardown            # Delete the Kind cluster
+```
+
+- Kustomize is the DEFAULT manifest strategy (`k8s/base` + `k8s/overlays`);
+  Helm (`k8s/helm/ai-eval-platform/`) is the expansion path.
+- The Kubernetes toolchain (kind, kubectl, kustomize, helm, devspace) is
+  installed best-effort on the host by `scripts/setup-host-tools.sh`
+  (`make tools-k8s`).
+- Docker Compose remains the primary local path; K8s is optional.
 
 ## Runtime Environment
 
-The AI agent (opencode) runs **inside a Dev Container**, not on a bare machine.
+The AI agent (opencode) runs **on the host**, not inside a container. The
+VSCode/opencode CLI connects to the host workspace directly.
 
-### Dev Container Setup
+### Host prerequisites
 
-The devcontainer is configured with:
-- **opencode**: Installed automatically via `.devcontainer/setup.sh` on container creation
-- **gh CLI**: Installed via devcontainer feature, authenticated via `GITHUB_TOKEN` or `GH_TOKEN` environment variable
-- **Node.js 22**: Installed via devcontainer feature
-- **Python 3.14**: Installed via Dockerfile
-- **uv**: Installed via Dockerfile
+- **Python 3.14** + **uv** (backend) — `backend/.venv`; `make check`
+- **Node.js 22** + **npm** (frontend) — `frontend/node_modules`
+- **Docker + Compose** for infra and the dev sandbox; the host user must be
+  in the `docker` group so evaluations can spawn sandbox containers via the
+  mounted Docker socket
+- **gh CLI** authenticated on the host (`~/.config/gh`, shared read-only
+  with the dev sandbox)
+
+**How the sandbox gets a token.** `gh` reads its credential from the
+environment (`GH_TOKEN`, then `GITHUB_TOKEN`) *before* the credential store,
+and `gh auth login` writes to the store rather than the environment. So an
+operator who logged in but never exported a token forwarded nothing, and a
+stale token lingering in a shell profile shadowed the fresh one — both ended in
+401s from inside the container. `scripts/resolve-gh-token.sh` closes both: it
+probes each candidate (exported `GH_TOKEN`, exported `GITHUB_TOKEN`, then the
+store) with a real authenticated call and prints one only once it is proven
+good. The Makefile and `scripts/open-in-sandbox.sh` call it and forward
+**nothing** when there is no working token, so `gh` inside the sandbox falls
+back to the read-only `~/.config/gh` mount — which beats a guaranteed 401.
+Each `gh` call is capped (default 5s, `GH_TOKEN_PROBE_TIMEOUT`) because the
+Makefile runs the resolver in a `$(shell ...)` at parse time, so an unbounded
+probe would block *every* target, `make help` included.
+Locked by `backend/tests/test_dev_sandbox_gh_token.py`.
 
 ### What the agent CAN do
 
 - Run backend commands (uv, python, pytest, ruff)
 - Run frontend commands (npm, npx, node)
 - Run git and GitHub CLI commands
-- Access services at forwarded ports
+- Run Docker/Compose commands for infra and the dev sandbox (host socket)
 
 ### What the agent CANNOT do
 
-- Run `docker` or `docker compose` commands (not available inside the container)
-- Access the Docker socket
-- Modify the host filesystem (only the workspace is writable)
+- Create containers for *evaluations* directly here only if the sandbox is
+  not reachable — evaluations are spawned by the Celery worker via the host
+  Docker socket (subprocess fallback exists when Docker is disabled)
+- Run K8s workflows (`make k8s-*`) end-to-end unless the K8s toolchain is
+  on PATH (see `scripts/setup-host-tools.sh`)
 
-### Service ports (forwarded from host)
+### Service ports
 
 - Backend API: `localhost:8000`
 - Frontend Dev: `localhost:5173`
@@ -123,22 +232,71 @@ The devcontainer is configured with:
 
 ### Authentication
 
-- **gh CLI**: Requires `GITHUB_TOKEN` or `GH_TOKEN` environment variable to be set in the devcontainer environment
+- **gh CLI**: Authenticated on the host via `scripts/setup-host-tools.sh`
+  (or `gh auth login`). The dev sandbox mounts `~/.config/gh` read-only.
 - **opencode**: Uses API keys configured in `opencode.json` or environment variables
 
 ## Environment Variables
 
-Backend reads from `.env` (gitignored):
+**Two `.env` files, two different readers** — putting a variable in the wrong one
+fails silently:
+- `<repo-root>/.env` (next to `docker-compose.yml`) — read by **Docker Compose on
+  the host** at `make dev-up`. Holds the provider keys (`GROQ_API_KEY`,
+  `GEMINI_API_KEY`), `LLM_FALLBACK_*`, `OLLAMA_BASE_URL`, `GH_TOKEN`. Compose
+  only interpolates the names `docker-compose.yml` references (`${VAR:-}`), so
+  only those values reach the containers. Restart the stack after editing.
+- `backend/.env` — read by pydantic `Settings` for app settings only
+  (`ENVIRONMENT`, `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `DOCKER_*`).
+  `app/services/llm.py` reads provider keys with `os.getenv`, which
+  pydantic-settings does **not** populate from this file.
+
+Both are gitignored. See `backend/.env.example` and DEVELOPMENT.md →
+"Which `.env` gets which variable".
+
+Backend settings read from `backend/.env` (gitignored):
 - `DATABASE_URL`: Database connection
 - `REDIS_URL`: Redis connection
 - `JWT_SECRET_KEY`: JWT signing key (required)
 - `LLM_API_KEYS`: JSON object with provider API keys
+- Per-provider keys, read by the worker and the dev sandbox: `OPENAI_API_KEY`,
+  `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`. Never committed; a
+  provider without its key fails with "API key missing" instead of falling
+  back to a different vendor.
+- `OLLAMA_BASE_URL`: Ollama endpoint (default `http://localhost:11434` inside
+  the container; compose sets `http://host.docker.internal:11434` because a
+  container's localhost is the container, not the host)
+- `OLLAMA_TIMEOUT`: seconds allowed for one local generation (default 300).
+  Deliberately far above the hosted providers' 60s: a local model runs on this
+  machine's CPU, so a 1.5B code model can take minutes on a weak host, and a
+  timeout there is indistinguishable from "Ollama is broken". The Docker sandbox
+  caps (CPU/RAM/30s) bound *test execution*, not generation, so a slow model
+  costs wall-clock rather than correctness.
+- `OLLAMA_NUM_THREADS`: CPU threads one local generation may use, sent as
+  Ollama's `num_thread` request option. Unset (the default) sends no option and
+  Ollama keeps its own thread count. Set `2` to keep a burst of generation off a
+  weak host, accepting slower answers — pair it with a higher `OLLAMA_TIMEOUT`.
+  Enforced by the platform, not Ollama: Ollama has no such variable of its own
+  and ignores one you export.
+- `LLM_FALLBACK_PROVIDER` / `LLM_FALLBACK_MODEL`: opt-in generation fallback.
+  When the primary provider raises (rate limit, quota, network), the worker
+  retries once with this provider/model and records the provenance in the
+  result metrics. Empty (the default) disables the retry, so behaviour is
+  unchanged. Intended pairing: `LLM_FALLBACK_PROVIDER=ollama` with
+  `LLM_FALLBACK_MODEL=tinyllama` (small enough for a CPU-only host)
 - Other service-specific variables
 
 ## Key Conventions
 
 - Linting: Ruff for backend, Oxlint for frontend
 - Testing: pytest for backend, Vitest for frontend
+- Browser tests: Playwright in `frontend/e2e/` via `make test-e2e` — needs a
+  real rendered browser, so it is **not** part of `make check`. Chromium is baked
+  into the dev image (above `USER devuser`, `/ms-playwright`, since apt needs
+  root), so the target works inside the sandbox and `make dev-build` is required
+  only after an image that predates the bake. Locked by
+  `backend/tests/test_dev_sandbox_playwright.py` (version sync, layer order, a
+  real launch as the runtime user, Makefile wiring). See DEVELOPMENT.md →
+  "Browser tests".
 - CI: GitHub Actions runs lint + build + test on `dev` → `main` PRs only — never on feature branch PRs or push to `dev`
 - Local testing: run `make check` before pushing feature branches
 - Auth: JWT tokens (OAuth2 planned for future)
@@ -146,13 +304,36 @@ Backend reads from `.env` (gitignored):
 - Migrations: Alembic
 - Background jobs: Celery with Redis broker
 
+### Admin Role
+
+- `User.is_admin` (bool) gates admin-only API routes and the `/admin` frontend.
+- Backend: `require_admin` dependency on `app.api.admin` router — routes under `/api/admin/*` (users, challenges, submissions, stats).
+- Frontend: `AdminRoute` wrapper + admin nav in `Layout`; `adminApi` in `src/services/api.ts`.
+
+### Error Handling (frontend)
+
+- API errors are normalized with `extractError` / `extractFieldErrors` helpers in `src/utils/errors.ts` (returns a human-readable message from `ApiError.detail` (Pydantic `{ detail }`) or falls back to the HTTP status; keeps the app resilient when the backend shape varies).
+- `ApiError` (in `src/services/api.ts`) carries `status`, `detail`, and field-level `validationErrors` parsed from Pydantic 422 responses.
+- Flash toasts use the shared notification pattern; 401s from non-credential endpoints trigger a session redirect via `handleUnauthorized` (login/register surface inline errors).
+
 ## Environment and Secret-File Rules
 
-- The backend environment file is `.env`.
-- Never access it without explicit permission.
-- Never open, read, print, summarize, quote, or send the contents of `.env`, `.env.*`, or any other environment/secret file unless the user explicitly gives permission in the current conversation.
-- Never run commands that reveal environment values (e.g., `cat .env`, `printenv`, `env`).
+- The environment files are `<repo-root>/.env` and `backend/.env` (see
+  Environment Variables above for which variables belong in each).
+- Never access either without explicit permission.
+- Never open, read, print, summarize, quote, or send the contents of `.env`, `.env.*`, or any other environment/secret file unless the user explicitly gives permission in the current conversation. `backend/.env.example` is the one exception: it holds placeholders and is safe to read.
+- Never run commands that reveal environment values (e.g., `cat .env`, `printenv`, `env`, `docker compose config`, `docker inspect …`). `docker compose config` looks like a harmless inspection command but renders the *interpolated* values, keys included.
+- To confirm a variable is set, check for presence, never print it:
+  `docker compose exec celery sh -c 'test -n "$GROQ_API_KEY" && echo set'`
 - Never display, repeat, log, store, or include secret values in responses, code changes, or commits.
+- `opencode.json` enforces the above at the tool level (deny `Read` of `.env`/
+  `.env.*`, deny `cat`/`head`/`tail`/`printenv`/`env`/`docker compose config`/
+  `docker inspect` of them, allow `*.env.example`). It is the backstop, not the
+  permission: bash rules are pattern-based, so an allowed interpreter
+  (`uv run python -c …`) can still reach a file, and a repo-wide
+  `grep -rn GROQ_API_KEY .` ignores `.gitignore`. Prefer the Grep tool
+  (gitignore-aware) and locked-down patterns. Locked by
+  `backend/tests/test_opencode_env_guard.py`.
 
 If the user explicitly permits reading environment configuration:
 
@@ -221,6 +402,18 @@ Agent definitions live in `opencode.json` and `.opencode/agents/`:
 ### Skills
 
 - Load relevant skills when working on specific domains (e.g., Docker, Celery, LLM integration)
+
+### Session Memory (progress file)
+
+- At the START of every new chat: read `.opencode/progress.md` (if it exists) and
+  resume from its "Next action" — this is how long-running work survives between
+  sessions. If the file references an issue/branch/PR, continue that work unless
+  the user says otherwise.
+- During work: update the file after each milestone (issue created, branch
+  renamed, code done, tests run, PR opened, merged).
+- Keep it small: prune completed detail to one line; cap at ~80–100 lines;
+  never store secrets/tokens/credentials; it is gitignored and must never be
+  committed.
 
 ### Rules for Agents
 

@@ -4,8 +4,8 @@
   height: var(--header-height);
   position: sticky;
   top: 0;
-  z-index: 100;
-  box-shadow: var(--shadow-sm);
+  z-index: var(--z-index-sticky);
+  box-shadow: var(--shadow-card);
 }
 
 .nav {
@@ -68,6 +68,12 @@
 .navRight {
   display: flex;
   align-items: center;
+  /* #232: the theme toggle is the first child here and `.navRight` had no gap,
+     so it sat flush against the avatar chip / auth buttons. The right-hand side
+     comes from this gap; the left-hand side from `.nav`'s gap plus a little
+     extra, so the toggle reads as its own control rather than a spacer. */
+  gap: var(--space-3);
+  margin-left: var(--space-2);
 }
 
 /* Auth actions (logged out) */
@@ -105,7 +111,7 @@
   height: 28px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-solid);
   font-size: var(--font-size-sm);
   font-weight: 700;
   display: inline-flex;
@@ -127,7 +133,7 @@
 .dropdownBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 110;
+  z-index: var(--z-index-dropdown);
 }
 
 .dropdown {
@@ -138,9 +144,9 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-elevated);
   padding: var(--space-2);
-  z-index: 120;
+  z-index: var(--z-index-dropdown);
   display: flex;
   flex-direction: column;
 }
@@ -238,7 +244,7 @@
     align-items: stretch;
     padding: var(--space-4) var(--space-6);
     gap: var(--space-3);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-elevated);
   }
 
   .links.open {

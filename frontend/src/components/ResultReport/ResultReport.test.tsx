@@ -1,0 +1,249 @@
+import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import ResultReport from "./ResultReport";
+import codeBlockStyles from "../CodeBlock/CodeBlock.module.css";
+import type { EvaluationResult } from "../../types.ts";
+
+const LOGS = ["tests/test_math.py::test_add PASSED   [100%]", "FAILED tests/test_math.py::test_sub"].join(
+  "\n",
+);
+
+function result(overrides: Partial<EvaluationResult> = {}): EvaluationResult {
+  return {
+    id: "r1",
+    passed_tests: 1,
+    total_tests: 2,
+    score: 50,
+    logs: LOGS,
+    metrics: {},
+    created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/**
+ * A suite that never loaded (#255): zero tests were collected, so the result
+ * is stored as 0/0 — not as 0 of 1. The Outcome card carries the reason.
+ */
+const COLLECTION_ERROR_SUMMARY =
+  "The test suite failed to load — no tests ran (1 collection error).";
+
+/**
+ * The stat cards are label/value pairs, and "—" already appears in the
+ * Duration card whenever the metric is missing — so the Tests-passed value has
+ * to be read out of its own card. A page-wide `getByText("—")` would die on a
+ * strict-mode violation here rather than on the bug.
+ */
+function statValue(label: string): string | null {
+  const card = screen.getByText(label).closest("div");
+  const paragraphs = card?.querySelectorAll("p");
+  return paragraphs?.item(paragraphs.length - 1)?.textContent ?? null;
+}
+
+describe("ResultReport when no test case exists", () => {
+  it("prints no fraction instead of 0/0", () => {
+    // 0/0 is not a score of nothing out of nothing — it is a run that never
+    // executed, and the Outcome card below says which failure it was.
+    render(
+      <ResultReport
+        result={result({
+          passed_tests: 0,
+          total_tests: 0,
+          score: 0,
+          logs: "1 error in 0.27s",
+          logs_summary: COLLECTION_ERROR_SUMMARY,
+          test_results: [],
+          metrics: { error: "collection error", error_count: 1 },
+        })}
+        code={null}
+        language="python"
+      />,
+    );
+
+    expect(screen.queryByText("0/0")).not.toBeInTheDocument();
+    expect(statValue("Tests passed")).toBe("—");
+    // The reason is on screen, not just in the raw log.
+    expect(screen.getByText(COLLECTION_ERROR_SUMMARY)).toBeInTheDocument();
+  });
+
+  it("still prints the fraction when tests did run", () => {
+    render(<ResultReport result={result()} code={null} language="python" />);
+
+    expect(statValue("Tests passed")).toBe("1/2");
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+  });
+});
+
+/**
+ * The log view is opt-in per call site, so the wiring is the thing that can rot:
+ * a dropped `log` prop would silently leave every report a wall of plain text
+ * and no unit test of CodeBlock alone would notice.
+ */
+describe("ResultReport log rendering", () => {
+  it("numbers and tints the execution logs", () => {
+    const { container } = render(
+      <ResultReport result={result()} code={null} language="python" />,
+    );
+
+    expect(screen.getByText(/raw output/i)).toBeInTheDocument();
+    const numbers = [...container.querySelectorAll(`.${codeBlockStyles.lineNumber}`)].map(
+      (el) => el.textContent,
+    );
+    expect(numbers).toEqual(["1", "2"]);
+
+    const failed = [...container.querySelectorAll(`.${codeBlockStyles.line}`)].find((row) =>
+      row.textContent?.includes("FAILED"),
+    );
+    expect(failed?.className).toContain(codeBlockStyles.lineError);
+  });
+
+  it("leaves generated source as a plain code block", () => {
+    // Same component, two surfaces: severity tints and a gutter on generated
+    // code would be misleading (a "FAIL" in a docstring is not a failed test).
+    const { container } = render(
+      <ResultReport
+        result={result()}
+        code={'def subtract(a, b):\n    """FAIL when wrong"""\n    return a - b'}
+        language="python"
+      />,
+    );
+
+    expect(screen.getByText("solution.py")).toBeInTheDocument();
+    const codeGutter = [...container.querySelectorAll(`.${codeBlockStyles.lineNumber}`)];
+    expect(codeGutter).toHaveLength(2); // the two log lines only
+    expect(container.querySelectorAll(`.${codeBlockStyles.lineError}`)).toHaveLength(1);
+  });
+});
+
+/**
+ * The complaint that motivated v0.14: the runner dump was the only failure
+ * output on the page, and it is unreadable. The summary leads; the dump is one
+ * click away. These pin that split, including the legacy case where a report
+ * predates summaries and has nothing to lead with.
+ */
+describe("ResultReport readable summary", () => {
+  it("leads with the summary instead of the raw dump", () => {
+    render(
+      <ResultReport
+        result={result({
+          logs_summary: "1 of 2 tests passed (score 50.0%)\nFailed tests (1):\n- test_sub",
+        })}
+        code={null}
+        language="python"
+      />,
+    );
+
+    expect(
+      screen.getByText(/1 of 2 tests passed/),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the raw dump collapsed behind a disclosure", () => {
+    render(
+      <ResultReport
+        result={result({ logs_summary: "1 of 2 tests passed (score 50.0%)" })}
+        code={null}
+        language="python"
+      />,
+    );
+
+    const disclosure = screen.getByText(/show raw output/i).closest("details");
+    expect(disclosure).not.toBeNull();
+    // Closed by default: the log body must not be visible without a click.
+    expect(disclosure).not.toHaveAttribute("open");
+  });
+
+  it("still renders a report whose summary is missing", () => {
+    // Results written before v0.14 have no summary column value. The card has
+    // to degrade to a pointer at the raw logs, not render an empty heading.
+    render(<ResultReport result={result()} code={null} language="python" />);
+
+    expect(screen.getByText(/no summary was recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/show raw output/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * A run whose code came from the fallback provider was produced by a different
+ * model than the one requested, so the report has to say so. The note is the
+ * only place a reader learns this — the metrics table below it also carries the
+ * keys, but nobody reads a metric row to work out who wrote the code.
+ */
+describe("ResultReport fallback provenance", () => {
+  const FALLBACK_METRICS = {
+    duration_ms: 4200,
+    fallback_used: true,
+    fallback_provider: "ollama",
+    fallback_model: "tinyllama",
+    primary_error: "HTTPStatusError: 429 rate_limit_exceeded",
+  };
+
+  it("names the fallback provider, its model and the primary failure", () => {
+    render(
+      <ResultReport
+        result={result({ metrics: FALLBACK_METRICS })}
+        code="def two_sum(): ..."
+        language="python"
+        status="completed"
+      />,
+    );
+
+    const note = screen.getByRole("status");
+    expect(note).toHaveTextContent("Generated by the fallback provider");
+    expect(note).toHaveTextContent("ollama");
+    expect(note).toHaveTextContent("tinyllama");
+    expect(note).toHaveTextContent("429 rate_limit_exceeded");
+  });
+
+  it("says nothing about a fallback on a normal run", () => {
+    render(
+      <ResultReport
+        result={result({ metrics: { duration_ms: 1200 } })}
+        code="def two_sum(): ..."
+        language="python"
+        status="completed"
+      />,
+    );
+
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText(/fallback/i)).toBeNull();
+  });
+
+  it("treats a non-boolean fallback_used as no fallback", () => {
+    // `fallback_used: "false"` from a hand-edited payload must not raise the
+    // alarm; only a real boolean true means the code came from the fallback.
+    render(
+      <ResultReport
+        result={result({ metrics: { fallback_used: "false" } })}
+        code="x"
+        language="python"
+      />,
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("renders the note even when the primary error is missing", () => {
+    render(
+      <ResultReport
+        result={result({ metrics: { fallback_used: true, fallback_provider: "ollama" } })}
+        code="x"
+        language="python"
+      />,
+    );
+    const note = screen.getByRole("status");
+    expect(note).toHaveTextContent("ollama");
+    expect(note).not.toHaveTextContent("undefined");
+  });
+
+  it("still labels the metrics rows", () => {
+    render(
+      <ResultReport
+        result={result({ metrics: FALLBACK_METRICS })}
+        code="x"
+        language="python"
+      />,
+    );
+    expect(screen.getByText("Fallback provider")).toBeInTheDocument();
+    expect(screen.getByText("Primary provider error")).toBeInTheDocument();
+  });
+});

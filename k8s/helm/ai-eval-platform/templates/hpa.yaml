@@ -1,0 +1,49 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "ai-eval-platform.fullname" . }}-backend
+  labels:
+    {{- include "ai-eval-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "ai-eval-platform.fullname" . }}-backend
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+
+{{- /* Optional worker HPA — gated on both the global switch and the
+   dedicated worker block (disabled by default; see values.yaml). */ -}}
+{{- if and .Values.autoscaling.enabled .Values.autoscaling.worker.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "ai-eval-platform.fullname" . }}-worker
+  labels:
+    {{- include "ai-eval-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "ai-eval-platform.fullname" . }}-worker
+  minReplicas: {{ .Values.autoscaling.worker.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.worker.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.worker.targetCPUUtilizationPercentage }}
+{{- end }}

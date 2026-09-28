@@ -24,7 +24,7 @@
   height: 64px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-solid);
   font-size: var(--font-size-2xl);
   font-weight: 700;
   display: flex;
@@ -38,8 +38,8 @@
   min-width: 200px;
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .name {
-  font-size: var(--font-size-2xl);
   margin-bottom: var(--space-1);
 }
 
@@ -59,6 +59,42 @@
   font-weight: 600;
 }
 
+/* Password change */
+.passwordCard {
+  margin-bottom: var(--space-6);
+}
+
+.passwordHeader {
+  margin-bottom: var(--space-4);
+}
+
+.passwordTitle {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-1);
+}
+
+.passwordSubtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 420px;
+}
+
+.passwordError {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.passwordActions {
+  margin-top: var(--space-1);
+}
+
 /* Stats */
 .statsRow {
   display: grid;
@@ -67,28 +103,13 @@
   margin-bottom: var(--space-8);
 }
 
-.statCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-6) var(--space-4);
-  text-align: center;
-}
-
-.statValue {
-  font-size: var(--font-size-3xl);
-  font-weight: 700;
-  color: var(--color-text);
-  line-height: 1.2;
-}
-
-.statLabel {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
+/* Staggered by position rather than by an inline delay, so the markup stays
+   declarative and the cadence is visible in one place. The cards themselves —
+   identity, wash, entrance, hover — are the shared StatCard. */
+.statsRow > :nth-child(1) { animation-delay: 0ms; }
+.statsRow > :nth-child(2) { animation-delay: 70ms; }
+.statsRow > :nth-child(3) { animation-delay: 140ms; }
+.statsRow > :nth-child(4) { animation-delay: 210ms; }
 
 /* Columns */
 .columns {
@@ -180,6 +201,36 @@
   color: var(--color-text);
 }
 
+.durationText {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.waitingText {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.delayedTag {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+/* Severe tier: a *pending* submission past the 10-minute mark mirrors the
+   backend's "waiting over 10 minutes … will be marked as failed automatically"
+   escalation on the detail page — distinct from the mild "delayed" tag. */
+.stuckTag {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  background: var(--color-danger-light);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
 .emptyCard {
   display: flex;
   flex-direction: column;
@@ -191,6 +242,88 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   margin: 0;
+}
+
+/* Per-challenge evaluation stats */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.statsItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.statsTitle {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  overflow-wrap: anywhere;
+}
+
+.statsTitle:hover {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.statsMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.scoreChip {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+.chipSuccess {
+  color: var(--color-success);
+  background: var(--color-success-light);
+}
+
+.chipWarning {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+}
+
+.chipDanger {
+  color: var(--color-danger);
+  background: var(--color-danger-light);
+}
+
+.statsLine {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Share actions inside a completed submission row */
+.submissionActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.actionsError {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
 }
 
 @media (max-width: 900px) {

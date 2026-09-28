@@ -1,34 +1,26 @@
 .page {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4) var(--space-8);
+  padding: var(--space-16) var(--space-6) var(--space-20);
 }
 
 .header {
   text-align: center;
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-12);
 }
 
+/* Layout only — size and the gradient come from the shared PageTitle. */
 .title {
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  background: linear-gradient(
-    90deg,
-    var(--color-primary),
-    var(--color-primary-hover)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   margin-bottom: var(--space-2);
 }
 
 .subtitle {
-  max-width: 48rem;
+  /* The same measure the other marketing pages use: 600px keeps the line length
+     readable, and 48rem here was 768px. */
+  max-width: 600px;
   margin: 0 auto;
   color: var(--color-text-muted);
-  font-size: 1.05rem;
+  font-size: var(--font-size-lg);
   line-height: 1.6;
 }
 
@@ -63,7 +55,7 @@
     var(--color-primary),
     var(--color-primary-hover)
   );
-  color: #fff;
+  color: var(--color-on-solid);
   font-weight: 700;
   font-size: 0.85rem;
 }
@@ -117,178 +109,253 @@
 
 .visual {
   position: relative;
-  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
   width: 100%;
   max-width: 380px;
   margin: 0 auto;
+  padding: var(--space-4);
   border-radius: var(--radius-lg);
-  background:
-    radial-gradient(
-      circle at 30% 30%,
-      color-mix(in srgb, var(--color-primary) 18%, transparent),
-      transparent 60%
-    ),
-    var(--color-bg);
+  background: var(--color-bg);
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
 }
 
-/* ---------- Animated visual compositions ---------- */
+/* ---------- Mini UI mockups ---------- */
 
-.visualIcon {
+.mockup {
+  width: 100%;
+  max-width: 340px;
+  text-align: left;
+}
+
+.mockTitle {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+/* Provider picker */
+
+.providerRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.45rem var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  margin-bottom: var(--space-2);
+}
+
+.providerSelected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.radio {
+  flex: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  border: 2px solid var(--color-border-hover);
   position: relative;
-  width: 120px;
-  height: 120px;
-  display: grid;
-  place-items: center;
 }
 
-/* Orbiting ring */
-.visualIcon::before {
+.providerSelected .radio {
+  border-color: var(--color-primary);
+}
+
+.providerSelected .radio::after {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  border: 3px solid
-    color-mix(in srgb, var(--color-primary) 55%, transparent);
-  border-top-color: transparent;
-  animation: orbit 6s linear infinite;
-}
-
-.visualIcon::after {
-  content: "";
-  position: absolute;
-  width: 96px;
-  height: 96px;
-  border-radius: 999px;
-  background: radial-gradient(
-    circle at 35% 35%,
-    color-mix(in srgb, var(--color-primary-hover) 40%, transparent),
-    transparent 70%
-  );
-  animation: pulse 3s ease-in-out infinite;
-}
-
-/* Multi-provider: three floating provider cores */
-.multi {
-  font-size: 2rem;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-primary) 60%, transparent));
-}
-
-.multi::before {
-  content: "";
-  position: absolute;
-  width: 14px;
-  height: 14px;
+  inset: 2px;
   border-radius: 999px;
   background: var(--color-primary);
-  top: 6px;
-  left: 54px;
-  animation: float 4s ease-in-out infinite;
 }
 
-.multi::after {
-  content: "";
-  position: absolute;
-  width: 10px;
-  height: 10px;
+.providerBadge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 1px 6px;
   border-radius: 999px;
-  background: var(--color-primary-hover);
-  bottom: 8px;
-  right: 30px;
-  animation: float 4s ease-in-out 1s infinite reverse;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
 }
 
-/* pytest: flask with rising bubbles */
-.pytest {
-  font-size: 2.1rem;
+.providerSub {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
-.pytest::before {
-  content: "";
-  position: absolute;
-  width: 8px;
-  height: 8px;
+.checkDot {
+  margin-left: auto;
+  color: var(--color-success);
+  font-weight: 800;
+}
+
+/* Code editor */
+
+.editorBar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0.45rem var(--space-3);
+  background: var(--color-code-header);
+  border-bottom: 1px solid var(--color-code-border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.editorDot {
+  width: 9px;
+  height: 9px;
   border-radius: 999px;
-  background: var(--color-primary);
-  bottom: 22px;
-  left: 46px;
-  animation: rise 2.4s ease-in infinite;
 }
 
-.pytest::after {
-  content: "";
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--color-primary-hover);
-  bottom: 12px;
-  left: 66px;
-  animation: rise 2.4s ease-in 0.8s infinite;
+.editorDot:nth-child(1) {
+  background: #ff5f56;
 }
 
-/* sandbox: shielded keyhole inside a rotating ring */
-.sandbox {
+.editorDot:nth-child(2) {
+  background: #ffbd2e;
+}
+
+.editorDot:nth-child(3) {
+  background: #27c93f;
+}
+
+.editorFile {
+  margin-left: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-code-text);
+  opacity: 0.9;
+}
+
+.code {
+  background: var(--color-code-bg);
+  padding: var(--space-3);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.8;
+  color: var(--color-code-text);
+}
+
+.codeLine {
+  white-space: pre;
+}
+
+.codeKw {
+  color: #c084fc;
+}
+
+.codeFn {
+  color: #22d3ee;
+}
+
+.codePrompt {
+  color: #4ade80;
+}
+
+.testPass {
+  color: #4ade80;
+}
+
+.testFail {
+  color: #f87171;
+}
+
+.codeResult {
+  color: #fbbf24;
+}
+
+/* Sandbox terminal */
+
+.terminal {
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-code-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.8;
+  color: var(--color-code-text);
+}
+
+/* Report checklist */
+
+.reportHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.reportScore {
   font-size: 2rem;
-}
-
-.sandbox::before {
-  content: "";
-  position: absolute;
-  inset: 10px;
-  border-radius: 999px;
-  border: 2px dashed var(--color-primary);
-  animation: orbit 9s linear infinite reverse;
-}
-
-.sandbox::after {
-  content: "";
-  position: absolute;
-  width: 16px;
-  height: 22px;
-  border-radius: 4px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
   background: linear-gradient(
     135deg,
     var(--color-primary),
     var(--color-primary-hover)
   );
-  box-shadow: 0 0 14px
-    color-mix(in srgb, var(--color-primary) 55%, transparent);
-  animation: pulse 3s ease-in-out infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-/* report: growing bars */
-.report {
-  font-size: 2rem;
+.reportScoreLabel {
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
-.report::before {
-  content: "";
-  position: absolute;
-  width: 60px;
-  height: 86px;
-  border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-primary) 30%, transparent) 0%,
-    color-mix(in srgb, var(--color-primary) 45%, transparent) 55%,
-    var(--color-primary) 100%
-  );
-  animation: rise 2.8s ease-in-out infinite alternate;
+.reportMeta {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
 }
 
-.report::after {
-  content: "";
-  position: absolute;
-  width: 70px;
-  height: 4px;
-  border-radius: 999px;
-  bottom: 8px;
-  background: var(--color-primary-hover);
-  animation: grow 3s ease-in-out infinite alternate;
+.reportList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.reportItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding: 0.4rem var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.reportItemOk {
+  color: var(--color-success);
+  background: var(--color-success-light);
+}
+
+.reportItemBad {
+  color: var(--color-danger);
+  background: var(--color-danger-light);
+}
+
+.reportMark {
+  font-weight: 800;
 }
 
 /* ---------- Content column ---------- */
@@ -375,7 +442,7 @@
     var(--color-primary),
     var(--color-primary-hover)
   );
-  color: #fff;
+  color: var(--color-on-solid);
   font-weight: 700;
   text-decoration: none;
   transition: transform 0.2s ease, filter 0.2s ease;
@@ -398,59 +465,13 @@
   }
 }
 
-@keyframes orbit {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.6;
-    transform: scale(0.95);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.05);
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
-}
-
-@keyframes rise {
-  0% {
-    opacity: 0;
-    transform: translateY(6px) scale(0.8);
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-16px) scale(1.1);
-  }
-}
-
-@keyframes grow {
-  from {
-    transform: scaleX(0.4);
-    opacity: 0.7;
-  }
-  to {
-    transform: scaleX(1);
-    opacity: 1;
+@media (prefers-reduced-motion: reduce) {
+  /* The pipeline icons bob on a 3s loop forever. That is decoration, not
+     feedback: it carries no information a static icon lacks, so a reader who
+     has asked for less motion gets none of it. The icons stay, fully
+     visible, at their resting position. */
+  .pipelineIcon {
+    animation: none;
   }
 }
 
