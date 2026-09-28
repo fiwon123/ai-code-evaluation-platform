@@ -291,6 +291,41 @@ visual-sweep: ## Screenshot every page/state/motion pass in both themes and view
 			echo "            the frames are gitignored, so a report left beside them dies with the machine."; \
 		}
 
+VISUAL_JOURNEYS_KEEP ?= 5
+
+visual-journeys: ## Film interactive flows (nav, login, create, pickers, toasts) as captioned screenshots + WebM clips, then read them
+	@if [ ! -d "$${PLAYWRIGHT_BROWSERS_PATH:-/nonexistent}" ] && [ ! -d "$${HOME:-/nonexistent}/.cache/ms-playwright" ]; then \
+		echo "No Playwright browser found — the journey audit cannot start."; \
+		echo "  in the dev sandbox : rebuild the image (make dev-build), Chromium is baked in"; \
+		echo "  on the host        : cd $(FRONTEND_DIR) && npx playwright install chromium"; \
+		exit 1; \
+	fi
+	@git check-ignore -q $(FRONTEND_DIR)/visual-sweeps/probe || { \
+		echo "$(FRONTEND_DIR)/visual-sweeps/ is not gitignored — refusing to write there."; \
+		echo "Add '$(FRONTEND_DIR)/visual-sweeps/' to .gitignore and try again."; \
+		exit 1; \
+	}
+	@echo "Pruning all but the newest $(VISUAL_JOURNEYS_KEEP) visual run(s)…"
+	@cd $(FRONTEND_DIR) && ls -1dt visual-sweeps/*/ 2>/dev/null | tail -n +$$(( $(VISUAL_JOURNEYS_KEEP) + 1 )) \
+		| xargs -r rm -rf
+	@# The journeys share the sweep's output contract: they are only the file
+	@# `journeys.visual.ts`, gated by VISUAL_JOURNEYS=1 (without it every journey
+	@# test is a skip, so `make visual-sweep` keeps its exact frames/findings).
+	@# VISUAL_SWEEP_REQUIRE_FRAMES stays unset, so the teardown merges the parts and
+	@# writes the manifest/findings but does not demand the sweep's 300-frame sum.
+	@run="$$(date -u +%Y%m%d-%H%M%S)"; \
+		cd $(FRONTEND_DIR) && \
+		VISUAL_SWEEP_RUN="$$run" VISUAL_JOURNEYS=1 npm run test:visual -- journeys && \
+		{ \
+			echo ""; \
+			echo "Run:        $(FRONTEND_DIR)/visual-sweeps/$$run/"; \
+			echo "Frames:     visual-sweeps/$$run/journeys/      (one directory per journey)"; \
+			echo "Clips:      journeys/<id>/<id>.webm             (equal parts screen-recording and screenshot)"; \
+			echo "Manifest:   visual-sweeps/$$run/manifest.json   (browser version + executable path, viewport, theme, commit, counts)"; \
+			echo "Next:       read the frames, then write the findings up in docs/ux-audit/REPORT.md —"; \
+			echo "            the frames are gitignored, so a report left beside them dies with the machine."; \
+		}
+
 # --- Lint / format ------------------------------------------------------------
 lint: ## Lint backend (ruff) + frontend (oxlint)
 	cd $(BACKEND_DIR) && uv run ruff check src/ tests/

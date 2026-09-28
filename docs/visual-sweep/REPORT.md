@@ -191,3 +191,13 @@ npx vitest run src/pages/visual-sweep.lock.test.ts                          # 16
 Findings land in `visual-sweeps/<run>/findings.json` — one entry per defect, with
 the frames it was seen in, and the rule table beside them so the file is readable
 without this document.
+
+## Related: the journey audit
+
+The interaction-level complement to this sweep lives in
+[`docs/ux-audit/REPORT.md`](../ux-audit/REPORT.md) (run `20260928-165201`,
+`make visual-journeys`): 11 walkthroughs — login/logout, registration,
+create-challenge, provider-picker, admin, theme cross-fade, mobile menu, two
+loading states — with captioned stills and four VP8 clips. Its 34 minor
+findings are the same four rule classes above, on the same three shared
+components: nothing new, which is the point of the report.
