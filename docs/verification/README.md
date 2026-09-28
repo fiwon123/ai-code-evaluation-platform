@@ -143,6 +143,10 @@ fallback records no such key, so its absence is not treated as failure (see
 ## Legs that cannot be exercised yet
 
 Recorded here rather than quietly omitted, per the issue's acceptance criteria.
+**Only rows 4, 5 and 6 are still blocked.** Row 7 and row 10 were blocked when
+this section was written and are now recorded passing; their setup is kept below
+because it is the recipe for reproducing them, and because *how* the block was
+identified is the part worth keeping.
 
 **Rows 4, 5 and 6 are blocked by a pre-auth 403 from Groq's edge.** The catalog
 is no longer the obstacle — the running stack exposes `llama-3.1-8b-instant`,
@@ -168,9 +172,9 @@ docker compose exec celery curl -s -o /dev/null -w '%{http_code}\n' \
   https://api.groq.com/openai/v1/models   # 403 = still blocked; 401 = reached
 ```
 
-**Row 7 is blocked by one config line, not by code.** Its key is intentionally
-invalid and the primary is *supposed* to fail, so no working key is needed. What
-is missing is the fallback leg being switched on in the worker:
+**Row 7 needed one config line, not code, and now passes.** Its key is
+intentionally invalid and the primary is *supposed* to fail, so no working key is
+needed. What it was missing was the fallback leg switched on in the worker:
 
 ```bash
 # in the repo-root .env (read by compose, which forwards it to celery)
@@ -189,6 +193,13 @@ the fallback refused to handle. `TestBlockedPrimaryFallsBack` in
 over a mock transport is refused with a real `403`, a real `OllamaProvider` answers,
 and the metrics carry the provenance. If that test ever fails, the bug is in the
 fallback; if row 7 keeps failing with an unwrapped 403, the bug is the config.
+
+Recorded result: `fallback_used: true`, `fallback_provider: ollama`,
+`fallback_model: tinyllama`, and `primary_error` naming the Groq `403`. The run
+`completed` on the `docker` backend over 3 attempts and scored **0.0 with 0/0
+tests** — TinyLlama answered the repair prompt with prose instructions instead of
+code, so pytest never collected the suite. That is the 1.1B model's limit, not the
+fallback's, and it is why this row asserts fallback provenance and not a score.
 
 **Rows 8, 9 and 10 need host Ollama and nothing else.** The containers resolve
 `host.docker.internal`, so the only missing piece is a server on the host. On
@@ -211,7 +222,8 @@ nothing.
 
 All three local rows need #266 merged before they can run at all, because the
 model has to be in the provider catalog or the submission is rejected. It is
-merged, and they are recorded in the evidence.
+merged, and all three are recorded in the evidence: rows 8, 9 and 10 each
+`completed` on the `docker` backend with **3/3 tests and a 100.0** score.
 
 On the size of a local run — **and read this before trusting a red row.**
 
@@ -228,7 +240,7 @@ The consequence is that a 60-second generation cap is a **coin flip** on this
 host, not a comfortable margin. A single calm-host sample is not evidence that
 the cap is adequate; it is evidence about one sample.
 
-Row 10 is recorded as `fail` for exactly this reason, and the reason is
+Row 10 was recorded as `fail` for exactly this reason, and the reason was
 reproducible in the evidence rather than guessed at:
 
 - every failure took **exactly 60.00s** between submission and result, and
@@ -239,11 +251,17 @@ reproducible in the evidence rather than guessed at:
 - the submissions never reached a test runner, so no runner or parser was
   implicated, and the same row passed earlier on an idle host.
 
-So the row is not evidence that the `tsx` runner is broken, and it is not
-evidence that the runner works either — it is evidence that the generation cap
+So the row was not evidence that the `tsx` runner was broken, and it was not
+evidence that the runner worked either — it was evidence that the generation cap
 was undersized for this host. #266 fixed the cap (300s default) and that is
-merged; the worker picks it up on restart. **If row 10 is red and the host was
-busy, restart the worker and re-run it before believing the row.**
+merged; the worker picks it up on restart, and after one `make dev-restart` the
+row **passes**: `completed`, `docker` backend, 3/3, 100.0. The raised cap is the
+whole difference between the two evidence rows, which is the point of recording
+the failure mode precisely instead of "the TS row is flaky".
+
+**If a local row comes back red and the host was busy, restart the worker and
+re-run it before believing the row** — and check `loadavg` first, because a red
+local row on a loaded host is a statement about the host, not about the runner.
 
 `EVALUATION_MAX_ATTEMPTS=1` — advised when these rows were written, back when a
 7B was assumed — is not the lever for any of this. The lever is spare CPU: check
