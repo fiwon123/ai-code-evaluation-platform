@@ -61,7 +61,7 @@ const PROVIDERS = [
   {
     value: "groq",
     name: "Groq",
-    description: "llama-3.1-8b-instant",
+    description: "openai/gpt-oss-20b",
     requiresKey: true,
   },
   {

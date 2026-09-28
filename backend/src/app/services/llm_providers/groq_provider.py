@@ -24,7 +24,7 @@ class GroqProvider(LLMProvider):
     def __init__(
         self,
         api_key: str,
-        model: str = "llama-3.1-8b-instant",
+        model: str = "openai/gpt-oss-20b",
         base_url: str = "https://api.groq.com/openai/v1",
         transport: httpx.BaseTransport | None = None,
     ) -> None:
