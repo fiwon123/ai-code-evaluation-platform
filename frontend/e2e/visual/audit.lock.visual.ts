@@ -91,6 +91,11 @@ test.describe("each rule fires on the defect it exists to catch", () => {
       expect: "#pin",
     },
     {
+      rule: "field-error-announced",
+      body: `<label for="email">Email</label><input id="email" type="text" style="height: 44px" aria-invalid="true" />`,
+      expect: "#email",
+    },
+    {
       rule: "text-tiny",
       body: `<p style="font-size: 9px">nine pixels</p>`,
       expect: "9px",
@@ -128,6 +133,9 @@ test.describe("a correct page produces no findings at all", () => {
           <label for="bio">Bio</label>
           <textarea id="bio" style="width: 320px; height: 88px"></textarea>
           <button type="button" style="height: 44px; padding: 0 16px">Save</button>
+          <label for="userId">User id</label>
+          <input id="userId" type="text" style="height: 44px" aria-invalid="true" aria-describedby="userId-error" />
+          <span id="userId-error">Required</span>
         </form>
         <a href="/challenges" style="display: inline-block; padding: 12px 20px">A padded link</a>
       `),

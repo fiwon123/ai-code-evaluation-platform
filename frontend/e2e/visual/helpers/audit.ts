@@ -115,6 +115,13 @@ export const AUDIT_RULES = {
     criterion: "WCAG 2.5.5 — Target Size (AAA 44px, AA 24px)",
     fix: "Grow the hit area with padding or a pseudo-element; a 12px icon button is not a target",
   },
+  "field-error-announced": {
+    id: "field-error-announced",
+    severity: "minor",
+    title: "Field error not announced",
+    criterion: "an erroring control must announce its message (aria-invalid + aria-describedby)",
+    fix: "Point aria-invalid at the control and aria-describedby at the error message element",
+  },
   "text-tiny": {
     id: "text-tiny",
     severity: "minor",
@@ -502,6 +509,28 @@ function collect(options: { atRest: boolean }): RawFinding[] {
       );
     }
     if (found.filter((f) => f.rule === "touch-target-small").length >= maxPerRule) break;
+  }
+
+  // --- rule: field errors announced ---------------------------------------
+
+  // A field that reports invalidity must also announce the message. The rule
+  // is deliberately structural: `aria-invalid="true"` without
+  // `aria-describedby` means the error text (if any) is orphaned, and a
+  // describedby that points at nothing means the announcement is empty.
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>('[aria-invalid="true"]'))) {
+    if (!visible(el)) continue;
+    const references = (el.getAttribute("aria-describedby") ?? "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id))
+      .filter((n): n is HTMLElement => n !== null && n !== undefined && !n.hidden);
+    if (references.length === 0) {
+      report(
+        "field-error-announced",
+        `${describe(el)} has aria-invalid but no aria-describedby that names a visible message`,
+      );
+      if (found.filter((f) => f.rule === "field-error-announced").length >= maxPerRule) break;
+    }
   }
 
   // --- rule: tiny text -----------------------------------------------------
