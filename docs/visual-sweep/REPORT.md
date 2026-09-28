@@ -391,3 +391,36 @@ Every rule is clean and dark parity holds; all findings here are **measured
 family drift** — same role, different size/width/gap — plus off-scale
 typography. Fixed in three batches: structural (A1–A6), typography scale
 (B1–B2), polish (C1–C5).
+
+## B fix pass — typography onto the scale (#311, batch 2)
+
+Run `20260928-203451`: **0 findings**. All 27 literal font-sizes from B1/B2
+mapped to the nearest `--font-size-*` token (xs 12 / sm 14 / base 16 / lg 18 /
+xl 20 / 2xl 24 / 3xl 30 / 4xl 36):
+
+| Where | Was | Now | Role |
+|---|---|---|---|
+| Features `.featureTitle` (h2) | 1.4rem (22.4px) | `--font-size-2xl` (24px) | content heading |
+| Features `.pipelineBadge`/`.pipelineDesc` | 0.85rem | `--font-size-sm` | label/description |
+| Features `.pipelineIcon` | 1.75rem | `--font-size-3xl` | icon |
+| Features `.pipelineName` / `.listItem` | 0.95rem | `--font-size-base` | name / list text |
+| Features `.providerRow` / `.reportScoreLabel` | 0.9rem | `--font-size-sm` | chip / label |
+| Features `.providerSub`, code blocks | 0.75rem | `--font-size-xs` | fine print / code |
+| Features `.reportScore` | 2rem | `--font-size-3xl` | metric display |
+| Features `.reportItemStatus` | 0.78rem | `--font-size-xs` | mono chip |
+| Features `.checkBadge` | 0.8rem | `--font-size-xs` | badge |
+| Features `.ctaTitle` | 1.6rem | `--font-size-2xl` | section heading |
+| Pricing `.tierPrice` | 2.5rem (40px, above scale max) | `--font-size-4xl` (36px) | price display |
+| Pricing FAQ `+` marker | 1.4rem | `--font-size-2xl` | glyph |
+| Home `.sampleTest` | 0.85rem | `--font-size-sm` | mono sample |
+| Home `.pipelineIcon` | 1.5rem | `--font-size-2xl` | icon |
+| Home `.statValue` | 2rem | `--font-size-3xl` | metric display |
+| Home `.heroTitle` (≤768px) | 2.25rem | `--font-size-4xl` | hero |
+| Demo `.stepIcon` | 1.5rem | `--font-size-2xl` | icon |
+| Demo `.phaseText` / test rows | 0.85rem | `--font-size-sm` | labels |
+| Contact `.handoffIcon` | 2rem | `--font-size-3xl` | icon |
+| ResultReport `.ringText` | 22px | `--font-size-2xl` | ring numeral |
+
+Measured on the live stack: Features `h2` 22.4px → 24px. `font-size: inherit`
+and the component-level literals (`Logo`, `PageTitle`'s responsive clamp) are
+deliberate and untouched.
