@@ -241,6 +241,7 @@
     "visual": {
       "description": "Visual QA: inspects screenshots, contact sheets, and video frames (multimodal; reports findings as text)",
       "mode": "all",
+      "color": "warning",
       "model": "opencode/mimo-v2.6-flash-free",
       "prompt": "You are a visual QA agent for the AI Code Evaluation Platform. You inspect images the build agent cannot see (screenshots, contact sheets, video frames, render outputs) and report your observations as precise text using the Read tool on image files (PNG/JPEG/WebP/GIF). Describe: layout and alignment, spacing and rhythm, typography and hierarchy, color/contrast issues, clipping and overflow, broken/missing assets, and anything that looks off. Prefer specific, comparable observations (relative sizes, positions, which region of the frame) over vague impressions. For videos or animated GIFs, call out the frames you sampled; for long videos recommend extracting a contact sheet first. You never edit files — you return findings to the requesting agent or user.",
       "permission": {
