@@ -253,7 +253,12 @@ class TestResolveIPv6:
 
 class TestFactoryWiring:
     def test_no_transport_by_default(self):
-        provider = get_llm_provider("groq", api_key="k")
+        # The dev stack exports LLM_PREFER_IPV6=true, so the *resolved* setting
+        # is not the default under test here. Pin it off explicitly; the declared
+        # library default is asserted separately in
+        # test_provider_host_reachability.py::test_the_platform_default_is_off.
+        with _prefer_ipv6(False):
+            provider = get_llm_provider("groq", api_key="k")
         assert isinstance(provider._client._transport, httpx.HTTPTransport)
         assert not isinstance(provider._client._transport, PreferIPv6Transport)
 
@@ -282,12 +287,16 @@ class TestFactoryWiring:
 
 
 @contextlib.contextmanager
-def _prefer_ipv6():
-    """Temporarily set ``llm_prefer_ipv6`` on the shared settings object."""
+def _prefer_ipv6(value: bool = True):
+    """Temporarily set ``llm_prefer_ipv6`` on the shared settings object.
+
+    Both directions are needed. The dev stack exports the variable, so a test
+    asserting the *off* behaviour has to pin it off rather than assume it.
+    """
     from app.config import settings
 
     previous = settings.llm_prefer_ipv6
-    settings.llm_prefer_ipv6 = True
+    settings.llm_prefer_ipv6 = value
     try:
         yield
     finally:

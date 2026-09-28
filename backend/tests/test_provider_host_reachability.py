@@ -213,7 +213,12 @@ class TestAddressFamilyIsChosenPerRequest:
     def test_the_platform_default_is_off(self):
         # Preferring IPv6 changes which egress IP a provider sees. That is a
         # deployment's decision, so the library default must not make it.
-        assert Settings().llm_prefer_ipv6 is False, (
+        #
+        # Assert the *declared* default, not `Settings()`. The dev and celery
+        # services export LLM_PREFER_IPV6=true — that is how the fix reaches the
+        # worker — so a resolved read fails in exactly the environment this fix
+        # exists for, and would have to be worked around rather than fixed.
+        assert Settings.model_fields["llm_prefer_ipv6"].default is False, (
             "llm_prefer_ipv6 must default to False; the dev stack opts in"
         )
 
