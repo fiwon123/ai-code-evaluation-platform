@@ -1,4 +1,5 @@
 import {
+  Children,
   cloneElement,
   forwardRef,
   isValidElement,
@@ -35,6 +36,14 @@ interface FieldProps {
  * aria-noise. `FieldGroup` (a caption over several controls) instead puts
  * `aria-describedby` on the group's `role="group"` wrapper, where the error
  * belongs as a description of the group.
+ *
+ * A field may carry more than one child — the register password field has a
+ * strength hint beside the input — so the control is found as the *first*
+ * element in `children` rather than by testing `children` itself. React hands
+ * over an array in that case, `isValidElement` is false for an array, and the
+ * previous `isValidElement(children)` guard therefore skipped the wiring
+ * entirely: the message still rendered, orphaned, and the control was marked
+ * invalid with no way to hear why (#323).
  */
 function wireError(
   children: ReactNode,
@@ -42,14 +51,31 @@ function wireError(
   errorId: string,
   viaChild: boolean,
 ): ReactNode {
-  if (!error) return children;
-  if (viaChild && isValidElement(children)) {
-    return cloneElement(children as ReactElement<Record<string, unknown>>, {
-      "aria-invalid": true,
-      "aria-describedby": errorId,
-    });
+  if (!error || !viaChild) return children;
+
+  // `toArray` flattens a single child into a one-item array, so this covers
+  // both shapes with one lookup.
+  const kids = Children.toArray(children);
+  const index = kids.findIndex(isValidElement);
+  if (index === -1) {
+    // No control to wire. Loud in development, silent in production: a warning
+    // the build cannot act on would only ever reach a page's console.
+    if (import.meta.env.DEV) {
+      console.warn(
+        "<Field> was given an error but no element to attach it to, so the " +
+          "message will not be announced with the field. Pass the control as " +
+          "the first child.",
+      );
+    }
+    return children;
   }
-  return children;
+
+  const wired = cloneElement(
+    kids[index] as ReactElement<Record<string, unknown>>,
+    { "aria-invalid": true, "aria-describedby": errorId },
+  );
+  if (kids.length === 1) return wired;
+  return kids.map((kid, i) => (i === index ? wired : kid));
 }
 
 export function Field({ label, error, children, id }: FieldProps) {
