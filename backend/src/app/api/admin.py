@@ -295,6 +295,29 @@ async def list_submissions(
     )
 
 
+@router.delete("/submissions/{submission_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_submission(
+    submission_id: UUID,
+    db: AsyncSession = Depends(get_session),
+    _admin: User = Depends(require_admin),
+) -> None:
+    """Delete any submission on the platform (admin only).
+
+    The submission's evaluation result and attempts go with it: both
+    relationships carry ``cascade="all, delete-orphan"``, so a plain delete
+    takes the child rows rather than leaving them orphaned.
+    """
+    submission = await db.get(Submission, submission_id)
+    if submission is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission not found",
+        )
+
+    await db.delete(submission)
+    await db.commit()
+
+
 @router.get("/stats", response_model=PlatformStats)
 async def platform_stats(
     db: AsyncSession = Depends(get_session),

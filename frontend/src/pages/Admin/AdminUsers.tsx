@@ -236,7 +236,7 @@ function AdminUsers() {
                         </Button>
                         {user.is_active ? (
                           <Button
-                            variant="danger"
+                            variant="secondary"
                             size="sm"
                             disabled={own || updatingId === user.id}
                             onClick={() => void deactivate(user)}
@@ -254,7 +254,7 @@ function AdminUsers() {
                           </Button>
                         )}
                         <Button
-                          variant="ghost"
+                          variant="danger"
                           size="sm"
                           disabled={own || updatingId === user.id}
                           onClick={() => setPendingDelete(user)}

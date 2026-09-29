@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
 
 from app.models.evaluation_result import EvaluationResult
 from app.models.submission import Submission
@@ -404,6 +405,118 @@ async def test_admin_submissions_include_username_and_challenge_title(
     assert len(items) == 1
     assert items[0]["username"] == user["username"]
     assert items[0]["challenge_title"] == "FizzBuzz"
+
+
+# --- Admin submission deletion ----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_submission(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    admin_token, _ = await register_admin(db_client, db_sessionmaker)
+    user_token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, user_token)
+    submission = await create_submission(db_client, user_token, challenge["id"])
+    submission_id = submission["id"]
+
+    # It is listed before deletion.
+    listed = await db_client.get("/api/admin/submissions", headers=auth(admin_token))
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()["items"]] == [submission_id]
+
+    # An admin can delete a submission they do not own.
+    response = await db_client.delete(
+        f"/api/admin/submissions/{submission_id}",
+        headers=auth(admin_token),
+    )
+    assert response.status_code == 204
+
+    listed = await db_client.get("/api/admin/submissions", headers=auth(admin_token))
+    assert listed.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_submission_removes_related_rows(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    """The evaluation result and attempts go with the submission.
+
+    Both relationships are `cascade="all, delete-orphan"`, so the delete takes
+    the children rather than leaving them pointing at a row that is gone.
+    """
+    admin_token, _ = await register_admin(db_client, db_sessionmaker)
+    user_token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, user_token)
+    submission = await create_submission(db_client, user_token, challenge["id"])
+    submission_id = submission["id"]
+
+    async def child_result_count() -> int:
+        async with db_sessionmaker() as session:
+            result = await session.execute(
+                select(func.count())
+                .select_from(EvaluationResult)
+                .where(EvaluationResult.submission_id == uuid.UUID(submission_id))
+            )
+            return result.scalar_one()
+
+    # Seed a child row, so there is something to orphan.
+    async with db_sessionmaker() as session:
+        session.add(
+            EvaluationResult(
+                submission_id=uuid.UUID(submission_id),
+                passed_tests=2,
+                total_tests=2,
+                score=100.0,
+            )
+        )
+        await session.commit()
+
+    # Asserted up front, otherwise the check below would also pass if the seed
+    # silently inserted nothing.
+    assert await child_result_count() == 1
+
+    response = await db_client.delete(
+        f"/api/admin/submissions/{submission_id}",
+        headers=auth(admin_token),
+    )
+    assert response.status_code == 204
+
+    assert await child_result_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_missing_submission_404(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    admin_token, _ = await register_admin(db_client, db_sessionmaker)
+
+    response = await db_client.delete(
+        f"/api/admin/submissions/{uuid.uuid4()}",
+        headers=auth(admin_token),
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_submission_rejected_for_non_admin(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    """A regular user cannot delete a submission, not even their own."""
+    admin_token, _ = await register_admin(db_client, db_sessionmaker)
+    user_token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, user_token)
+    submission = await create_submission(db_client, user_token, challenge["id"])
+
+    response = await db_client.delete(
+        f"/api/admin/submissions/{submission['id']}",
+        headers=auth(user_token),
+    )
+    assert response.status_code == 403
+
+    # Still there.
+    listed = await db_client.get("/api/admin/submissions", headers=auth(admin_token))
+    assert [item["id"] for item in listed.json()["items"]] == [submission["id"]]
 
 
 # --- Richer stats: provider aggregates + error types -------------------------

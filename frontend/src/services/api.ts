@@ -291,4 +291,5 @@ export const adminApi = {
       `/api/admin/submissions${buildQueryString(params)}`,
       options,
     ),
+  removeSubmission: (id: string) => api.del(`/api/admin/submissions/${id}`),
 };
