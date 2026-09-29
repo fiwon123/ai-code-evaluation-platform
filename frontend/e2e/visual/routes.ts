@@ -289,15 +289,37 @@ export interface SweepStateProof {
   role?: string;
   name?: string;
   /**
-   * Exact text, and it has to be unambiguous.
+   * Exact text. Combine it with `role` to scope the proof into that element.
    *
    * The app says some things twice — a 422 renders the field's message in `Field`
-   * *and* a form-level alert — and a string that appears twice makes
-   * `getByText` a strict-mode violation instead of a proof. When a state needs to
-   * show a repeated string, the proof is the one that carries the field name, and
-   * `note` says why that is the reachable one.
+   * *and* in a form-level `role="alert"` — and a string that appears twice makes
+   * a bare `getByText` a strict-mode violation instead of a proof.
+   *
+   * The earlier answer to that was to match the copy carrying the field name
+   * (`identifier: …`), on the reasoning that it was unique. #326 stopped the
+   * banner from printing that internal key, so the string went to zero matches
+   * and the proof became unsatisfiable — the state silently stopped being
+   * photographable, on a harness whose whole premise is that it cannot silently
+   * pass. Scoping by role is the replacement: it keys off structure instead of
+   * copy, so a wording change does not invalidate it, and it can pin the message
+   * to the live region that announced it.
    */
   text?: string;
+  /**
+   * Where the copy comes from, when it is not in the app's source.
+   *
+   * Most proofs quote app copy and can be checked against `src/`. Some quote
+   * something the app renders but never *ships* — a server's validation message
+   * is the case in point: Pydantic's text arrives in the 422 at runtime, so no
+   * amount of source-grepping can confirm the app still renders it. Declaring
+   * `server` says "this is observable only in a browser", which is the truth
+   * #335 was allowed to paper over.
+   *
+   * Declaring it is not a way out of checking: the lock requires every proof to
+   * be either present in shipped source or declared here, so a state cannot
+   * quietly exempt itself.
+   */
+  origin?: "server";
   /** Why this proof, and not some other marker on the page. */
   note?: string;
 }
@@ -386,21 +408,32 @@ export const SWEEP_STATES: readonly SweepState[] = [
     route: "/login",
     drive: "login-field-errors",
     expect: {
-      text: "identifier: String should have at least 3 characters",
+      // The alert *and* the text it announced. `role` alone would prove only that
+      // something announced; the bare message alone is a strict-mode violation,
+      // because `Field` renders the same string. Together they pin it to the
+      // live region.
+      role: "alert",
+      text: "String should have at least 3 characters",
+      // Pydantic's text, delivered in the 422 body at runtime. The app has no
+      // copy of this string to keep in step — which is the point: it is why the
+      // proof has to be observable in a browser, and why this state went stale
+      // without any test noticing.
+      origin: "server",
       // The real Pydantic message for the real schema: `LoginRequest.identifier`
       // is `Field(min_length=3)`. A two-character identifier satisfies the
       // input's `required` but not the server, so this is reachable rather than
       // a payload invented to make a screenshot.
       //
-      // The `identifier: ` prefix is what makes this proof reachable. The bare
-      // message is on the page twice — in `Field` and in this alert — so
-      // `getByText` on the message alone is a strict-mode violation. The field's
-      // own copy has no hook to scope by: a sibling `<span>` with no id, no role,
-      // and an input with neither `aria-invalid` nor `aria-describedby`. That
-      // absence is the finding, and it is why the proof is the alert.
-      note: "The alert proves the 422 was mapped to a field; the frame also shows the field-level copy, which no locator can reach on its own.",
+      // This proof used to be the text carrying the `identifier: ` prefix, on
+      // the reasoning that the field's copy had no hook to scope by — a sibling
+      // `<span>` with no id and an input with no `aria-invalid`. Both of those
+      // were added in #323/#326, and the prefix was removed in #320/#326, so the
+      // proof matched nothing and this state quietly stopped capturing. See
+      // #335, and the `SweepStateProof` note for why the prefix was the wrong
+      // thing to have relied on.
+      note: "The alert proves the 422 surfaced as a live region; the frame also shows the field-level copy, which is now wired to its input via aria-describedby.",
     },
-    caption: "A 422 rendered as a per-field message, with the input outlined as invalid. Note for the report: the field error is not programmatically linked to the input — no aria-invalid, no aria-describedby — so a screen reader announces neither the invalid state nor the message.",
+    caption: "A 422 rendered as a per-field message: the input outlined and marked `aria-invalid`, its message linked by `aria-describedby` so it is announced with the field, and the form-level copy in a `role=\"alert\"` live region. (The original caption recorded the aria wiring as a missing-feature finding; #323/#326 added it.)",
   },
   {
     id: "login-submitting",

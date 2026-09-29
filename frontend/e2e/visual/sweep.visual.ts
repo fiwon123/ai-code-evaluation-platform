@@ -401,9 +401,18 @@ test.describe("at rest", () => {
       // (the lock imports it), and that project has no Playwright types — so the
       // matrix cannot name `AriaRole` without dragging `@playwright/test` into the
       // app's type graph.
-      await expect(
-        page.getByRole(role as Parameters<Page["getByRole"]>[0], { name, exact: true }),
-      ).toBeVisible();
+      const loc = page.getByRole(role as Parameters<Page["getByRole"]>[0], {
+        name,
+        exact: true,
+      });
+      await expect(loc).toBeVisible();
+      // `text` alongside a `role` scopes the proof *into* that element rather
+      // than the whole page, which is how a string the app says twice becomes
+      // addressable: `getByText` alone is a strict-mode violation, and `role`
+      // alone would prove only that *something* announced. Asserting the exact
+      // text of the role-scoped element is stronger than either — it pins the
+      // message to the live region that announced it (#335).
+      if (text) await expect(loc).toHaveText(text);
       return;
     }
     if (text) {
