@@ -1,0 +1,110 @@
+/*
+ * ComparisonMark — the yes/no marks in the plan table.
+ *
+ * The colour is the fast channel, so it leans on the same success/danger tokens
+ * the rest of the app uses for "good" and "bad" rather than introducing marks-
+ * specific hues. Both are checked against WCAG AA on the table's own surface:
+ * `--color-success` and `--color-danger` are the two the `contrast.spec.ts`
+ * suite already validates, and the icons are large shapes with a single stroke
+ * rather than small text, so the 3:1 non-text minimum is the relevant bar and
+ * they clear it comfortably.
+ */
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  /* The containing block for `.srOnly` below.
+   *
+   * An absolutely-positioned box is only clipped by an ancestor's `overflow`
+   * when that ancestor is the one it positions against — a `static` ancestor
+   * does not clip it, it escapes to the viewport. The comparison table lives in
+   * a `.tableWrap` scroller, and without this the hidden "Not included" text
+   * landed outside the wrapper's clip, 481px to the right on a 360px screen,
+   * and silently gave the whole page a horizontal scrollbar: the table it was
+   * supposed to stay inside of, the one scroll case the wrap exists for.
+   */
+  position: relative;
+  /* `middle`, not a hand-picked offset — see the note below the property. */
+  vertical-align: middle;
+  transform: translateY(0.5px);
+}
+
+/*
+ * Why the mark sits where it does, measured rather than eyeballed.
+ *
+ * The mark is a 16px box. Text beside it is 14px on a 17px line box. Getting
+ * those to agree optically is a real problem with two traps in it, and this
+ * comment exists because both traps are invisible in the source:
+ *
+ * 1. **`vertical-align` does nothing where it looks like it should work.** In
+ *    the tier list (`.tierItem`, a flex row) this box is a flex item, and
+ *    `vertical-align` does not apply to flex items at all. Worse, `align-items:
+ *    baseline` then aligns it against a baseline that is not the mark's: an
+ *    inline-flex box whose only in-flow child is a *replaced* element takes
+ *    that element's bottom margin edge as its baseline, so the whole 16px box
+ *    hangs above the text baseline instead of straddling it. Measured, the ink
+ *    sat 5.3px above the cap centre — the mark was floating a third of its own
+ *    height up the line. An earlier `vertical-align: -2px` here was inert in
+ *    the list and only ever did anything in the table, where it was 3.3px short
+ *    of the correction it was aiming at: one magic number, tuned by eye, wrong
+ *    in both of the two places it applied to.
+ * 2. **A transform is a visual offset, not a layout one.** It is here only to
+ *    absorb the sub-pixel difference between the two contexts below, which
+ *    cannot both be zero from a single `vertical-align`. It must not be
+ *    confused for the mechanism: `vertical-align: middle` is what fixes the
+ *    5.3px, and this 0.5px is what brings both contexts inside 0.65px.
+ *
+ * After this, measured against the cap centre of the text beside it
+ * (`getBoundingClientRect` vs font metrics from `measureText`, in a real
+ * browser — jsdom has no layout engine and cannot see any of this):
+ *
+ * | context                                  | before | after  |
+ * |------------------------------------------|--------|--------|
+ * | tier feature list (flex row)              | −5.3px | −0.6px |
+ * | comparison table cell (inline in a `<td>`) | −3.3px | +0.1px |
+ *
+ * Both numbers are reproducible; the e2e suite asserts the tolerance so a
+ * future change to either context's typography cannot silently reintroduce a
+ * mark that floats.
+ */
+
+.icon {
+  /* The mark is a fixed 16px shape, so it must not squash when its cell or list
+     item is narrower than that. Flex items shrink by default; the text beside
+     * it is the thing that should wrap. */
+  flex: none;
+}
+
+.yes {
+  color: var(--color-success);
+}
+
+.no {
+  color: var(--color-danger);
+}
+
+/*
+ * Visually hidden, still announced.
+ *
+ * The `1px` + `overflow: hidden` + `clip` combination is the standard recipe
+ * because it keeps the text in the accessibility tree *and* in the page's
+ * rendered text, unlike `display: none`. `white-space: nowrap` stops it from
+ * introducing a scroll width; the negative margin cancels the box it would
+ * otherwise still occupy.
+ *
+ * This is the repo's second copy of this pattern (`Spinner.module.css` has one)
+ * and deliberately not a shared global yet — a utility for a single consumer is
+ * a premature abstraction, and adding one to `globals.css` is a separate
+ * decision.
+ */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
