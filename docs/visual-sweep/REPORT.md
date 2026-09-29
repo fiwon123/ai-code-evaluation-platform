@@ -159,21 +159,33 @@ way: the rule first reported a filmstrip frame as a blocker.)
 
 ## Not covered — needs a human, or a rule that does not exist yet
 
-Honest list of what this report does **not** tell you:
+Honest list of what this report does **not** tell you. Item statuses reflect
+the [V pass](#v-pass--reading-the-frames-not-just-measuring-them-319), the only
+part of this report that looks at the frames rather than measuring them.
 
-1. **Aesthetics.** Nothing here judges whether the app looks good. Open the
-   contact sheets.
-2. **Form errors are not linked to their inputs.** Found by hand while building
-   the `login-field-errors` state: `TextInput` sets no `aria-invalid`, and
-   `Field`'s error message is not associated with the input by
-   `aria-describedby`. The field *is* labelled, so `control-unlabelled` passes —
-   the rule cannot see this, and no rule here covers "the error message is
-   announced with the field". Worth a rule, and worth a fix.
-3. **Text that is legible but wrong** — truncation by design, awkward wrapping,
-   inconsistent alignment. A measurement can find text that overflows; it cannot
-   find text that reads badly.
+1. **Aesthetics.** *(closed by the V pass)* — the measurement still does not
+   judge whether the app looks good, but the frames have now been read: all 26
+   groups in both themes and both viewports, with the findings written up. Hover
+   and focus states remain unseeable from a static frame.
+2. **Form errors are not linked to their inputs.** *(partly closed)* — the V
+   pass confirmed the inline error now sits directly under its input with a
+   matching red border, in all four theme/viewport combinations. The
+   `aria-invalid` / `aria-describedby` gap below is still unmeasured, and the V
+   pass found a related one a rule cannot see: the form-level banner repeats the
+   field's message with the internal key prepended (V1).
+3. **Text that is legible but wrong** — *(partly closed by the V pass)*.
+   Truncation by design and inconsistent alignment are still the rule's blind
+   spot, but wrap quality, orphan words and prose measure have now been read and
+   reported. What remains is copy editing, not layout.
 4. **Anything about the 4.0px rounding of a single shadow.** Out of scope, and
    deliberately so.
+5. **The scroll bands between the sweep's three sample positions** *(opened by
+   the V pass)* — a page taller than three viewports has unsampled regions, and
+   the `code-block-expanded` state falls in one, so the expanded state was never
+   observed to differ from the collapsed one.
+6. **Multi-row table behaviour** *(opened by the V pass)* — every admin table
+   held at most 3 rows, so cross-row alignment and per-row action spacing were
+   never tested.
 
 ## Reproducing
 
@@ -438,3 +450,200 @@ unified:
 Measured across features/pricing/about/contact/privacy on the live stack:
 `h1` margin-top 12px, header margin-bottom 48px on every page. All marketing
 heroes now share one title treatment, one eyebrow gap and one close.
+
+---
+
+## V pass — reading the frames, not just measuring them (#319)
+
+Everything above is a measurement. This section is the first pass that *looked*.
+
+It exists because the report had an honest admission in it, quoted at
+["Not covered"](#not-covered--needs-a-human-or-a-rule-that-does-not-exist-yet)
+item 1: *"Aesthetics. Nothing here judges whether the app looks good. Open the
+contact sheets."* Nobody ever opened them — the model driving the sweep has no
+vision, so the limit was structural, not a matter of effort. #315 added a
+vision-capable `visual` subagent; this is the pass that uses it.
+
+### Evidence
+
+Run `20260928-204840` (the batch-3 gate) — **332 frames**, 26 groups x 2 themes
+x 2 viewports. Reviewed via the `visual` subagent in 12 tasks, grouped so each
+task held one surface: marketing, legal, auth, app, admin, and the interactive
+states.
+
+### The tooling problem came first
+
+The obvious approach — hand the `visual` agent the existing contact sheets —
+**does not work**, and it is worth recording why, because the failure is
+invisible and produces confident nonsense.
+
+The contact sheets are built for *human* triage: 320px tiles, 12 per 4x3 sheet.
+At that size the tile type is below a vision model's legibility threshold, and
+worse, it cannot reliably tell which tile came from which file. Measured, not
+assumed:
+
+| Attempt | Result |
+|---|---|
+| 1 sheet, 1 image | correct, 9/10 confidence, headline read verbatim |
+| 1 sheet × 12 separate reads (one route) | **5 of 12** frames bound to the right file |
+| 12 sheets, 24 reads | reviewer reported `login/scroll-0.png` returning the **demo** page, and one path returning three different images across three reads |
+| 3 labelled sheets, 9 frames | **9 of 9** correct, every caption read verbatim |
+
+A reviewer asked to read 12 unattributed frames produced findings that were
+*plausible and wrong* — a real-looking paragraph of observations about a pricing
+page that was in fact the demo page. Written into this report unchallenged, that
+would have been three issues and a false confidence claim.
+
+The fix is one file, `e2e/visual/helpers/review-sheets.mjs`: same tiling maths,
+**640px cells instead of 320** (half the capture's native width, desktop and
+Pixel 7 alike), and **22px captions burned into each cell** instead of 12px. The
+sheet becomes *self-labelling* — the reviewer quotes the caption it can see
+beside each finding, which turns attribution from a memory exercise into
+something checkable against the pixels. That single change took attribution from
+5/12 to 9/9 on a harder test.
+
+```bash
+make visual-sweep                                  # frames
+cd frontend && node e2e/visual/helpers/review-sheets.mjs   # sheets, into visual-review-sheets/
+```
+
+### What the pass found
+
+**Two defects, both confirmed in source. One of them is user-visible in
+production.**
+
+#### V1 — the login error banner leaks an internal field key (DEFECT, confirmed) — **#320**
+
+`states/login-field-errors` shows the form-level banner reading:
+
+> `identifier: String should have at least 3 characters`
+
+while the field it belongs to is labelled **"Email or username"**. The same
+message is already shown inline under the input, so the banner adds only the
+dev-facing key. Confirmed at the source, not inferred from pixels:
+
+- `services/api.ts:112` builds the summary as `` `${field}: ${msg}` `` from the
+  Pydantic 422 `loc` — so the raw key is composed into the string by design.
+- `pages/Login.tsx:49` sets that summary via `extractError(err)`, and
+  `pages/Login.tsx:104-108` renders it verbatim in the `role="alert"` banner.
+- The user-facing label is `"Email or username"` (`Login.tsx:81`), so the key
+  `identifier` is never a word the user has seen.
+
+Every 422 on a form that renders a banner leaks the same way; `Register.tsx:37`
+has the identical `setError(extractError(err))` call. A validation error is
+shown twice — once correctly, once as a developer-facing string.
+
+#### V2 — `/admin/submissions` has no row actions (DEFECT, confirmed) — **#321**
+
+The admin submissions table renders 7 columns and stops at `CREATED`
+(`pages/Admin/AdminSubmissions.tsx:106-112`). There is no `ACTIONS` header and
+no per-row control. The sibling tables both have one —
+`AdminChallenges.tsx:139` and `AdminUsers.tsx` both render an actions column
+with a destructive control. So an admin can delete a challenge and delete a user
+from the console, but cannot act on a submission at all, and the table's only
+asymmetry is invisible rather than intentional.
+
+#### Three candidates refuted by the source check
+
+The pass is only worth the trouble if the source check is allowed to *reject*
+findings. It rejected three:
+
+| Reported | Why it is not a defect |
+|---|---|
+| `demo` CTA row: a third control is "bare text" while its siblings are buttons | `Demo.tsx:503-509` uses `variant="ghost"` — a deliberate tertiary tier (transparent bg, secondary ink). Intentional hierarchy, not a lost style |
+| `submission-loading` is "one featureless empty rectangle" | The sweep runs `prefers-reduced-motion: reduce`, and `Skeleton.module.css` disables the shimmer under it *on purpose* (documented in the file). A paused shimmer is a flat block. Capture artefact |
+| Footer year differs between viewports (© 2025 vs © 2026) | `Footer.tsx:84` renders `new Date().getFullYear()` — one value per process. A per-viewport difference is impossible within a run; the reviewer misread a glyph |
+
+### Improvements, grouped by cause
+
+Not defects — coherence and craft, a designer's call. Grouped because most of
+them are the same few causes repeated, which is the actionable part.
+
+**Prose measure is the single largest theme.** The legal and docs pages run
+body copy at **105–122 characters per line** (privacy, terms, security, gdpr)
+against a comfortable 45–75. The amber "template, not legal advice" callout is
+worse: it spans the full 1200px container, so its first line is **~177
+characters**, ~1.6x an already-long body line, and it starts ~280px left of the
+column it introduces. One `max-width` on the callout fixes the worst instance.
+
+**Orphan words and awkward wraps**, all IMPROVEMENT, all fixable with
+`text-wrap: balance` on the affected headings: home's features subhead (line 2
+is the single word "assistants."), home's hero subhead (splits "All in one
+platform", then strands "platform." alone on mobile), home's middle feature card
+("sandbox." alone), demo's subtitle ("now." alone), pricing's disclaimer
+("implemented yet."), and the em-dash break in the terms contents rail.
+
+**Reflowed grids leave a half-empty last row.** Features' 5-step pipeline is 5
+across on desktop and reflows to 2 columns on Pixel 7, so the 5th card ("Score")
+sits alone with an empty cell beside it in both themes. Same shape on home's
+mobile footer (2+1 with a ~175px void beside LEGAL). Centring or spanning the
+last item is the fix.
+
+**Container gutters disagree.** Three independent reviewers measured a 24px
+mismatch on the auth pages: nav/footer inset 64px vs the auth grid's 40px. The
+source explains it exactly — `AuthLayout .grid` (line 23-33) sets
+`max-width: var(--max-width)` *inside* a `.page` that already applies
+`padding: … var(--space-6)` (line 15), while `.nav` and `.container` apply the
+padding themselves. Double centring, so the auth content sits 24px inboard of
+the chrome on every auth page.
+
+**Admin table craft.** `/admin/users` gives the destructive control
+("Delete") the *plain* style while the less-final "Deactivate" is solid red —
+inverted against `/admin/challenges`, where "Delete" is solid red. Its `ACTIONS`
+header also aligns to neither end of the action cluster, unlike every other
+header on the row. `/admin/submissions`' status filter spans the full 1150px
+container for a single-select. On `/challenges`, the `CREATED` column is ~310px
+wider than its content while `TITLE` carries two lines.
+
+**Density and hierarchy.** `/profile` and `/submissions/:id` are both dashboards
+but use two different stat-tile systems (value-above-label, uppercase, centred,
+30px accent vs label-above-value, sentence case, left, 24px muted) with nothing
+tying them together. The submission score (96.7%) is the same 24px as its
+siblings ("118/120", "completed", "4.2s"), so only the ring graphic makes it the
+headline. The public share page shows "Score 96.7%" beside "Tests passed 118/120"
+with nothing explaining that the score is composite — a first-time visitor from
+a link can read one as a bug — and it ends with no in-context next action.
+
+**States.** The login submitting state changes only the primary button; the
+inputs and the GitHub button stay fully enabled-looking while the request is in
+flight. `Log out` in the user dropdown has no divider or danger colour, so it
+reads as another nav item. The mobile nav trigger stays `☰` while open. The
+login error banner changes *kind* between themes (pale tinted pill in light,
+solid red block in dark) for the same element.
+
+### What the pass also could not determine
+
+Worth as much as the findings — it is the honest edge of the method:
+
+1. **Regions between the three scroll positions.** The sweep samples 0%, 50%,
+   100%, so a page taller than three viewports has unsampled gaps. The pricing
+   FAQ's third item, the submission "Outcome" body and the `code-block-expanded`
+   state fall in them. The expanded state was therefore never observed to differ
+   from the collapsed one.
+2. **Anything hover-, focus- or scroll-triggered.** A static frame cannot show a
+   hover-revealed row action, a focus ring, or a nav that hides on scroll. One
+   reviewer found an *empty band at the top of desktop mid-scroll frames* where
+   the navbar should be, and could not tell a sticky-header paint bug from a
+   paused hide-on-scroll transition. Unresolved.
+3. **Sub-pixel alignment at 0.5x.** Cells are half-scale, so gutters carry
+   ±20px of error. The 24px auth mismatch is above that threshold; claims
+   below it are not asserted.
+4. **Design intent.** The pass can see that a gap is 3x its neighbours. It
+   cannot know whether the gap is deliberate breathing room or an accident.
+
+### Effect on "Not covered"
+
+Item 1 (*aesthetics*) is now **closed** — looked at, across all 26 groups in
+both themes and both viewports, with the findings written up above. Item 3
+(*text that is legible but wrong*) is **partly** closed: wrap quality, orphan
+words and prose measure were reviewed and reported; what remains is copy
+editing, not layout.
+
+Items 2 (form errors not linked to inputs) and 4 (the 4.0px shadow rounding)
+are untouched by this pass, and the states review independently confirmed item 2
+is now fixed — the inline error sits directly under its input with a matching
+red border, in all four theme/viewport combinations.
+
+New gaps this pass opened, none of which a static frame can close: hover and
+focus states, the unsampled scroll bands, and multi-row table behaviour (every
+admin table held at most 3 rows, so cross-row alignment was never tested).
