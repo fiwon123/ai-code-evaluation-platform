@@ -167,12 +167,14 @@ part of this report that looks at the frames rather than measuring them.
    judge whether the app looks good, but the frames have now been read: all 26
    groups in both themes and both viewports, with the findings written up. Hover
    and focus states remain unseeable from a static frame.
-2. **Form errors are not linked to their inputs.** *(partly closed)* — the V
-   pass confirmed the inline error now sits directly under its input with a
-   matching red border, in all four theme/viewport combinations. The
-   `aria-invalid` / `aria-describedby` gap below is still unmeasured, and the V
-   pass found a related one a rule cannot see: the form-level banner repeats the
-   field's message with the internal key prepended (V1).
+2. **Form errors are not linked to their inputs.** *(closed by the V pass and
+   #323)* — the V pass confirmed the inline error now sits directly under its
+   input with a matching red border, in all four theme/viewport combinations. The
+   `aria-invalid` / `aria-describedby` gap below was still unmeasured then, and
+   remains so here: the V pass found two things a rule cannot see, the
+   form-level banner repeating the field's message with the internal key
+   prepended (V1, #320), and `Field` silently skipping the aria wiring on its
+   one field with more than one child (V2, #323).
 3. **Text that is legible but wrong** — *(partly closed by the V pass)*.
    Truncation by design and inconsistent alignment are still the rule's blind
    spot, but wrap quality, orphan words and prose measure have now been read and
@@ -302,6 +304,27 @@ error with it. The fix ships a new audit rule plus the wiring:
   `aria-describedby`, and audits clean on one that references a real
   message; vitest cases cover `Field`, `FieldGroup` and the valid
   noise-free path.
+
+**Correction (#323).** The wiring above was only ever correct for a *single*
+child. `Field` located the control with `isValidElement(children)`, and React
+hands over an **array** when a field has more than one child, so the guard was
+false and the clone was skipped — no `aria-describedby`, silently, with no
+test and no rule failure to show for it. Only one field in the app has more
+than one child: the register password input, which carries a strength hint
+beside it. The inline error still rendered and still looked correct, so the
+sweep's own `login-field-errors` state (single-child fields, 0 findings) could
+not see it, and the structural rule could not either — an unannounced field is
+indistinguishable from an unwired one once the attributes are simply absent.
+
+`Field` now finds the control as the first element among its children and
+rebuilds `children` with that one cloned, so sibling hints keep rendering. The
+one remaining silent case — an error with no element to attach to — warns in
+development instead of doing nothing. Covered by a component test asserting
+the wiring holds with a second child, and a page-level test on register
+asserting the password control's `aria-describedby` resolves to the visible
+message. The general case is still a standing limitation of the rule: it can
+only prove a present `aria-describedby` is valid, never that a needed one
+exists.
 
 The sweep's `login-field-errors` state exercises the wiring on a real page:
 0 `field-error-announced` findings.
@@ -509,8 +532,8 @@ cd frontend && node e2e/visual/helpers/review-sheets.mjs   # sheets, into visual
 
 ### What the pass found
 
-**Two defects, both confirmed in source. One of them is user-visible in
-production.**
+**Three defects, all confirmed in source. V1 is user-visible in production;
+V3 is invisible to sighted users and to this report's own rules.**
 
 #### V1 — the login error banner leaks an internal field key (DEFECT, confirmed) — **#320**
 
@@ -542,6 +565,30 @@ no per-row control. The sibling tables both have one —
 with a destructive control. So an admin can delete a challenge and delete a user
 from the console, but cannot act on a submission at all, and the table's only
 asymmetry is invisible rather than intentional.
+
+#### V3 — the register password error is never announced with its field (DEFECT, confirmed) — **#323**
+
+`states/register-field-errors` shows the password error correctly placed under
+its input, with a matching red border — visually indistinguishable from the
+login field, whose error *is* announced. The frames cannot tell the two apart,
+but the source can:
+
+- `components/Input/Input.tsx` located the control to wire with
+  `isValidElement(children)`. React passes an **array** when a field has more
+  than one child, so the guard was false and the `aria-invalid` /
+  `aria-describedby` clone was skipped entirely.
+- Exactly one field in the app has more than one child: the register password
+  input, which carries a strength hint (`pages/Register.tsx`) beside it.
+
+So the control rendered its inline error and its red border while pointing at
+nothing — sighted users see the problem, screen reader users hear only the
+label. This is the gap the `field-error-announced` rule was added to catch,
+and it did not catch it: the rule proves a *present* `aria-describedby` is
+valid, and cannot prove a *missing* one should be there. The sweep's own
+`login-field-errors` state passes, because login's fields have single children.
+
+Found by reading the register state against the login one, not by measuring
+either — the correct answer and the buggy answer produce the same pixels.
 
 #### Three candidates refuted by the source check
 
