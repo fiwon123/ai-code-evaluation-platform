@@ -25,7 +25,7 @@ describe("extractFieldErrors", () => {
   it("returns the validation map from an ApiError with field errors", () => {
     const err = new ApiError(
       422,
-      "password: String should have at least 8 characters",
+      "String should have at least 8 characters",
       { password: "String should have at least 8 characters" },
     );
     expect(extractFieldErrors(err)).toEqual({

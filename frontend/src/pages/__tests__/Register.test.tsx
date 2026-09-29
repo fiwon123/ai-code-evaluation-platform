@@ -108,7 +108,7 @@ describe("Register", () => {
       register: vi.fn().mockRejectedValue(
         new ApiError(
           422,
-          "password: String should have at least 8 characters",
+          "String should have at least 8 characters",
           { password: "String should have at least 8 characters" },
         ),
       ),
@@ -126,9 +126,19 @@ describe("Register", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
-    await waitFor(() =>
-      expect(screen.getByText("String should have at least 8 characters")).toBeInTheDocument(),
-    );
+    const message = "String should have at least 8 characters";
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(message);
+    // #320: the banner must not carry the Pydantic field key.
+    expect(alert).not.toHaveTextContent("password:");
+
+    // The same message is also shown inline under the field, so a bare text
+    // query now matches both. Assert the inline copy exists by filtering the
+    // banner out — and that there is exactly one of it, so a future change that
+    // renders the error twice does not quietly pass.
+    await waitFor(() => expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true"));
+    const inline = screen.getAllByText(message).filter((el) => el !== alert);
+    expect(inline).toHaveLength(1);
   });
 
   it("redirects to challenges when already logged in", () => {

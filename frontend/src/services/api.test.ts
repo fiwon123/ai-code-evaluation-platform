@@ -124,12 +124,112 @@ describe("api service", () => {
     expect(err).toBeInstanceOf(ApiError);
     const apiErr = err as ApiError;
     expect(apiErr.status).toBe(422);
-    expect(apiErr.detail).toContain("password: String should have at least 8 characters");
-    expect(apiErr.detail).toContain("email: String should match pattern");
+    expect(apiErr.detail).toBe(
+      "String should have at least 8 characters. String should match pattern",
+    );
+    // The summary is what a form-level banner renders, so it must not carry the
+    // Pydantic `loc` key — the field is labelled "Email or username" on the
+    // login form, and the user has never seen the word "email" as a key (#320).
+    expect(apiErr.detail).not.toContain("password:");
+    expect(apiErr.detail).not.toContain("email:");
+    // The keys are still available for the inline per-field errors.
     expect(apiErr.validationErrors).toEqual({
       password: "String should have at least 8 characters",
       email: "String should match pattern",
     });
+  });
+
+  it("never leaks the Pydantic field key into a 422 summary (#320)", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: [
+            {
+              type: "string_too_short",
+              loc: ["body", "identifier"],
+              msg: "String should have at least 3 characters",
+              ctx: { min_length: 3 },
+            },
+          ],
+        }),
+        { status: 422 },
+      ),
+    );
+
+    const err = await api
+      .post("/api/auth/login", { identifier: "ab", password: "whatever" })
+      .then(
+        () => {
+          throw new Error("expected rejection");
+        },
+        (e: unknown) => e,
+      );
+
+    const apiErr = err as ApiError;
+    // The exact string the login page rendered before the fix.
+    expect(apiErr.detail).not.toContain("identifier");
+    expect(apiErr.detail).toBe("String should have at least 3 characters");
+    // The key survives in the field map, so the inline error still resolves.
+    expect(apiErr.validationErrors).toEqual({
+      identifier: "String should have at least 3 characters",
+    });
+  });
+
+  it("deduplicates repeated 422 messages in the summary", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: [
+            { loc: ["body", "password"], msg: "String should have at least 8 characters" },
+            { loc: ["body", "confirm_password"], msg: "String should have at least 8 characters" },
+            { loc: ["body", "email"], msg: "String should match pattern" },
+          ],
+        }),
+        { status: 422 },
+      ),
+    );
+
+    const err = await api
+      .post("/api/auth/register", {})
+      .then(
+        () => {
+          throw new Error("expected rejection");
+        },
+        (e: unknown) => e,
+      );
+
+    const apiErr = err as ApiError;
+    expect(apiErr.detail).toBe(
+      "String should have at least 8 characters. String should match pattern",
+    );
+    expect(apiErr.validationErrors).toEqual({
+      password: "String should have at least 8 characters",
+      confirm_password: "String should have at least 8 characters",
+      email: "String should match pattern",
+    });
+  });
+
+  it("substitutes a readable message when a 422 item has no msg (#320)", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: [{ loc: ["body", "identifier"], msg: "   " }] }),
+        { status: 422 },
+      ),
+    );
+
+    const err = await api
+      .post("/api/auth/login", {})
+      .then(
+        () => {
+          throw new Error("expected rejection");
+        },
+        (e: unknown) => e,
+      );
+
+    const apiErr = err as ApiError;
+    // Not "" and not "identifier: ".
+    expect(apiErr.detail).toBe("Invalid value");
+    expect(apiErr.validationErrors).toEqual({ identifier: "Invalid value" });
   });
 
   it("falls back to status text when the error body is not JSON", async () => {
