@@ -216,6 +216,12 @@ blob-report/
 # newest few runs (see VISUAL_SWEEP_KEEP).
 frontend/visual-sweeps/
 
+# Review sheets — the model-readable re-tiling of a sweep run's frames, built by
+# e2e/visual/helpers/review-sheets.mjs. Derived from visual-sweeps/ above, same
+# reasoning: the frames are the evidence, the sheet is a view of it, and the
+# write-up is what gets committed.
+frontend/visual-review-sheets/
+
 # Docker
 docker-compose.override.yml
 
