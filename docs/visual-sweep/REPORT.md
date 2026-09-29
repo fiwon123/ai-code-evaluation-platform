@@ -793,8 +793,18 @@ way `useCountUp` is handled.
 
 ### Also found, and not fixed here
 
-The `login-field-errors` state fails on every run, in both themes and both
-viewports, **on `dev` with a clean tree** — its proof text still expects the
+The `login-field-errors` state failed on every run, in both themes and both
+viewports, **on `dev` with a clean tree** — its proof text still expected the
 Pydantic 422 body (`identifier: String should have at least 3 characters`) that
-#320/#326 removed from the UI. Four of 340 frames never get captured as a
-result. Tracked as #335, separately.
+#320/#326 removed from the UI, so it matched nothing and four frames were never
+captured. #335 fixes it, and adds the locks that make the class visible without
+a browser: see [M pass](#m-pass--motion-the-sweep-could-not-see-332-334) and
+issue #335.
+
+Separately, `findings.json` reports 4 blockers of `text-clipped` on `/pricing`
+that are **false positives introduced by #333** — the visually-hidden
+"Included"/"Not included" text on `ComparisonMark`, which the standard
+`.srOnly` pattern clips to a 1px box on purpose. A rule that files
+*intentional* clipping as a blocker is the failure mode the sweep exists to
+prevent, because the only remedy is for a reader to learn to ignore the report.
+Tracked as #337.
