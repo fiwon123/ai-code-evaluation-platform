@@ -270,8 +270,47 @@ describe("the two pages cannot drift apart again", () => {
     }
   });
 
+  it("keeps the option-grid selectors in the BadgeSelect module only", () => {
+    // The difficulty control is a BadgeSelect, so its geometry belongs to the
+    // primitive. A `.chip`/`.chips` reappearing in the form or in either page
+    // would be a second, drifting implementation of the same control.
+    const badgeSelect = CSS["../BadgeSelect/BadgeSelect.module.css"];
+    expect(badgeSelect, "BadgeSelect.module.css did not resolve").toBeDefined();
+
+    const optionSelectors = [".options", ".option", ".radio", ".legend"];
+    for (const selector of optionSelectors) {
+      expect(
+        new RegExp(`(^|[\\s,}])${selector.replace(".", "\\.")}\\s*[,{]`).test(
+          badgeSelect,
+        ),
+        `BadgeSelect.module.css no longer declares ${selector}`,
+      ).toBe(true);
+    }
+
+    for (const css of [
+      SHARED_CSS,
+      "../../pages/CreateChallenge.module.css",
+      "../../pages/EditChallenge.module.css",
+    ]) {
+      const sheet = CSS[css];
+      expect(sheet, `${css} did not resolve`).toBeDefined();
+      for (const selector of optionSelectors) {
+        expect(
+          new RegExp(`(^|[\\s,}])${selector.replace(".", "\\.")}\\s*[,{]`).test(
+            sheet,
+          ),
+          `${css} declares ${selector} — it belongs to BadgeSelect.module.css`,
+        ).toBe(false);
+      }
+    }
+  });
+
   it("keeps the field selectors in the shared stylesheet only", () => {
     const shared = CSS[SHARED_CSS];
+    // `.chips`/`.chip` used to be listed here. They now belong to
+    // `BadgeSelect.module.css`, which owns the difficulty option grid, so the
+    // guard moved with them rather than being deleted — a selector with no owner
+    // is exactly how the drift it was written to catch starts again.
     const fieldSelectors = [
       ".form",
       ".section",
@@ -279,8 +318,6 @@ describe("the two pages cannot drift apart again", () => {
       ".grid",
       ".counter",
       ".examples",
-      ".chips",
-      ".chip",
       ".actions",
       ".errorBanner",
     ];

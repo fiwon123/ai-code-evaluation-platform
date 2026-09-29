@@ -1,0 +1,107 @@
+/*
+ * BadgeSelect — a responsive grid of radio options.
+ *
+ * The layout is `auto-fill` + `minmax` rather than a fixed column count, so the
+ * same markup reflows from 4-across to 2-across to 1-across without a media
+ * query and without a hardcoded breakpoint that the content does not control.
+ * The `min()` cap matters: without it a long language name ("Objective-C")
+ * would set the track's min-content width and the grid would overflow its
+ * container on a 360px screen rather than wrapping.
+ */
+
+.group {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.legend {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.options {
+  display: grid;
+  /* 11rem tracks, but never wider than the space actually available. */
+  grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
+  gap: var(--space-2);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+/* `--option-accent` lets an option carry its own identity colour (a language's
+   brand colour) so the selected ring matches the badge it wraps. Falls back to
+   the primary token when an option has no accent. */
+.option {
+  --option-accent: var(--color-primary);
+}
+
+.option:hover {
+  border-color: var(--option-accent);
+}
+
+/* The radio is focusable and visible, so the focus ring is on the control
+   itself and never depends on `:has()`. */
+.radio {
+  flex: none;
+  margin: 0;
+  accent-color: var(--option-accent);
+  cursor: pointer;
+}
+
+.radio:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.optionSelected {
+  border-color: var(--option-accent);
+  background: var(--color-primary-light);
+  box-shadow: 0 0 0 1px var(--option-accent);
+}
+
+/*
+ * The body is allowed to shrink so a long option name truncates with an
+ * ellipsis instead of forcing the track wider. `min-width: 0` on the flex child
+ * is what actually permits that — without it the child refuses to shrink below
+ * its content and the grid overflows.
+ */
+.body {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option {
+    transition: none;
+  }
+}

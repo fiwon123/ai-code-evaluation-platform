@@ -25,6 +25,8 @@
  */
 import type { ReactNode } from "react";
 
+import Badge from "../Badge/Badge.tsx";
+import BadgeSelect from "../BadgeSelect/BadgeSelect.tsx";
 import Button from "../Button/Button.tsx";
 import {
   Field,
@@ -35,6 +37,10 @@ import {
   useFieldId,
 } from "../Input/Input.tsx";
 import type { ChallengeDifficulty } from "../../types.ts";
+import {
+  DIFFICULTIES,
+  difficultyLabel,
+} from "../../utils/difficulty.ts";
 import {
   LANGUAGES,
   evaluationEstimate,
@@ -55,23 +61,22 @@ export interface ChallengeFormValue {
   difficulty: ChallengeDifficulty;
 }
 
-export const DIFFICULTIES: ReadonlyArray<{
-  value: ChallengeDifficulty;
-  label: string;
-}> = [
-  { value: "easy", label: "Easy" },
-  { value: "medium", label: "Medium" },
-  { value: "hard", label: "Hard" },
-];
-
 /**
- * Difficulty as a segmented control over a native radio group.
+ * Difficulty as a badge row over a native radio group.
  *
  * A `<select>` was three tab stops and no way to see the options without
  * opening it. A `fieldset`/`legend` radio group is one tab stop, arrow keys
- * move between the options, and the legend names the group for a screen
- * reader without inventing a `role` — and the radios keep the `name`/`value`
- * semantics a form posts with.
+ * move between the options, and the legend names the group for a screen reader
+ * without inventing a `role` — and the radios keep the `name`/`value` semantics
+ * a form posts with.
+ *
+ * The control itself is unchanged from the hand-rolled version it replaces (same
+ * `fieldset`/`legend`, same `name="difficulty"`, same radio children); what is
+ * new is that each option is a coloured `Badge` instead of bare text, so
+ * Easy/Medium/Hard are distinguishable at a glance and match the pills on the
+ * challenges list and a challenge's page. The alternative — hand-rolling a
+ * second copy of this markup in the CreateChallenge page for the language grid —
+ * is what `BadgeSelect` now exists to prevent.
  */
 export function DifficultyChips({
   value,
@@ -81,29 +86,16 @@ export function DifficultyChips({
   onChange: (next: ChallengeDifficulty) => void;
 }) {
   return (
-    <fieldset className={styles.difficulty}>
-      <legend className={styles.difficultyLegend}>Difficulty</legend>
-      <div className={styles.chips}>
-        {DIFFICULTIES.map((option) => {
-          const selected = option.value === value;
-          return (
-            <label
-              key={option.value}
-              className={`${styles.chip} ${selected ? styles.chipSelected : ""}`}
-            >
-              <input
-                type="radio"
-                name="difficulty"
-                value={option.value}
-                checked={selected}
-                onChange={() => onChange(option.value)}
-              />
-              {option.label}
-            </label>
-          );
-        })}
-      </div>
-    </fieldset>
+    <BadgeSelect
+      legend="Difficulty"
+      name="difficulty"
+      value={value}
+      onChange={onChange}
+      options={DIFFICULTIES.map((option) => ({
+        value: option.value,
+        children: <Badge variant={option.variant}>{option.label}</Badge>,
+      }))}
+    />
   );
 }
 
@@ -354,7 +346,7 @@ export function ChallengeFormActions({
   onCancel,
   error,
 }: ChallengeFormActionsProps) {
-  const difficulty = DIFFICULTIES.find((d) => d.value === value.difficulty);
+  const difficulty = difficultyLabel(value.difficulty);
 
   return (
     <>
@@ -369,7 +361,7 @@ export function ChallengeFormActions({
             {value.title.trim() || "Untitled challenge"}
           </span>
           <span className={styles.summaryMeta}>
-            {languageLabel(value.language)} · {difficulty?.label ?? value.difficulty}{" "}
+            {languageLabel(value.language)} · {difficulty} {" "}
             difficulty
           </span>
         </div>
