@@ -801,10 +801,35 @@ captured. #335 fixes it, and adds the locks that make the class visible without
 a browser: see [M pass](#m-pass--motion-the-sweep-could-not-see-332-334) and
 issue #335.
 
-Separately, `findings.json` reports 4 blockers of `text-clipped` on `/pricing`
-that are **false positives introduced by #333** — the visually-hidden
-"Included"/"Not included" text on `ComparisonMark`, which the standard
-`.srOnly` pattern clips to a 1px box on purpose. A rule that files
-*intentional* clipping as a blocker is the failure mode the sweep exists to
-prevent, because the only remedy is for a reader to learn to ignore the report.
-Tracked as #337.
+### A false blocker, and what a report with nothing in it has to prove
+
+`findings.json` was carrying 4 `text-clipped` **blockers** on `/pricing` that
+were false positives introduced by #333: the visually-hidden "Included" / "Not
+included" text on `ComparisonMark`, which the standard `.srOnly` pattern clips to
+a 1px box on purpose. `text-clipped` saw 22px of text needing 1px and said so,
+loudly, in the one place a reviewer's eye goes.
+
+A rule that files *intentional* clipping as a blocker is the mirror image of the
+false all-clear [above](#m-pass--motion-the-sweep-could-not-see-332-334), and the
+cure is worse: a reader learns to dismiss blockers, and that habit outlives the
+reason. #337 exempts the visually-hidden pattern, keyed on the clip
+(`rect(0px, 0px, 0px, 0px)` / `inset(50%)`) rather than on size, because size is
+where real clipping lives.
+
+The interesting part is what an exemption owes in return. The two quiet fixtures
+pass just as well if the rule is switched off wholesale, and a report that
+silently loses a rule is indistinguishable from a clean one — which is the same
+problem this section opened with. So the exemption is asserted in both
+directions: `srOnly` text must stay quiet, **and** a genuinely clipped sentence
+on the same page must still fire. Widening the exemption to "anything that
+clips" fails that control, which is the only thing standing between a shorter
+report and a weaker one.
+
+`findings.json` is now empty: **0 findings across 344 frames**. Read that
+against the caveat [above](#no-blockers-no-majors-is-evidence-about-these-11-rules-not-about-the),
+though — an empty report is what a broken audit looks like too. What makes it
+evidence here is that the same run carries `audit.lock.visual.ts` green, where
+every rule fires on a fixture built to break it and is asserted to have fired
+*about the element it was aimed at*. The rules are demonstrably alive; the app is
+demonstrably clean. Those are different claims, and the harness is built so they
+are checked by different tests.

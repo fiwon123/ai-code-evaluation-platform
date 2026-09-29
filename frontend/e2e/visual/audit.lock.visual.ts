@@ -116,6 +116,67 @@ test.describe("each rule fires on the defect it exists to catch", () => {
   }
 });
 
+test.describe("visually-hidden text is not clipped text (#337)", () => {
+  // A false *blocker* is worse than a missed finding, because the cure is for a
+  // reader to learn to dismiss blockers, and that habit outlives the reason. The
+  // exemption therefore gets the same treatment as a rule: a fixture that must
+  // stay quiet, and a control that must still speak.
+  const HIDDEN = [
+    {
+      label: "the 1px box with clip",
+      style: "position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0)",
+    },
+    {
+      // The modern equivalent. The `clip` fixture alone would leave this path
+      // untested, and it is the one a rewrite to `clip-path` would land on.
+      label: "the 1px box with clip-path",
+      style: "position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)",
+    },
+  ];
+
+  for (const { label, style } of HIDDEN) {
+    test(`stays quiet on ${label}`, async ({ page }) => {
+      // Real text, longer than four characters so the `own.length` guard cannot
+      // be what is keeping it quiet.
+      await page.setContent(
+        page_(
+          `<div class="box" style="position: relative">
+             <span id="sr" style="${style}">Not included in the free tier</span>
+             <p>Visible copy that wraps onto several lines within its box.</p>
+           </div>`,
+        ),
+      );
+      const findings = await auditFrame(page, CTX);
+      const clipped = findings.filter((f) => f.rule === "text-clipped");
+      expect(
+        clipped.map((f) => f.detail),
+        `${label} was reported as clipped text`,
+      ).toEqual([]);
+    });
+  }
+
+  test("still reports a real clip on the same page", async ({ page }) => {
+    // The control. The two fixtures above pass just as well if the rule were
+    // switched off wholesale, which is the failure mode of an exemption: a
+    // quieter report and no one notices for months. So a genuinely clipped
+    // sentence, in the same document as a visually-hidden span, must still fire.
+    await page.setContent(
+      page_(
+        `<div class="box" style="position: relative">
+           <span id="sr" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0)">Not included in the free tier</span>
+           <p id="real" style="height: 20px; overflow: hidden">A sentence long enough to need three lines of vertical room in a box with room for one</p>
+         </div>`,
+      ),
+    );
+    const findings = await auditFrame(page, CTX);
+    const finding = findings.find((f) => f.rule === "text-clipped");
+    expect(findings.map((f) => f.rule), "text-clipped stopped firing entirely").toContain(
+      "text-clipped",
+    );
+    expect(finding?.detail, "fired for the wrong element").toContain("#real");
+  });
+});
+
 test.describe("a correct page produces no findings at all", () => {
   // The false-positive lock, and the one that matters most: a rule set that
   // reports a defect on a correct page gets ignored on an incorrect one.
