@@ -95,51 +95,6 @@
  * means focus lands on a real control and the shared `:focus-visible` ring
  * applies unchanged — no `:has()` selector and no second copy of the ring
  * geometry to keep in step with `styles/focus.css`. */
-.difficulty {
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.difficultyLegend {
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  color: var(--color-text);
-  padding: 0;
-  margin-bottom: var(--space-2);
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.chip {
-  display: flex;
-  align-items: center;
-  min-height: var(--control-height);
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-
-.chip:hover {
-  border-color: var(--color-primary);
-}
-
-.chipSelected {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light);
-  box-shadow: 0 0 0 1px var(--color-primary);
-}
-
 .guide {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);

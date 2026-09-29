@@ -12,6 +12,7 @@ import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi } from "../services/api.ts";
 import type { Challenge, ChallengeDifficulty } from "../types.ts";
+import { DIFFICULTIES, DIFFICULTY_VARIANT } from "../utils/difficulty.ts";
 import { extractError } from "../utils/errors.ts";
 import { formatRelativeTime } from "../utils/formatting.ts";
 import { LANGUAGES, languageLabel } from "../utils/language.ts";
@@ -19,17 +20,6 @@ import styles from "./Challenges.module.css";
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
-
-const DIFFICULTIES: ChallengeDifficulty[] = ["easy", "medium", "hard"];
-
-const DIFFICULTY_VARIANT: Record<
-  ChallengeDifficulty,
-  "success" | "warning" | "danger"
-> = {
-  easy: "success",
-  medium: "warning",
-  hard: "danger",
-};
 
 function Challenges() {
   const { user } = useAuth();
@@ -179,8 +169,8 @@ function Challenges() {
         >
           <option value="all">All difficulties</option>
           {DIFFICULTIES.map((diff) => (
-            <option key={diff} value={diff}>
-              {diff.charAt(0).toUpperCase() + diff.slice(1)}
+            <option key={diff.value} value={diff.value}>
+              {diff.label}
             </option>
           ))}
         </SelectInput>
