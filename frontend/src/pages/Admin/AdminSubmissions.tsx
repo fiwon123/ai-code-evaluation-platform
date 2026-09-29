@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
+import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
+import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { adminApi } from "../../services/api.ts";
 import type { AdminSubmission, SubmissionStatus } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
@@ -15,6 +18,7 @@ import styles from "./Admin.module.css";
 const PAGE_SIZE = 20;
 
 function AdminSubmissions() {
+  const { showToast } = useToast();
   const [submissions, setSubmissions] = useState<AdminSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +26,8 @@ function AdminSubmissions() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
   const [total, setTotal] = useState(0);
+  const [pendingDelete, setPendingDelete] = useState<AdminSubmission | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setPage(1);
@@ -55,6 +61,26 @@ function AdminSubmissions() {
     void load();
     return () => controller.abort();
   }, [page, status]);
+
+  async function confirmDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await adminApi.removeSubmission(pendingDelete.id);
+      setSubmissions((prev) => prev.filter((s) => s.id !== pendingDelete.id));
+      setTotal((prev) => Math.max(0, prev - 1));
+      setPendingDelete(null);
+      showToast("Submission deleted.", "success");
+    } catch (err) {
+      setError(extractError(err));
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -110,6 +136,7 @@ function AdminSubmissions() {
                 <th>Provider</th>
                 <th>Score</th>
                 <th>Created</th>
+                <th className={styles.actionsCol}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -153,6 +180,24 @@ function AdminSubmissions() {
                   <td className={styles.cellMuted}>
                     {formatRelativeTime(submission.created_at)}
                   </td>
+                  <td className={styles.actionsCol}>
+                    <div className={styles.rowActions}>
+                      <Button
+                        to={`/submissions/${submission.id}`}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        View report
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setPendingDelete(submission)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -170,6 +215,19 @@ function AdminSubmissions() {
         pageSize={PAGE_SIZE}
         onPageChange={setPage}
       />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete submission?"
+        confirmLabel="Delete"
+        loading={deleting}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => void confirmDelete()}
+      >
+        {pendingDelete
+          ? "This evaluation and its logs will be permanently removed. This cannot be undone."
+          : ""}
+      </ConfirmDialog>
     </div>
   );
 }
