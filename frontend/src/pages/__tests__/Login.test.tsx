@@ -76,6 +76,35 @@ describe("Login", () => {
     );
   });
 
+  // Regression guard for #320: a 422 used to render the Pydantic `loc` key in
+  // the banner, so the login page showed "identifier: String should have at
+  // least 3 characters" under a field labelled "Email or username".
+  it("never shows the internal field key in the error banner", async () => {
+    const { ApiError } = await import("../../services/api.ts");
+    mockAuth({
+      login: vi.fn().mockRejectedValue(
+        new ApiError(
+          422,
+          "String should have at least 3 characters",
+          { identifier: "String should have at least 3 characters" },
+        ),
+      ),
+    });
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "ab" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "whatever" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("String should have at least 3 characters");
+    expect(alert).not.toHaveTextContent("identifier");
+  });
+
   it("redirects to challenges when already logged in", () => {
     mockAuth({ user: { id: "u1" } });
     renderLogin();
