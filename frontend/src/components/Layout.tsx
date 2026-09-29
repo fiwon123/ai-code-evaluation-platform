@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.tsx";
 import Button from "./Button/Button.tsx";
 import Footer from "./Footer/Footer.tsx";
 import Logo from "./Logo/Logo.tsx";
+import ScrollToTop from "./ScrollToTop.tsx";
 import ThemeToggle from "./ThemeToggle/ThemeToggle.tsx";
 import styles from "./Layout.module.css";
 
@@ -196,6 +197,7 @@ function Layout() {
       </header>
       <main className={styles.main}>
         <div className={styles.content}>
+          <ScrollToTop />
           <Outlet />
         </div>
         <Footer />
