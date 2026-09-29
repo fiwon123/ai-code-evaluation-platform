@@ -54,6 +54,13 @@ export interface AnimationCensus {
    * is animating that the sweep cannot place on a timeline.
    */
   unseekable: string[];
+  /**
+   * Transitions declared on a pseudo-element, which `getAnimations()` can never
+   * report — see {@link censusPseudoTransitions} for why that is structural
+   * rather than a matter of timing, and why it is recorded here instead of
+   * crashing the run.
+   */
+  pseudoTransitions: string[];
 }
 
 /** Where a scroll landed, and whether the page had anything to reveal. */
@@ -114,7 +121,13 @@ export async function settleAtScroll(
   page: Page,
   fraction: number,
 ): Promise<SettleReport> {
-  const report = await page.evaluate(async (f: number): Promise<SettleReport> => {
+  // Two round trips, deliberately. The pseudo-element scan runs *after* the
+  // settle, on its own: it costs a forced computed-style resolution per element
+  // per pseudo, and folding it into the loop would make the settle's cost depend
+  // on the page's element count and its number of quiesce rounds. Nor can the
+  // answer change in between — nothing here edits a stylesheet.
+  const report = await page.evaluate(
+    async (f: number): Promise<Omit<SettleReport, "pseudoTransitions">> => {
     // --- scroll ------------------------------------------------------------
     const scroller = document.scrollingElement ?? document.documentElement;
     const maxScroll = Math.max(0, scroller.scrollHeight - window.innerHeight);
@@ -132,9 +145,12 @@ export async function settleAtScroll(
     // the determinism lock sees 0.674 opacity on one run and 0.519 on the next.
     // So the pinning is re-applied every frame while reveals light up, and the
     // census reported is the one from the *final* pass.
-    const pin = (): AnimationCensus => {
+    // Returns the census minus the pseudo-transition list, which is merged in
+    // from Node after the settle: `pin` runs on every quiesce round and that
+    // scan is far too expensive to repeat.
+    const pin = (): Omit<AnimationCensus, "pseudoTransitions"> => {
       const animations = document.getAnimations();
-      const census: AnimationCensus = {
+      const census: Omit<AnimationCensus, "pseudoTransitions"> = {
         total: animations.length,
         timeDriven: 0,
         positionDriven: 0,
@@ -347,7 +363,7 @@ export async function settleAtScroll(
   // "different bytes every run" failure this harness exists to prevent, and the
   // determinism lock is what surfaced it.
   await waitForTextSettled(page);
-  return report;
+  return { ...report, pseudoTransitions: await censusPseudoTransitions(page) };
 }
 
 /**
@@ -406,39 +422,151 @@ export async function seekAnimations(page: Page, fraction: number): Promise<numb
  * have its animations finished out from under it first.
  */
 export async function censusAnimations(page: Page): Promise<AnimationCensus> {
-  return page.evaluate((): AnimationCensus => {
-    // Document-level `getAnimations()` already covers every animation in the
-    // tree; only the *element* method takes a `subtree` option.
-    const animations = document.getAnimations();
-    const census: AnimationCensus = {
-      total: animations.length,
-      timeDriven: 0,
-      positionDriven: 0,
-      infinite: 0,
-      unseekable: [],
+  // Two separate `page.evaluate` round trips, not one function calling the
+  // other: `censusPseudoTransitions` is Node-side and opens its own channel, so
+  // calling it from inside an in-page callback would be asking the browser to
+  // make a request it has no way to make. They are independent reads, so they
+  // run together.
+  const [census, pseudoTransitions] = await Promise.all([
+    page.evaluate((): Omit<AnimationCensus, "pseudoTransitions"> => {
+      // Document-level `getAnimations()` already covers every animation in the
+      // tree; only the *element* method takes a `subtree` option.
+      const animations = document.getAnimations();
+      const census: Omit<AnimationCensus, "pseudoTransitions"> = {
+        total: animations.length,
+        timeDriven: 0,
+        positionDriven: 0,
+        infinite: 0,
+        unseekable: [],
+      };
+      for (const animation of animations) {
+        if (!(animation.timeline instanceof DocumentTimeline)) {
+          census.positionDriven += 1;
+          continue;
+        }
+        census.timeDriven += 1;
+        if ((animation.effect?.getComputedTiming().iterations ?? 1) === Infinity) {
+          census.infinite += 1;
+        }
+        const duration = animation.effect?.getComputedTiming().duration;
+        if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) {
+          const target = (animation.effect as KeyframeEffect | null)?.target;
+          census.unseekable.push(
+            target instanceof Element
+              ? `${target.tagName.toLowerCase()}.${
+                  typeof target.className === "string" ? target.className.split(/\s+/)[0] : ""
+                }`
+              : animation.constructor.name,
+          );
+        }
+      }
+      return census;
+    }),
+    censusPseudoTransitions(page),
+  ]);
+  return { ...census, pseudoTransitions };
+}
+
+/**
+ * Transitions the census can see declared in CSS but that no `Animation` object
+ * ever represents, so no seek can place them.
+ *
+ * This is a *structural* blind spot, not a timing one, and that is what makes it
+ * safe to detect without a clock: no amount of seeking, waiting or pausing will
+ * make these appear in `getAnimations()`.
+ *
+ * **The scope is narrower than "pseudo-elements", and an earlier draft of this
+ * comment got that wrong.** It claimed no pseudo-element transition is ever
+ * reported, on the evidence of a page whose `::after` transition had never been
+ * *triggered* — an untriggered transition has no `Animation` to report, so the
+ * test would have "confirmed" the claim about any pseudo-element ever. Triggering
+ * it properly gives the opposite answer:
+ *
+ * | declaration                          | in `getAnimations()`?          |
+ * |--------------------------------------|--------------------------------|
+ * | `.a::after { transition: transform }` | **yes** — `pseudo=::after`    |
+ * | `.c::details-content { transition }` | **no** — no entry at all      |
+ *
+ * So `::before`/`::after` transitions are seekable and must *not* be reported
+ * here: doing so would tell the report that the sweep cannot reach motion it can
+ * in fact place, which is the same class of error as the one this function
+ * exists to remove. The list below is the verified-unreachable set and nothing
+ * else; extending it means re-running the experiment above, not reasoning about
+ * it.
+ *
+ * It is recorded rather than thrown, because the page is not at fault. The
+ * shipped consumer is `/pricing`'s FAQ answer, which animates through
+ * `::details-content` — a supported mechanism (Chrome 131+, Safari 18.4+,
+ * Firefox 139+) that #332 put on that page deliberately. Throwing would make the
+ * sweep permanently red over a correct page and train everyone to ignore the
+ * guard, which is worse than the false all-clear it replaces.
+ *
+ * The consequence is recorded instead: a pass that intends to film one of these
+ * has to sample the *value* rather than seek the animation, the way `useCountUp`
+ * is handled below, and the manifest says so rather than implying the run
+ * covered it.
+ *
+ * Detection is a computed-style read, so it is deterministic — no clock, no
+ * sampling, nothing to flake. `transition-property` and `transition-duration` are
+ * both non-inherited, so their initial values (`all` and `0s`) are what an
+ * element with no such rule reports: a non-zero duration is therefore a genuine
+ * declaration and cannot be an artefact of inheritance.
+ */
+export async function censusPseudoTransitions(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    // Verified-unreachable pseudo-elements, and *only* those. `::before` and
+    // `::after` are excluded on evidence, not taste: Chromium does report them,
+    // as `pseudo=::before` / `pseudo=::after` entries. See the doc comment for
+    // the experiment. Each entry costs a `getComputedStyle` per element on the
+    // page, which is also why the list stays this short.
+    const PSEUDOS = ["::details-content"] as const;
+
+    /**
+     * Forced style is a real cost: one `getComputedStyle` per element per
+     * pseudo-element, on every page in the sweep. Bounded, and the bound is
+     * reported rather than hidden, because a silent truncation would show up as
+     * a clean bill of health for the elements that were never looked at.
+     */
+    const MAX_ELEMENTS = 3000;
+
+    const describe = (el: Element) => {
+      const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
+      const tag = el.tagName.toLowerCase();
+      return cls ? `${tag}.${cls}` : tag;
     };
-    for (const animation of animations) {
-      if (!(animation.timeline instanceof DocumentTimeline)) {
-        census.positionDriven += 1;
-        continue;
-      }
-      census.timeDriven += 1;
-      if ((animation.effect?.getComputedTiming().iterations ?? 1) === Infinity) {
-        census.infinite += 1;
-      }
-      const duration = animation.effect?.getComputedTiming().duration;
-      if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) {
-        const target = (animation.effect as KeyframeEffect | null)?.target;
-        census.unseekable.push(
-          target instanceof Element
-            ? `${target.tagName.toLowerCase()}.${
-                typeof target.className === "string" ? target.className.split(/\s+/)[0] : ""
-              }`
-            : animation.constructor.name,
-        );
+
+    /** `0.2s` / `200ms` / `0s` -> milliseconds. NaN for anything unparseable. */
+    const toMs = (value: string) => {
+      const raw = value.trim();
+      if (raw.endsWith("ms")) return Number.parseFloat(raw);
+      if (raw.endsWith("s")) return Number.parseFloat(raw) * 1000;
+      return Number.NaN;
+    };
+
+    const found: string[] = [];
+    const elements = Array.from(document.querySelectorAll("*"));
+    for (const el of elements.slice(0, MAX_ELEMENTS)) {
+      for (const pseudo of PSEUDOS) {
+        const style = getComputedStyle(el, pseudo);
+        const property = style.transitionProperty;
+        if (!property || property === "none") continue;
+
+        // CSS repeats a shorter list to match the longer one, so a single
+        // `transition-duration` covers a two-property `transition-property`.
+        // Reading index 0 alone would miss the second property entirely, and
+        // `::details-content` declares exactly that shape.
+        const properties = property.split(",").map((p) => p.trim());
+        const durations = style.transitionDuration.split(",").map(toMs);
+        const at = (i: number) => durations[i % durations.length];
+        if (!Number.isFinite(at(0)) || at(0) <= 0) continue;
+
+        found.push(`${describe(el)}${pseudo} { ${properties.map((p, i) => `${p} ${at(i)}ms`).join(", ")} }`);
       }
     }
-    return census;
+    if (elements.length > MAX_ELEMENTS) {
+      found.push(`… and ${elements.length - MAX_ELEMENTS} element(s) not scanned (MAX_ELEMENTS=${MAX_ELEMENTS})`);
+    }
+    return found;
   });
 }
 

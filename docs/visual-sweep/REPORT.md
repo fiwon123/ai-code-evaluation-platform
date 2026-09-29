@@ -188,6 +188,13 @@ part of this report that looks at the frames rather than measuring them.
 6. **Multi-row table behaviour** *(opened by the V pass)* — every admin table
    held at most 3 rows, so cross-row alignment and per-row action spacing were
    never tested.
+7. **Motion the API cannot represent** *(opened by the M pass, #334)* — a
+   transition on `::details-content` is never reported by `getAnimations()`, so
+   the sweep can neither seek it nor film it. The census now *records* the blind
+   spot rather than passing over it, and `/pricing` is in
+   `SWEEP_MOTION_EXCEPTIONS` with the reason; what is still missing is a
+   value-sampling pass of the kind `useCountUp` gets. The login form's error
+   state is separately unphotographable for a stale reason — see #335.
 
 ## Reproducing
 
@@ -694,3 +701,100 @@ red border, in all four theme/viewport combinations.
 New gaps this pass opened, none of which a static frame can close: hover and
 focus states, the unsampled scroll bands, and multi-row table behaviour (every
 admin table held at most 3 rows, so cross-row alignment was never tested).
+
+## M pass — motion the sweep could not see (#332, #334)
+
+The [Motion](#motion) table above covers three filmstrips, all on `/`. This pass
+is about a motion surface the sweep had no way to look at, and about the defect
+that was hiding in it.
+
+### The finding
+
+`/pricing`'s FAQ disclosure rotated its `+`/`×` glyph over 200ms while the
+native `<details>` answer had **no transition at all**, so the answer snapped
+open and closed instantly. The closing half is the part that reads as a bug
+rather than a taste question: a row that was **already collapsed still showed a
+`×`** for roughly the first 160ms, because the glyph was the only thing still
+moving.
+
+Four independent reads of the toggle clip reported it. The existing test suite
+passed throughout — the DOM said the right things were present, and nothing in
+jsdom can see two things moving at different speeds.
+
+After the fix both halves animate off one custom property, `--faq-reveal`, via
+`::details-content` with `interpolate-size: allow-keywords`. Measured, the two
+track within **0.17 percentage points** at every sampled frame.
+
+### Why the sweep could not have found it
+
+This is the part worth keeping. `helpers/motion.ts` is built on one rule —
+*never sample animation state by elapsed time*, seek everything instead — and it
+is honest about its limits. `AnimationCensus` carries an `unseekable` list, and
+`assertSeekable` refuses to let a run report success while an animation it meant
+to place stayed put.
+
+But the census is built on `document.getAnimations()`, and **that API does not
+report `::details-content` transitions at all**. Not late, not unreliably —
+absent. The census on `/pricing` returns `total: 0` while the page visibly
+animates, and `assertSeekable` passes it. The motion pass would have reported
+"nothing to see".
+
+That is the failure `manifest.ts` already names as the worst one available:
+
+> *A guard that passes because it looked in the wrong directory is worse than no
+> guard, because it converts a crash into a false all-clear.*
+
+Verified in Chromium 153, because the scope turned out to be much narrower than
+it first looked:
+
+| declaration                          | in `getAnimations()`?     |
+|--------------------------------------|---------------------------|
+| `.a::after { transition: transform }` | **yes** — `pseudo=::after` |
+| `.c::details-content { transition }` | **no** — no entry at all   |
+
+`::before`/`::after` transitions are seekable and must **not** be reported as
+blind spots. An earlier draft of the detector scanned all three and its comment
+"proved" the wrong thing, from a test whose pseudo transition had never been
+*triggered* — an untriggered transition has no `Animation` to report, so the
+experiment would have "confirmed" the claim about any pseudo-element ever.
+
+### What changed
+
+- `censusPseudoTransitions` reports transitions the census can see declared in
+  CSS but that no `Animation` object represents. Deterministic — a computed-style
+  read, no clock, nothing to flake. Measured across `/`, `/pricing`, `/features`
+  and `/challenges` at two viewports: **one** blind spot found, the FAQ's
+  `::details-content`, and no false positives.
+- `AnimationCensus.pseudoTransitions` carries it into the manifest, so a run
+  cannot look clean by omission.
+- `census.lock.visual.ts` locks the behaviour in a real browser, both ways: the
+  declaration is reported, **and** `/`'s element-level motion is not. Mutating
+  the detector to widen its scope fails the control; mutating it to return
+  nothing fails the positive.
+- `SWEEP_MOTION_SURFACES` + `SWEEP_MOTION_EXCEPTIONS` replace a comment in
+  `routes.ts` that had gone stale — it asserted `/` was the only page with a
+  motion system, which #332 made false. Now checkable, in both directions.
+
+### No filmstrip for `/pricing`, deliberately
+
+A `kind: "transition"` pass would be worse than nothing here. It seeks each
+animation to a fraction of its own duration; on this page the census sees **one**
+animation (the glyph) and the answer's `block-size` is not in the set, so the
+seek would place the glyph faithfully and leave the panel snapped. Every frame
+would show an open row with an unfinished `+` — indistinguishable from the
+defect this pass fixed, and this report already has one instance of a rule
+filing a filmstrip frame as a blocker.
+
+So the invariant is asserted where it can be observed: `e2e/pricing.spec.ts`
+stretches the transition and compares the two halves' normalised progress, and
+`/pricing` is listed in `SWEEP_MOTION_EXCEPTIONS` with that reason. The missing
+piece is a pass that samples the *value* rather than seeking the animation, the
+way `useCountUp` is handled.
+
+### Also found, and not fixed here
+
+The `login-field-errors` state fails on every run, in both themes and both
+viewports, **on `dev` with a clean tree** — its proof text still expects the
+Pydantic 422 body (`identifier: String should have at least 3 characters`) that
+#320/#326 removed from the UI. Four of 340 frames never get captured as a
+result. Tracked as #335, separately.

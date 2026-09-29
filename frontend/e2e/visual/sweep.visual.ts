@@ -207,19 +207,17 @@ test.describe("at rest", () => {
             viewport,
             page: route.path,
             state: `static ${route.path} @ scroll ${fraction}`,
-            settle: {
-              total: settle.total,
-              timeDriven: settle.timeDriven,
-              positionDriven: settle.positionDriven,
-              infinite: settle.infinite,
-              scrollY: settle.scrollY,
-              maxScroll: settle.maxScroll,
-              revealed: settle.revealed,
-              pendingReveals: settle.pendingReveals,
-              revealsTimedOut: settle.revealsTimedOut,
-              unquiesced: settle.unquiesced,
-              unsettledReveals: settle.unsettledReveals,
-            },
+            // Spread, not a hand-written list — and this is the *second* time
+            // this projection has cost a field. The interface above records the
+            // first: a local type, settled fields spelled out a third time, and
+            // a teardown that read `{}` for anything added later. Sharing the
+            // type fixed the compile error but not the omission, because every
+            // name in a hand-written list still exists in both shapes — so
+            // `pseudoTransitions` (#334) reached the manifest's *type* and not
+            // the manifest, which is the identical silent drop with an extra
+            // step. A spread cannot fall behind: a new census field is carried
+            // by construction, and a renamed one is a type error here.
+            settle: { ...settle },
           });
         }
 
