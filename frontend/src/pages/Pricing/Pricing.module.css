@@ -84,12 +84,14 @@
 .tierItem {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-}
-
-.check {
-  color: var(--color-success);
-  font-weight: 700;
-  margin-right: var(--space-2);
+  /* `center`, not `baseline`. The check is a fixed-size box and the label beside
+     it is text, and a text baseline is the wrong datum for a 16px box whose only
+     child is a replaced element — it resolved to the SVG's bottom edge, putting
+     the mark 5.3px above the cap centre. `center` is the mechanism; the residual
+     sub-pixel is the mark's own `translateY`. See ComparisonMark.module.css. */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .tierButton {
@@ -139,6 +141,31 @@
   font-size: var(--font-size-sm);
 }
 
+/* A yes/no cell is left aligned, and that is a decision rather than a default.
+ *
+ * Centring the mark was tried first, on the reasoning that a cell holding one
+ * 16px glyph and no text wants to be centred. It does not, here, and the visual
+ * review is why: the tier headers ("Free", "Pro", "Enterprise") and the string
+ * values under them ("50", "Unlimited", "Dedicated") all share one left ink
+ * edge, so each column already has a single vertical scan line. Centring only
+ * the marks breaks that edge on exactly the rows a reader scans to find which
+ * rows differentiate the tiers — measured, the centred mark sat 30px to 118px
+ * right of its own column's header, further on "Pro" than on "Enterprise",
+ * because the columns are auto-sized and differ in width.
+ *
+ * Two traps recorded here, both of which cost a debugging round:
+ *
+ * - `.markCell { text-align: center }` *looked* applied and was not. It is
+ *   specificity (0,1,0) and the rule above it, `.table th, .table td`, is
+ *   (0,1,1) — so the declaration lost the cascade and every mark cell was left
+ *   aligned the whole time, while the comment above it described centring that
+ *   never happened. The class is gone rather than fixed: nothing needs it now.
+ * - A rule that loses a cascade fails silently. There is no warning, the class
+ *   name still shows up in the DOM, and `getComputedStyle` is the only way to
+ *   find out. The e2e suite now asserts the resolved `text-align`, not the
+ *   class, for the same reason it measures the mark's position.
+ */
+
 .table thead th {
   font-weight: 700;
   color: var(--color-text-muted);
@@ -178,6 +205,17 @@
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+
+  /*
+   * One source of truth for how long the disclosure takes to open, shared by the
+   * glyph rotation and the answer's height. Two independent `0.2s` literals can
+   * drift apart in a later edit, and when they do the two halves desync again —
+   * which is exactly the bug this rule replaced. As a custom property it is also
+   * the only thing the visual capture needs to change to film the disclosure in
+   * slow motion, which is the sole way to photograph a 200ms height transition
+   * through a ~46ms screenshot.
+   */
+  --faq-reveal: 0.2s;
 }
 
 .faqQuestion {
@@ -202,7 +240,7 @@
   font-weight: 400;
   color: var(--color-primary);
   line-height: 1;
-  transition: transform 0.2s ease;
+  transition: transform var(--faq-reveal) ease;
 }
 
 .faqItem[open] .faqQuestion::after {
@@ -215,6 +253,39 @@
   color: var(--color-text-muted);
   line-height: 1.6;
   font-size: var(--font-size-sm);
+}
+
+/*
+ * The `+` → `×` glyph eases over 200ms, but the native <details> answer pops in
+ * and out with no transition at all, so the two are visibly disconnected: an open
+ * row whose glyph is still an upright `+`, and — worse, because it lasts — a
+ * *collapsed* row still showing a `×` for the first ~160ms of closing. Four
+ * independent visual reviews of the toggle clip reported the desync, and the
+ * closing half of it reads as a real defect rather than a taste question.
+ *
+ * `::details-content` (Chrome 131+, Safari 18.4+, Firefox 139+) is the supported
+ * way to transition the content box, and it needs `interpolate-size:
+ * allow-keywords` for `block-size: auto` to be interpolable at all.
+ *
+ * Progressive enhancement on purpose: where the pseudo-element is unsupported
+ * the rule is dropped, the answer still snaps, and only the glyph eases — the
+ * exact behaviour this replaces. Nothing breaks.
+ *
+ * `content-visibility ... allow-discrete` keeps the content rendered *through*
+ * the close transition; without it the box collapses instantly and the easing
+ * is invisible, which would look like a broken fix.
+ */
+.faqItem::details-content {
+  block-size: 0;
+  overflow: hidden;
+  interpolate-size: allow-keywords;
+  transition:
+    block-size var(--faq-reveal) ease,
+    content-visibility var(--faq-reveal) allow-discrete;
+}
+
+.faqItem[open]::details-content {
+  block-size: auto;
 }
 
 @media (max-width: 768px) {
