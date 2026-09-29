@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   SWEEP_MOTION,
+  SWEEP_MOTION_EXCEPTIONS,
+  SWEEP_MOTION_SURFACES,
   SWEEP_ROUTES,
   SWEEP_ROUTE_EXCEPTIONS,
   SWEEP_STATES,
@@ -116,13 +118,23 @@ describe("the sweep covers every route, in both directions", () => {
   });
 
   it("reads the routes out of App.tsx at all", () => {
-    expect(APP_TSX.length, "App.tsx is empty or unreachable — the glob is stale").toBeGreaterThan(1000);
-    expect(appPaths.length, "no path attributes found in App.tsx").toBeGreaterThanOrEqual(20);
-    expect(new Set(appPaths).size, "App.tsx declares a duplicate path").toBe(appPaths.length);
+    expect(
+      APP_TSX.length,
+      "App.tsx is empty or unreachable — the glob is stale",
+    ).toBeGreaterThan(1000);
+    expect(
+      appPaths.length,
+      "no path attributes found in App.tsx",
+    ).toBeGreaterThanOrEqual(20);
+    expect(new Set(appPaths).size, "App.tsx declares a duplicate path").toBe(
+      appPaths.length,
+    );
   });
 
   it("sweeps every path App.tsx declares", () => {
-    const missed = appPaths.filter((path) => !sweptPaths.includes(path) && !exceptions.includes(path));
+    const missed = appPaths.filter(
+      (path) => !sweptPaths.includes(path) && !exceptions.includes(path),
+    );
     expect(
       missed,
       "App.tsx routes with no sweep entry — add one to SWEEP_ROUTES, or to " +
@@ -151,8 +163,14 @@ describe("the sweep covers every route, in both directions", () => {
     // an entry for a route that no longer exists is stale, and an entry with no
     // reason is an undeclared decision.
     for (const [path, reason] of Object.entries(SWEEP_ROUTE_EXCEPTIONS)) {
-      expect(appPaths, `exception names a route App.tsx does not declare: ${path}`).toContain(path);
-      expect(reason.trim().length, `exception for ${path} has no reason`).toBeGreaterThan(20);
+      expect(
+        appPaths,
+        `exception names a route App.tsx does not declare: ${path}`,
+      ).toContain(path);
+      expect(
+        reason.trim().length,
+        `exception for ${path} has no reason`,
+      ).toBeGreaterThan(20);
     }
   });
 });
@@ -160,7 +178,10 @@ describe("the sweep covers every route, in both directions", () => {
 describe("every declared frame is a frame that can exist", () => {
   it("gives every route a heading, so no capture can be of a blank page", () => {
     for (const route of SWEEP_ROUTES) {
-      expect(route.heading.trim().length, `${route.path} has no heading to assert`).toBeGreaterThan(2);
+      expect(
+        route.heading.trim().length,
+        `${route.path} has no heading to assert`,
+      ).toBeGreaterThan(2);
     }
   });
 
@@ -169,7 +190,10 @@ describe("every declared frame is a frame that can exist", () => {
     // an *empty* one, which is neither.
     for (const route of SWEEP_ROUTES) {
       if (route.scroll) {
-        expect(route.scroll.length, `${route.path} declares an empty scroll set`).toBeGreaterThan(0);
+        expect(
+          route.scroll.length,
+          `${route.path} declares an empty scroll set`,
+        ).toBeGreaterThan(0);
       }
     }
   });
@@ -182,7 +206,14 @@ describe("every declared frame is a frame that can exist", () => {
     for (const route of SWEEP_ROUTES) {
       expect(
         Object.keys(route),
-        `${route.path} narrows its sweep: ${Object.keys(route).filter((key) => !["path", "url", "heading", "auth", "scroll", "note"].includes(key)).join(", ")}`,
+        `${route.path} narrows its sweep: ${Object.keys(route)
+          .filter(
+            (key) =>
+              !["path", "url", "heading", "auth", "scroll", "note"].includes(
+                key,
+              ),
+          )
+          .join(", ")}`,
       ).not.toContain("themes");
       expect(Object.keys(route)).not.toContain("viewports");
     }
@@ -193,39 +224,103 @@ describe("every declared frame is a frame that can exist", () => {
     // screenshot ends up showing a page with no dialog on it. Two proofs is
     // ambiguous: the frame would be titled by whichever resolved first.
     for (const state of SWEEP_STATES) {
-      const kinds = [state.expect.role !== undefined, state.expect.text !== undefined].filter(Boolean);
-      expect(kinds.length, `state ${state.id} has ${kinds.length} proofs`).toBe(1);
-      if (state.expect.role) {
-        expect(state.expect.name, `state ${state.id} gives a role with no name`).toBeTruthy();
-      }
-      expect(state.caption.trim().length, `state ${state.id} has no caption for the report`).toBeGreaterThan(
-        20,
+      const kinds = [
+        state.expect.role !== undefined,
+        state.expect.text !== undefined,
+      ].filter(Boolean);
+      expect(kinds.length, `state ${state.id} has ${kinds.length} proofs`).toBe(
+        1,
       );
+      if (state.expect.role) {
+        expect(
+          state.expect.name,
+          `state ${state.id} gives a role with no name`,
+        ).toBeTruthy();
+      }
+      expect(
+        state.caption.trim().length,
+        `state ${state.id} has no caption for the report`,
+      ).toBeGreaterThan(20);
     }
   });
 
   it("starts every state and motion pass on a swept route", () => {
     const paths = new Set(SWEEP_ROUTES.map((route) => route.path));
     for (const state of SWEEP_STATES) {
-      expect(paths, `state ${state.id} names an unswept route: ${state.route}`).toContain(state.route);
+      expect(
+        paths,
+        `state ${state.id} names an unswept route: ${state.route}`,
+      ).toContain(state.route);
     }
     for (const pass of SWEEP_MOTION) {
-      expect(paths, `motion ${pass.id} names an unswept route: ${pass.route}`).toContain(pass.route);
+      expect(
+        paths,
+        `motion ${pass.id} names an unswept route: ${pass.route}`,
+      ).toContain(pass.route);
     }
   });
 
   it("samples each motion pass in units its kind can honour", () => {
     for (const pass of SWEEP_MOTION) {
-      expect(pass.samples.length, `motion ${pass.id} samples nothing`).toBeGreaterThanOrEqual(3);
+      expect(
+        pass.samples.length,
+        `motion ${pass.id} samples nothing`,
+      ).toBeGreaterThanOrEqual(3);
       for (const sample of pass.samples) {
         // 1.4 or -0.2 is not a position, it is a typo, and clamping would hide it.
-        expect(sample, `motion ${pass.id} samples outside 0..1`).toBeGreaterThanOrEqual(0);
-        expect(sample, `motion ${pass.id} samples outside 0..1`).toBeLessThanOrEqual(1);
+        expect(
+          sample,
+          `motion ${pass.id} samples outside 0..1`,
+        ).toBeGreaterThanOrEqual(0);
+        expect(
+          sample,
+          `motion ${pass.id} samples outside 0..1`,
+        ).toBeLessThanOrEqual(1);
       }
       // A scroll filmstrip that stops short of 1 has never shown the footer.
       if (pass.kind === "scroll") {
-        expect(pass.samples, `motion ${pass.id} never reaches the bottom`).toContain(1);
+        expect(
+          pass.samples,
+          `motion ${pass.id} never reaches the bottom`,
+        ).toContain(1);
       }
+    }
+  });
+
+  it("films every page that animates, or says in writing why it does not", () => {
+    // The checkable form of a claim `routes.ts` used to make in a comment —
+    // "Home is the only page with a motion system on it" — which went stale
+    // silently when `/pricing` gained an animated disclosure in #332, and
+    // stayed stale because a comment cannot be tested. Checked in both
+    // directions, like `SWEEP_ROUTE_EXCEPTIONS`: a surface with neither a pass
+    // nor a written exception is an undeclared decision, and an exception for a
+    // surface that no longer animates is a stale exemption.
+    for (const surface of SWEEP_MOTION_SURFACES) {
+      const filmed = SWEEP_MOTION.some(
+        (motion) => motion.route === surface.route,
+      );
+      const excused = SWEEP_MOTION_EXCEPTIONS[surface.route];
+      expect(
+        filmed || Boolean(excused),
+        `${surface.route} animates (${surface.why}) but has neither a SWEEP_MOTION pass ` +
+          "nor an entry in SWEEP_MOTION_EXCEPTIONS",
+      ).toBe(true);
+    }
+    for (const [route, reason] of Object.entries(SWEEP_MOTION_EXCEPTIONS)) {
+      expect(
+        SWEEP_MOTION_SURFACES.map((surface) => surface.route),
+        `motion exception names a surface that is not declared: ${route}`,
+      ).toContain(route);
+      expect(
+        reason.trim().length,
+        `motion exception for ${route} has no reason`,
+      ).toBeGreaterThan(20);
+      // An exception is a statement that the pass is *missing*, so a page cannot
+      // quietly acquire one and keep the exemption — the two are contradictory.
+      expect(
+        SWEEP_MOTION.some((motion) => motion.route === route),
+        `${route} has both a motion pass and a motion exception; one of them is stale`,
+      ).toBe(false);
     }
   });
 
@@ -236,9 +331,10 @@ describe("every declared frame is a frame that can exist", () => {
       ["motion", SWEEP_MOTION.map((pass) => pass.id)],
     ] as const) {
       const unique = new Set(ids);
-      expect(unique.size, `duplicate ${label} id: ${ids.filter((id) => ids.indexOf(id) !== ids.indexOf(id)).join(", ")}`).toBe(
-        ids.length,
-      );
+      expect(
+        unique.size,
+        `duplicate ${label} id: ${ids.filter((id) => ids.indexOf(id) !== ids.indexOf(id)).join(", ")}`,
+      ).toBe(ids.length);
     }
   });
 });
@@ -263,7 +359,9 @@ describe("the matrix is the composition the acceptance criteria describe", () =>
   it("sweeps every state in both themes unless it says why not", () => {
     const frames = SWEEP_STATES.reduce(
       (sum, state) =>
-        sum + (state.themes ?? SWEEP_THEMES).length * (state.viewports ?? SWEEP_VIEWPORTS).length,
+        sum +
+        (state.themes ?? SWEEP_THEMES).length *
+          (state.viewports ?? SWEEP_VIEWPORTS).length,
       0,
     );
     // A state is worth one row of the report; nine of them is the state surface
@@ -276,8 +374,13 @@ describe("the matrix is the composition the acceptance criteria describe", () =>
   it("samples motion densely enough to read a transition", () => {
     // Three frames show a beginning, a middle and an end. Two show a guess.
     for (const pass of SWEEP_MOTION) {
-      expect(pass.samples.length, `motion ${pass.id} is too sparse to review`).toBeGreaterThanOrEqual(3);
+      expect(
+        pass.samples.length,
+        `motion ${pass.id} is too sparse to review`,
+      ).toBeGreaterThanOrEqual(3);
     }
-    expect(SWEEP_MOTION.reduce((sum, pass) => sum + pass.samples.length, 0)).toBeGreaterThanOrEqual(10);
+    expect(
+      SWEEP_MOTION.reduce((sum, pass) => sum + pass.samples.length, 0),
+    ).toBeGreaterThanOrEqual(10);
   });
 });

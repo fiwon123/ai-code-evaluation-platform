@@ -498,13 +498,65 @@ export interface SweepMotion {
 }
 
 /**
+ * Pages that animate something, whether or not the sweep can film it.
+ *
+ * The list exists because the previous version of this file asserted in a
+ * comment that motion was a `/` speciality — "Home is the only page with a
+ * motion system on it" — and that claim quietly went stale. `/pricing`'s FAQ
+ * disclosure has animated since #332, and because the comment said the matrix
+ * was small *by fact*, the next person to add a motion surface had no reason to
+ * revisit it. A claim in a comment cannot be checked; a row in a table can.
+ *
+ * Each page is either covered by a `SWEEP_MOTION` pass or listed in
+ * `SWEEP_MOTION_EXCEPTIONS` with its reason, and
+ * `src/pages/visual-sweep.lock.test.ts` checks both directions — so a new
+ * motion surface without either a pass or a written exception fails the build.
+ */
+export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = [
+  {
+    route: "/",
+    why: "Reveal staggers, the `.scrollReveal` view() reveals, the ambient layer and `useCountUp` — all element-level, all seekable, all filmed.",
+  },
+  {
+    route: "/pricing",
+    why: "The FAQ disclosure. Its glyph is element-level and seekable; its answer animates through `::details-content`, which no `Animation` object represents.",
+  },
+];
+
+/**
+ * Motion surfaces with no filmstrip, and why there isn't one.
+ *
+ * Not an oversight and not a to-do. `/pricing` is listed here because the
+ * honest pass for it does not exist yet, and a plausible-looking one would be
+ * worse than none:
+ *
+ * A `kind: "transition"` pass seeks each animation to a fraction of its own
+ * duration. On this page the census sees **one** animation — the glyph's
+ * `transform` — and the answer's `block-size` is not in the set at all, so the
+ * seek would place the glyph faithfully and leave the panel snapped. Every frame
+ * of that filmstrip would show an open row with an unfinished `+`, which reads
+ * as the exact desync #332 fixed. A reviewer could not tell it from a defect,
+ * and the report's own history already has one instance of a rule filing a
+ * filmstrip frame as a blocker.
+ *
+ * So the invariant is asserted where it can actually be observed — in
+ * `e2e/pricing.spec.ts`, which stretches the transition and compares the two
+ * halves' normalised progress against each other — and the blind spot is
+ * recorded in the manifest by `censusPseudoTransitions` so no run implies it was
+ * covered. A pass that samples the *value* rather than seeking the animation, the
+ * way `useCountUp` is handled, is the missing piece.
+ */
+export const SWEEP_MOTION_EXCEPTIONS: Readonly<Record<string, string>> = {
+  "/pricing":
+    "The FAQ answer animates via ::details-content, which getAnimations() never reports, so a seek-based filmstrip would place the glyph and leave the panel snapped — a sheet that looks like the #332 desync. Asserted numerically in e2e/pricing.spec.ts; the blind spot is recorded in the manifest by censusPseudoTransitions. #334.",
+};
+
+/**
  * The motion passes.
  *
- * Home is the only page with a motion system on it — `Reveal`, `.scrollReveal`,
- * the ambient layer and `useCountUp` all appear there and nowhere else — so the
- * matrix is small by fact, not by omission. A new page that adopts `Reveal`
- * without a pass here is invisible to the sweep, which is a deliberate gap the
- * report should name rather than something to paper over.
+ * `/` is the only page whose motion the sweep can place on a timeline, so the
+ * matrix is small by fact — but "small by fact" is a claim that expires, and it
+ * did: see `SWEEP_MOTION_SURFACES` above, which is the checkable version of it.
  */
 export const SWEEP_MOTION: readonly SweepMotion[] = [
   {
