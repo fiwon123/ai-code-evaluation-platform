@@ -93,6 +93,14 @@ async function captureJ(page: Page, file: string, meta: FrameMeta): Promise<void
   const full = resolve(OUT_ROOT, file);
   mkdirSync(join(full, ".."), { recursive: true });
   const started = Date.now();
+  // A still is a claim that the page has come to rest, and the audit is run with
+  // the at-rest rules on. That contract is only true if nothing is mid-flight,
+  // so settle what the rest of the journey waited on the *words* for: an
+  // entrance animates geometry, not text, so `waitForTextSettled` returns while
+  // it is still at opacity 0 — which is how the theme toggle's scale-in used to
+  // be photographed at 26x26px and invisible, and reported as content that
+  // never arrived. #342.
+  await waitForAnimationsSettled(page);
   const buffer = await page.screenshot({ path: full });
   FINDINGS.push(
     ...(await auditFrame(page, {
@@ -145,9 +153,16 @@ async function burstJ(
     mkdirSync(dirname(full), { recursive: true });
     await page.screenshot({ path: full, type: "jpeg", quality: 72 });
     const frame = join(dir, name);
+    // A burst frame is a sample of a *moving* page, the same way a sweep
+    // filmstrip is. The at-rest rules must not judge it: at 0% of its own
+    // transition the toggle is legitimately at opacity 0, and that opacity is
+    // the subject of the frame. `auditFrame` exempts exactly the ids it is
+    // handed here (`motion:`), so bursts are declared motion — like the sweep's
+    // filmstrips — rather than left to be read as resting content. The manifest
+    // still records the webm name; only the audit's view of the frame changes.
     FINDINGS.push(
       ...(await auditFrame(page, {
-        page: `webm:${meta.page}`,
+        page: `motion:${meta.page}`,
         theme: meta.theme,
         viewport: meta.viewport,
         frame,
@@ -504,13 +519,6 @@ gate("journey audit — at rest", () => {
     await expect(page.getByText("Password looks good")).toBeVisible();
     await page.getByRole("button", { name: "Create account" }).click();
     await expect(page.getByRole("heading", { name: "Challenges", level: 1 })).toBeVisible();
-    // The landing page's theme toggle scales in from nothing. Waiting for the
-    // heading is not waiting for that: the words are already there while the
-    // button is still at opacity 0, so this frame used to be captured mid
-    // entrance — and whichever point on the curve it happened to land on decided
-    // whether the census called it a minor small target or a blocker. The 250ms
-    // this replaced never synchronised it either; it only shifted the sample.
-    await waitForAnimationsSettled(page);
     await captureJ(page, "journeys/register-validation/03-created.png", {
       theme, viewport, page: "register-validation", state: "Account created — welcome toast",
     });

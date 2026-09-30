@@ -294,6 +294,13 @@ test.describe("a correct page produces no findings at all", () => {
     // not the rule.
     const atRest = await auditFrame(page, { ...CTX, page: "/" });
     expect(atRest.map((f) => f.rule)).toContain("content-invisible");
+    // The exemption is the *prefix*, not the frame type. A burst recorded as
+    // `webm:` reads as resting content to the audit, which is how the journeys'
+    // `anim-*.jpg` frames used to be reported as "content painted as nothing"
+    // mid-transition (#342) — they now declare `motion:` like the sweep's
+    // filmstrips, and this line makes the rename visible if that ever slips.
+    const staleBurst = await auditFrame(page, { ...CTX, page: "webm:theme-crossfade" });
+    expect(staleBurst.map((f) => f.rule)).toContain("content-invisible");
   });
 
   test("a region that scrolls on purpose is not an overflow", async ({ page }) => {
