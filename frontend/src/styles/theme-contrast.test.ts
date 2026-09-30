@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { SubmissionStatus } from "../types.ts";
+import { statusVariant } from "../utils/formatting.ts";
 import languageSource from "../utils/language.ts?raw";
 import globalsCss from "./globals.css?raw";
 
@@ -294,6 +296,30 @@ describe("status pill contrast", () => {
         ratio,
         `--${pill.strong} (${text}) on --color-surface (${surface}) is only ${ratio.toFixed(2)}:1`,
       ).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+  });
+
+  it("covers every status `statusVariant` can return", () => {
+    // This is the lock that would have prevented the bug #348 fixed. The dark
+    // "processing" pill shipped at 3.13:1 for as long as `STATUS_PILLS` listed
+    // three families instead of four — and it shipped *green*, because the list
+    // and the thing it was supposed to describe were two separate hand-kept
+    // inventories with no assertion connecting them. Adding a `SubmissionStatus`
+    // or a variant to `statusVariant` without a pill entry here is now a
+    // failure rather than a silent hole in the coverage.
+    const STATUSES: SubmissionStatus[] = [
+      "pending",
+      "processing",
+      "completed",
+      "failed",
+    ];
+    const covered = new Set(STATUS_PILLS.map((pill) => pill.base));
+    for (const status of STATUSES) {
+      const variant = statusVariant(status);
+      expect(
+        covered.has(`color-${variant}` as (typeof STATUS_PILLS)[number]["base"]),
+        `status "${status}" paints the .${variant} badge, so --color-${variant}-strong/-light must be in STATUS_PILLS and held to AA in both themes`,
+      ).toBe(true);
     }
   });
 
