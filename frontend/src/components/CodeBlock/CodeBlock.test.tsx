@@ -79,16 +79,111 @@ describe("splitLogLines", () => {
   });
 });
 
-describe("CodeBlock (code mode, unchanged)", () => {
+describe("CodeBlock (code mode)", () => {
   it("renders code with no gutter", () => {
     const { container } = render(<CodeBlock code="x = 1" filename="solution.py" />);
     expect(screen.getByText("x = 1")).toBeInTheDocument();
     expect(container.querySelectorAll(`.${styles.lineNumber}`)).toHaveLength(0);
   });
 
-  it("labels the header with the language", () => {
-    render(<CodeBlock code="x = 1" language="python" />);
-    expect(screen.getByText("language: python")).toBeInTheDocument();
+  it("names the language once, via the badge, using its display name", () => {
+    // "language: python" read as machine output and the reader wanted a display
+    // name; `languageMeta` owns the naming (issue #356). The plain-text label
+    // stays "code" so the name is not printed twice.
+    const { container } = render(<CodeBlock code="x = 1" language="python" />);
+    const badge = container.querySelector('[title="Python · pytest"]');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toContain("Py");
+    expect(screen.getByText("code")).toBeInTheDocument();
+    expect(screen.queryByText(/language:/)).not.toBeInTheDocument();
+  });
+
+  it("pairs a filename with the language badge", () => {
+    // ResultReport passes both. "solution.py · Py" is a useful pairing, because a
+    // generated file's extension and the language it was actually evaluated as
+    // can disagree, and the badge is the one that is authoritative.
+    const { container } = render(
+      <CodeBlock code="x = 1" language="python" filename="solution.py" />,
+    );
+    expect(screen.getByText("solution.py")).toBeInTheDocument();
+    expect(container.querySelector('[title="Python · pytest"]')).not.toBeNull();
+  });
+
+  it("does not badge a prompt", () => {
+    // ChallengeDetail renders the prompt through CodeBlock as language="text".
+    // A language pill on English prose is a lie about what the surface is.
+    const { container } = render(<CodeBlock code="Write two_sum." language="text" />);
+    expect(container.querySelector('[class*="badge"]')).toBeNull();
+  });
+
+  it("does not badge an unknown language", () => {
+    // An unrecognized value is catalog data that has drifted, not a language to
+    // assert in the chrome.
+    const { container } = render(<CodeBlock code="x = 1" language="brainfuck" />);
+    expect(container.querySelector('[class*="badge"]')).toBeNull();
+  });
+});
+
+describe("CodeBlock (syntax highlighting)", () => {
+  it("colorizes keywords, strings, numbers and calls for real code", () => {
+    const { container } = render(
+      <CodeBlock code={'def solve(x):\n    return int(x) + 1  # go'} language="python" />,
+    );
+    const kinds = [...container.querySelectorAll("[data-token]")].map(
+      (el) => el.getAttribute("data-token"),
+    );
+    expect(kinds).toContain("keyword");
+    expect(kinds).toContain("comment");
+    expect(container.querySelector('[data-token="keyword"]')?.textContent).toBe("def");
+    expect(container.querySelector('[data-token="comment"]')?.textContent).toBe("# go");
+  });
+
+  it("renders code that the reader can copy verbatim", () => {
+    // The spans are the whole point, so the invariant worth locking is that they
+    // do not alter the text. If a token were dropped or reordered here, the user
+    // would copy broken source out of an evaluation report.
+    const code = 'def f():\n    """Doc."""\n    return 1  # ok\n';
+    const { container } = render(<CodeBlock code={code} language="python" />);
+    const pre = container.querySelector("pre")!;
+    expect(pre.textContent).toBe(code);
+  });
+
+  it("renders an unknown language as plain text rather than guessing", () => {
+    const { container } = render(<CodeBlock code="x = 1" language="brainfuck" />);
+    expect(container.querySelectorAll("[data-token]")).toHaveLength(0);
+    expect(container.querySelector("pre")?.textContent).toBe("x = 1");
+  });
+
+  it("renders a prompt as a single text node, not as tokens", () => {
+    // "text" is prose. Tokenizing it would paint the first word of every
+    // sentence as a keyword.
+    const { container } = render(
+      <CodeBlock code="Write a function two_sum(nums, target)." language="text" />,
+    );
+    expect(container.querySelectorAll("[data-token]")).toHaveLength(0);
+    expect(screen.getByText("Write a function two_sum(nums, target).")).toBeInTheDocument();
+  });
+
+  it("does not syntax-color a log", () => {
+    // Log lines are already classified by severity; a red FAILED line must not
+    // also be tokenized, and traceback frames would color differently from the
+    // prose around them.
+    const { container } = render(<CodeBlock code={PYTEST_LOG} language="python" log />);
+    expect(container.querySelectorAll("[data-token]")).toHaveLength(0);
+  });
+
+  it("keeps model-generated markup inert", () => {
+    // Generated code is untrusted input. There is no HTML string anywhere in
+    // the pipeline, so a paste of HTML has nothing to inject through.
+    const { container } = render(
+      <CodeBlock
+        code={'<img src=x onerror="alert(1)">\n<script>alert(2)</script>'}
+        language="html"
+      />,
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector("pre")?.textContent).toContain("<script>alert(2)</script>");
   });
 });
 

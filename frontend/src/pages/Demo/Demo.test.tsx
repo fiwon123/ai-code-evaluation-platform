@@ -6,6 +6,7 @@ import Demo from "./Demo.tsx";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
+import { expectCodeToContain } from "../../test/code.ts";
 
 vi.mock("../../context/AuthContext.tsx", () => ({
   useAuth: vi.fn(),
@@ -160,10 +161,9 @@ afterEach(() => {
     ).toBeInTheDocument();
     expect(screen.getByText("Write a function two_sum(nums, target).")).toBeInTheDocument();
 
-    // The actual test suite, with its inputs and expected outputs.
-    expect(
-      screen.getByText(/assert two_sum\(\[2, 7, 11, 15\], 9\) == \[0, 1\]/),
-    ).toBeInTheDocument();
+    // The actual test suite, with its inputs and expected outputs. Matched on
+    // the code surface's assembled text — the test suite is tokenized (#356).
+    expectCodeToContain(/assert two_sum\(\[2, 7, 11, 15\], 9\) == \[0, 1\]/);
 
     // Runner metadata mirrors the backend sandbox configuration. The meta
     // line is split across <code> children, so match each leaf separately.

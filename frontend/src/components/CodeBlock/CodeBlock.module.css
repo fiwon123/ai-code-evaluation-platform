@@ -9,12 +9,20 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   background: var(--color-code-header);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   border-bottom: 1px solid var(--color-code-border);
+}
+
+/* The header uses `justify-content: space-between` for the label/copy pair, so
+   the badge needs `margin-left: auto` to hold the right-hand group together
+   when a language badge is present between them. */
+.headerBadge {
+  margin-left: auto;
 }
 
 .copyButton {
@@ -99,6 +107,35 @@
 
 .lineTrace .lineText {
   color: var(--color-code-muted);
+}
+
+/* No opacity here: the comment colour is already the quietest of the syntax
+   tokens, and dimming it further pushed the effective contrast under 4.5:1
+   against the light-theme code surface. `theme-contrast.test.ts` checks the
+   rendered value, so a retune here cannot reintroduce that. */
+.code .comment {
+  color: var(--color-code-comment);
+}
+
+.code .string {
+  color: var(--color-code-string);
+}
+
+.code .number {
+  color: var(--color-code-number);
+}
+
+.code .keyword {
+  color: var(--color-code-keyword);
+  font-weight: 600;
+}
+
+.code .type {
+  color: var(--color-code-type);
+}
+
+.code .function {
+  color: var(--color-code-fn);
 }
 
 .footer {
