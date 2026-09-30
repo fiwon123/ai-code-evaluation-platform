@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectReadable } from "./helpers/color";
 import { CHALLENGE_STATS, mockApi } from "./data";
 
 /**
@@ -313,11 +314,17 @@ test.describe("Profile evaluation cards", () => {
  * The first was invisible to the unit tests and the second to every test but this
  * one, which is the argument for measuring rather than asserting on the DOM.
  */
-async function openLists(page: Page) {
+async function openLists(page: Page, theme: "light" | "dark" = "light") {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.addInitScript(() => window.localStorage.setItem("theme", "light"));
+  await page.addInitScript((t) => window.localStorage.setItem("theme", t), theme);
   await mockApi(page, undefined, { auth: true });
   await page.goto("/profile");
+  // Proved, not assumed. The app re-applies the stored theme on boot, so a run
+  // that thinks it is measuring dark while measuring light would report the
+  // light theme's numbers as if they were the dark theme's — every assertion
+  // below silently about the wrong theme. The same trap `contrast.spec.ts`
+  // documents, and the reason it checks the attribute rather than setting it.
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   // Both columns in full, not just one card. The submissions' shortest card is
   // the processing one and the challenges' tallest is a two-line title, so waiting
   // on a single card measures the page mid-load.
@@ -531,6 +538,45 @@ test.describe("Profile list alignment", () => {
     // Difficulty comes from the shared vocabulary, so the pill is the one #346
     // held to contrast rather than a local mapping that could drift from it.
     await expect(unjoined.getByText("Medium")).toBeVisible();
+  });
+
+  test("the dark theme holds the same alignment", async ({ page }) => {
+    // The floor is a fixed pixel value but the gaps around it are tokens, and
+    // tokens are per-theme, so a light run is not evidence about dark. This is
+    // the same lesson as #346's badge: the theme you happen to be looking at is
+    // not a measurement of the other one.
+    await openLists(page, "dark");
+    if (await sideBySide(page)) {
+      expect(await edges(page, "My challenges")).toEqual(
+        await edges(page, "Recent submissions"),
+      );
+    }
+    for (const heading of ["My challenges", "Recent submissions"]) {
+      const heights = await column(page, heading).evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().height)),
+      );
+      expect(
+        Math.max(...heights) - Math.min(...heights),
+        `${heading} heights differ in dark`,
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("the status badges stay readable in both themes", async ({ page }) => {
+    // Rendered, not read from the stylesheet: the processing pill is the one
+    // #346 had to fix, and it measured 3.13:1 in dark against its own tint before
+    // `--color-primary-strong` existed. Asserting the token would have passed
+    // anyway — the defect was the *pairing*, and only painting both proves it.
+    for (const theme of ["light", "dark"] as const) {
+      await openLists(page, theme);
+      for (const status of ["completed", "failed", "processing"] as const) {
+        await expectReadable(
+          page,
+          submissionRow(page, status).locator('[class*="badge"]').first(),
+          `${theme} ${status} badge`,
+        );
+      }
+    }
   });
 
   test("the em dash stands in for a value that was never measured", async ({ page }) => {
