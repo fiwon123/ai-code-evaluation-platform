@@ -1,0 +1,76 @@
+/* Keyboard-reachable tooltip (issue #347). See Tooltip.tsx for why the
+ * platform's `title` could not be used: no focus, no styling, no description.
+ *
+ * The bubble is `position: absolute` inside an `inline-block` wrapper, and is
+ * never `display: none` — it is kept in the accessibility tree and moved out of
+ * view instead, because `aria-describedby` has to keep resolving whether or not
+ * the bubble is open. `visibility: hidden` takes it out of the visual and
+ * interaction trees while leaving the description intact. */
+
+.wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* A non-focusable trigger takes the tab stop, so it needs a visible focus ring
+   of its own — the trigger inside it may be a bare `<span>` with nothing. */
+.wrapper:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.bubble {
+  position: absolute;
+  z-index: 40;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 16rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  /* The inverse surface, not `--color-bg`: this sits over coloured language
+     tints and a themed bubble would have to be right twice. */
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  pointer-events: auto;
+  box-shadow: var(--shadow-md);
+  visibility: hidden;
+  opacity: 0;
+  /* `--transition-fast` already carries its easing ("150ms ease"), so the
+     visibility leg spells the delay as a bare duration. Closing is delayed so
+     the bubble does not blink out from under a pointer that is leaving it. */
+  transition:
+    opacity var(--transition-fast),
+    visibility 0s linear 150ms;
+}
+
+.bubble[data-open] {
+  visibility: visible;
+  opacity: 1;
+  /* No delay on the way *in*: the content has to be there the moment the
+     pointer lands, or a reader who moved onto it has already lost it. */
+  transition-delay: 0s;
+}
+
+.top {
+  bottom: calc(100% + var(--space-1));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.bottom {
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble {
+    transition: none;
+  }
+}
