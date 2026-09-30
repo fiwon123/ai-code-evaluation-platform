@@ -39,6 +39,66 @@ const SOURCES = import.meta.glob("../**/*.{test,spec}.{ts,tsx}", {
   eager: true,
 }) as Record<string, string>;
 
+/**
+ * The Playwright suite's equivalent (#340).
+ *
+ * Same failure mode, different verb. `journeys.visual.ts` waited 250ms after
+ * clicking submit and `websocket.spec.ts` waited 300ms after pushing a frame, both
+ * as synchronisation. Measured, not assumed: the register page's DOM is
+ * byte-identical at 0ms and at 250ms, so that sleep bought nothing at all, and it
+ * was labelled "Submit blocked" while photographing a race it could not resolve.
+ *
+ * A browser test gets one more tool than a unit test here — `page.waitForTimeout`
+ * — and the temptation is worse, because waiting for a *state* is often
+ * impossible: asserting that an update changed nothing has no state to wait for.
+ * That is why the sanctioned answer is not "wait longer" but "assert the absence
+ * where it is readable" — see `settleSocketFrames`, and the hook-level test that
+ * proves the drop.
+ */
+const E2E_SOURCES = import.meta.glob("../../e2e/**/*.{spec,visual}.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+/**
+ * Comments are stripped before matching, so documenting a wait cannot smuggle one
+ * past the lock — and so the `//` in the `http://` origins these files are full of
+ * does not truncate the line before the call is read.
+ */
+const stripComments = (body: string): string =>
+  body.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+const E2E_SLEEP = /\bpage\.waitForTimeout\s*\(/;
+
+/**
+ * The one sanctioned wall-clock wait in the browser suite, and what it is for.
+ *
+ * `burstJ` records a moving moment as a strip of JPEGs. Between frames it must
+ * let the animation actually advance — that is the artefact, not synchronisation,
+ * and no state can stand in for it because the state *is* time passing. The
+ * `because` pattern is part of the exemption: delete the justification and the
+ * lock goes red, so an exemption cannot outlive the argument that earned it.
+ */
+const E2E_EXEMPT: Record<string, { count: number; because: RegExp }> = {
+  "../../e2e/visual/journeys.visual.ts": {
+    count: 1,
+    because: /one legitimate wall-clock wait/,
+  },
+};
+
+/** e2e files whose wall-clock waits are not accounted for. */
+function unexplainedE2ESleeps(sources: Record<string, string>): string[] {
+  return Object.entries(sources)
+    .filter(([path, body]) => {
+      const found = stripComments(body).match(new RegExp(E2E_SLEEP.source, "g"))?.length ?? 0;
+      const exempt = E2E_EXEMPT[path];
+      if (!exempt) return found > 0;
+      return found !== exempt.count || !exempt.because.test(body);
+    })
+    .map(([path]) => path);
+}
+
 /** Test files with a wall-clock sleep in them. */
 function sleepers(sources: Record<string, string>): string[] {
   return Object.entries(sources)
@@ -88,6 +148,64 @@ describe("the sleep detector fires on a sleep", () => {
     expect(
       SLEEP.test("vi.spyOn(window, 'setTimeout')"),
     ).toBe(false);
+  });
+});
+
+describe("the browser sleep detector fires on a sleep", () => {
+  it("catches the shape #340 used", () => {
+    expect(E2E_SLEEP.test("await page.waitForTimeout(300);")).toBe(true);
+  });
+
+  it("catches it however the argument is spaced or named", () => {
+    expect(E2E_SLEEP.test("await page.waitForTimeout( 250 )")).toBe(true);
+    expect(E2E_SLEEP.test("await page.waitForTimeout(MOTION_MS);")).toBe(true);
+  });
+
+  it("is not fooled by a wait hidden in a comment", () => {
+    // The natural way to defeat this lock is to write `// await
+    // page.waitForTimeout(300)` and leave the real one below it.
+    expect(stripComments("// await page.waitForTimeout(300);\n").includes("waitForTimeout")).toBe(
+      false,
+    );
+    expect(
+      stripComments("/* page.waitForTimeout(300) */ const a = page.waitForTimeout(1);").match(
+        new RegExp(E2E_SLEEP.source, "g"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("keeps origins intact so the call after a url is still read", () => {
+    // `//` inside a string would otherwise be taken for a comment and swallow the
+    // rest of the line — and these files are full of `http://` origins.
+    expect(
+      stripComments('const base = "http://localhost:4173"; await page.waitForTimeout(1);').match(
+        new RegExp(E2E_SLEEP.source, "g"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("leaves the sanctioned settling helpers alone", () => {
+    // The ban must not push people back to sleeping, so the replacement has to
+    // survive it.
+    expect(E2E_SLEEP.test("await settleSocketFrames(page);")).toBe(false);
+    expect(E2E_SLEEP.test("const { scrollY } = await settleAtScroll(page, 1);")).toBe(false);
+    expect(E2E_SLEEP.test("await expect(locator).toBeVisible();")).toBe(false);
+  });
+});
+
+describe("no browser test synchronises by sleeping", () => {
+  it("reads a real corpus, so the ban is not vacuous", () => {
+    expect(Object.keys(E2E_SOURCES).length).toBeGreaterThan(10);
+  });
+
+  it("finds no unexplained waits", () => {
+    expect(
+      unexplainedE2ESleeps(E2E_SOURCES),
+      "A browser test is waiting on real time to pass. Wait on the state that " +
+        "proves the thing happened, or use a settling helper. If the frame you " +
+        "are waiting on genuinely must advance (a recorded burst), say why in a " +
+        "comment the lock can check. See #340.",
+    ).toEqual([]);
   });
 });
 

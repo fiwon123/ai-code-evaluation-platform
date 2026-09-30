@@ -661,3 +661,56 @@ export function assertSeekable(census: AnimationCensus, context: string): void {
     );
   }
 }
+
+/**
+ * Waits until nothing finite is still animating, so a capture cannot land
+ * mid-flight.
+ *
+ * `waitForTextSettled` watches `innerText`, which is the right signal for a page
+ * whose *words* are still counting up and the wrong one for an entrance: a theme
+ * toggle that scales from 0 with its opacity at 0 changes no text, so the text
+ * settle returns immediately and the frame is photographed at 29x29px and
+ * invisible. The static sweep does not hit this because its motion pass seeks
+ * animations deterministically, but a journey captures whatever the clock left
+ * running.
+ *
+ * Two details keep it honest. Infinite animations are excluded, because an
+ * ambient loop never "finishes" and would hold every capture open forever — the
+ * sweep freezes those deliberately instead. And the result has to hold across
+ * several consecutive frames, because an animation still inside its start delay
+ * reports `idle` and is indistinguishable from one that never ran; the first
+ * clean frame after a navigation is exactly when that is true.
+ *
+ * Returns false rather than throwing when the budget runs out: a page that never
+ * settles is a finding for the manifest, not a harness crash.
+ */
+export async function waitForAnimationsSettled(page: Page): Promise<boolean> {
+  return page
+    .waitForFunction(
+      (cleanFramesNeeded) => {
+        const store = window as unknown as {
+          __visualSweepAnimations?: { clean: number; frames: number };
+        };
+        const tracker = store.__visualSweepAnimations ?? { clean: 0, frames: 0 };
+        tracker.frames += 1;
+        const running = document.getAnimations().filter((animation) => {
+          const timing = animation.effect?.getComputedTiming();
+          if (timing?.iterations === Infinity) return false;
+          // Widened to `string` because the DOM lib this project compiles
+          // against types `playState` without "pending" — which is precisely the
+          // state an animation is in while it waits out its start delay, so it is
+          // the one that must not be mistaken for a finished one.
+          const state = animation.playState as string;
+          return state === "running" || state === "pending";
+        });
+        tracker.clean = running.length === 0 ? tracker.clean + 1 : 0;
+        store.__visualSweepAnimations = tracker;
+        // The budget bounds the wait; it is not the wait.
+        return tracker.clean >= cleanFramesNeeded || tracker.frames > 180;
+      },
+      8,
+      { timeout: 4_000, polling: "raf" },
+    )
+    .then(() => true)
+    .catch(() => false);
+}
