@@ -10,6 +10,7 @@ import {
   repairedSubmission,
   repairingMessage,
   repairingSubmission,
+  settleSocketFrames,
   snapshotMessage,
   statusMessage,
   terminalMessage,
@@ -232,7 +233,18 @@ test.describe("Evaluation WebSocket", () => {
     // land last.
     await expect(page.getByText(/Running tests/)).toBeVisible();
     socket.send(statusMessage("processing", "generating"));
-    await page.waitForTimeout(300);
+    // Settle to the page's next paint before judging the patch. The 300ms this
+    // replaces was a duration picked to outlast delivery, which is a guess that
+    // is wrong in whichever direction the machine is slow or fast; the assertions
+    // below are the same either way.
+    //
+    // What this test cannot do is prove the frame was *processed* — it asserts
+    // that nothing changed, and an unprocessed frame also produces no change. The
+    // drop itself is asserted deterministically on the hook's own state in
+    // `src/hooks/useSubmissionSocket.test.ts` ("ignores a record-less update when
+    // no snapshot has arrived yet"); what is left here is the browser-level
+    // consequence, that the real record survives the frame intact.
+    await settleSocketFrames(page);
 
     // Nothing to patch, so the hook drops the update rather than inventing a
     // two-field Submission. Without the guard that object would replace the real

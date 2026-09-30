@@ -22,7 +22,11 @@ import {
   sweepSubmission,
 } from "./fixtures";
 import { auditFrame, type Finding } from "./helpers/audit";
-import { waitForTextSettled } from "./helpers/motion";
+import {
+  settleAtScroll,
+  waitForAnimationsSettled,
+  waitForTextSettled,
+} from "./helpers/motion";
 import { checkBrowserProvenance, SANDBOX_BROWSER_ROOT } from "./helpers/provenance";
 import {
   OUT_ROOT,
@@ -115,6 +119,16 @@ async function captureJ(page: Page, file: string, meta: FrameMeta): Promise<void
  * Every burst is also recorded in the manifest (like the sweep's filmstrips)
  * and then re-encoded into one small WebM by `webmJ` when the moment matters
  * enough to move.
+ *
+ * The `waitForTimeout` below is the one legitimate wall-clock wait in the e2e
+ * suite, and it is exempt from the ban in `src/test/no-wall-clock-sleeps.test.ts`
+ * for the reason the sweep's own rule gives: this is a *recorder*, not a sampler
+ * of something else. A burst is defined by its frame interval — 30 frames at
+ * 150ms to cover a 5s toast's dismissal — and the whole point is to let real
+ * time pass between shots. Replacing it with a seek would defeat the function.
+ *
+ * So it stays, with the reason written down, which is what stops the next person
+ * from reading it as an oversight and "fixing" it.
  */
 async function burstJ(
   page: Page,
@@ -362,9 +376,13 @@ gate("journey audit — at rest", () => {
     await beginJourney(page, theme, "/features");
     await expect(page.getByRole("heading", { name: "Features", level: 1 })).toBeVisible();
 
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    await page.waitForTimeout(250);
-    const atBottom = await page.evaluate(() => window.scrollY);
+    // `settleAtScroll(1)` rather than a smooth `scrollTo` followed by a 250ms
+    // sleep: the sleep guessed how long the scroll animation takes, and then the
+    // guess was *recorded* — `atBottom` reached the manifest as an annotation
+    // and into the frame's label. Too short and the reading is a mid-scroll
+    // position, so the journey is filed as having scrolled somewhere it never
+    // was. It also did not settle reveals, which the sweep's settle does.
+    const { scrollY: atBottom } = await settleAtScroll(page, 1);
     testInfo.annotations.push({ type: "scroll", description: `features bottom: scrollY=${atBottom}` });
     await captureJ(page, "journeys/scroll-nav-loss/01-features-bottom.png", {
       theme, viewport, page: "scroll-nav-loss", state: `Scrolled to bottom (scrollY=${atBottom})`,
@@ -447,8 +465,35 @@ gate("journey audit — at rest", () => {
       theme, viewport, page: "register-validation", state: "Weak password — live hint",
     });
 
+    // Nothing posts: the 5-character password violates the field's
+    // `minLength={8}` and Email/Username are `required`, so native validation
+    // refuses the submit synchronously. Measured before changing this — the DOM
+    // is byte-identical at 0ms and at 250ms — so the sleep this replaces was
+    // dead time that could only ever photograph a race. Asserting the two
+    // reasons it is blocked is stronger than waiting to see whether it was.
+    const registerPosts: string[] = [];
+    page.on("request", (req) => {
+      if (req.method() === "POST" && req.url().includes("/api/auth/register")) {
+        registerPosts.push(req.url());
+      }
+    });
+
     await page.getByRole("button", { name: "Create account" }).click();
-    await page.waitForTimeout(250);
+    expect(
+      await page
+        .getByLabel("Password")
+        .evaluate((el) => (el as HTMLInputElement).checkValidity()),
+      "a 5-character password should fail minLength={8}, which is what blocks this submit",
+    ).toBe(false);
+    await expect(
+      page.getByRole("heading", { name: "Create your account" }),
+      "the blocked submit must leave the form on screen",
+    ).toBeVisible();
+    // The journey continues by filling this same form, so a request that *had*
+    // gone out would have navigated away here and failed the next `fill` — the
+    // counter is the claim stated outright rather than left implied.
+    expect(registerPosts, "a blocked submit must not reach the API").toEqual([]);
+
     await captureJ(page, "journeys/register-validation/02-submit-blocked.png", {
       theme, viewport, page: "register-validation", state: "Submit blocked — invalid fields",
     });
@@ -459,6 +504,13 @@ gate("journey audit — at rest", () => {
     await expect(page.getByText("Password looks good")).toBeVisible();
     await page.getByRole("button", { name: "Create account" }).click();
     await expect(page.getByRole("heading", { name: "Challenges", level: 1 })).toBeVisible();
+    // The landing page's theme toggle scales in from nothing. Waiting for the
+    // heading is not waiting for that: the words are already there while the
+    // button is still at opacity 0, so this frame used to be captured mid
+    // entrance — and whichever point on the curve it happened to land on decided
+    // whether the census called it a minor small target or a blocker. The 250ms
+    // this replaced never synchronised it either; it only shifted the sample.
+    await waitForAnimationsSettled(page);
     await captureJ(page, "journeys/register-validation/03-created.png", {
       theme, viewport, page: "register-validation", state: "Account created — welcome toast",
     });

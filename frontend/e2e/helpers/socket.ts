@@ -324,3 +324,27 @@ export async function mockSubmissionSocket(
     },
   };
 }
+
+/**
+ * Lets frames the mock has already written reach the page's `onmessage`.
+ *
+ * A frame sent from the test is handed to the browser, but the page dispatches it
+ * on its own task queue, so it may not have been handled by the time the next
+ * line runs. Sleeping a fixed number of milliseconds only guesses at that: too
+ * short and the test judges a message that has not arrived yet, too long and every
+ * run pays the delay for nothing. Two animation frames is a boundary the page
+ * actually observes rather than a duration we hope is enough.
+ *
+ * This is still a settling step, not a proof — nothing here can make an assertion
+ * about an *absence* deterministic. Claims of the form "this update changed
+ * nothing" are proved where the state is readable, in
+ * `src/hooks/useSubmissionSocket.test.ts`; this only lets the browser test check
+ * that the page survives the frame.
+ */
+export const settleSocketFrames = (page: Page): Promise<void> =>
+  page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
