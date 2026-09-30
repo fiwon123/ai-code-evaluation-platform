@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import languageSource from "../utils/language.ts?raw";
 import globalsCss from "./globals.css?raw";
 
 /**
@@ -67,6 +68,17 @@ function themeTokens(selector: string): Record<string, string> {
   }
   return tokens;
 }
+
+/**
+ * Every language accent, read from the single source of truth rather than a
+ * copied list — a hand-maintained copy would drift, and the drift is exactly
+ * what this check exists to catch.
+ */
+const LANGUAGE_ACCENTS: Record<string, string> = Object.fromEntries(
+  [...languageSource.matchAll(/"?([a-zA-Z0-9#-]+)"?:\s*\{[^}]*?color:\s*"(#[0-9A-Fa-f]{6})"/g)].map(
+    (m) => [m[1]!, m[2]!],
+  ),
+);
 
 const LIGHT = themeTokens(':root,\n[data-theme="light"]');
 const DARK = themeTokens('[data-theme="dark"]');
@@ -380,5 +392,48 @@ describe("title gradient is not duplicated per page", () => {
     const scanned = gradientStylesheets();
     expect(Object.keys(scanned).length).toBeGreaterThan(10);
     expect(scanned).toHaveProperty("components/PageTitle/PageTitle.module.css");
+  });
+});
+
+describe("language accent tags (issue #346)", () => {
+  // Issue #346 painted the example buttons' language tags with the brand accent
+  // and wrote the tag's text in `--color-surface`. That was the wrong token: the
+  // accent fill is theme-invariant (a fixed colour per language) but
+  // `--color-surface` flips white -> near-black with the theme, so the text
+  // flipped too and landed at 3.47:1 in dark against Python's #3776AB. A browser
+  // measurement, not a guess.
+  //
+  // `--color-on-accent` is the token for exactly this job, and its own
+  // definition already calls out #3776AB as an accent that must not take dark
+  // ink. Held here so a retune of any accent, or of the token, fails in the
+  // fast suite rather than in a diff nobody reads.
+  for (const [theme, tokens] of [
+    ["light", LIGHT],
+    ["dark", DARK],
+  ] as const) {
+    it(`writes accent tags in a token that does not flip with the ${theme} theme`, () => {
+      const css = MODULE_CSS["../components/ChallengeForm/challenge-form.module.css"]!;
+      const tag = css.slice(css.indexOf(".exampleTag"), css.indexOf("}", css.indexOf(".exampleTag")));
+      expect(tag).toMatch(/color:\s*var\(--color-on-accent\)/);
+      expect(tag).not.toMatch(/color:\s*var\(--color-surface\)/);
+      // The fill is the accent, which is what makes this contrast obligation exist.
+      expect(tag).toMatch(/background:\s*var\(--example-accent\)/);
+    });
+
+    it(`keeps every language accent legible on its own tag in ${theme}`, () => {
+      const ink = tokens["color-on-accent"]!;
+      const failures = Object.entries(LANGUAGE_ACCENTS)
+        .map(([name, accent]) => [name, accent, contrastRatio(ink, accent)] as const)
+        .filter(([, , ratio]) => ratio < 4.5)
+        .map(([name, accent, ratio]) => `${name} ${accent} at ${ratio.toFixed(2)}:1`);
+      expect(failures).toEqual([]);
+    });
+  }
+
+  it("scans the real accent table, not an empty one", () => {
+    // A regex that stopped matching would leave an empty record, and
+    // `expect([]).toEqual([])` above would read as a pass.
+    expect(Object.keys(LANGUAGE_ACCENTS).length).toBeGreaterThanOrEqual(20);
+    expect(LANGUAGE_ACCENTS["python"]).toBe("#3776AB");
   });
 });

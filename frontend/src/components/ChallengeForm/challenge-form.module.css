@@ -133,7 +133,16 @@
   font-size: var(--font-size-xs);
   font-weight: 700;
   font-family: var(--font-mono);
-  color: var(--color-surface);
+  /* `--color-on-accent`, not `--color-surface`. The accent fill is
+     theme-invariant (it is a fixed brand colour per language) but
+     `--color-surface` is not: it is white in light and near-black in dark, so
+     the tag's text flipped with the theme and dropped to 3.47:1 in dark against
+     Python's #3776AB. Measured in Chromium, not inferred. `--color-on-accent`
+     is #ffffff in both themes, and its definition already names this exact
+     accent as the case that must not take dark ink. Locked in
+     `theme-contrast.test.ts`, which holds all 20 languages to >= 4.5:1 in
+     both themes. */
+  color: var(--color-on-accent);
   background: var(--example-accent);
   border-radius: var(--radius-sm);
 }
