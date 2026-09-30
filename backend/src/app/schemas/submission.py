@@ -155,6 +155,10 @@ class ChallengeStatsItem(BaseModel):
 
     challenge_id: UUID
     challenge_title: str
+    #: Carried here rather than fetched per card (issue #347): the dashboard's
+    #: card grid shows a truncated description under the title, and N+1 requests
+    #: for data the aggregate query already joins to would be the wrong trade.
+    description: str = ""
     language: str
     total_runs: int
     completed_runs: int
@@ -162,6 +166,10 @@ class ChallengeStatsItem(BaseModel):
     avg_score: float | None
     best_score: float | None
     last_run_at: datetime
+    #: Wall-clock of the most recent run, for the card's duration stat (issue
+    #: #347). None when that run recorded no duration (a failed run never
+    #: produces a result row, and pre-0.14 reports have no metrics).
+    last_duration_ms: float | None = None
 
 
 class SubmissionStatsRead(BaseModel):
