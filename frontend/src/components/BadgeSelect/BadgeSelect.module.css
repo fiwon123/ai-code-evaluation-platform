@@ -34,6 +34,21 @@
   gap: var(--space-2);
 }
 
+/*
+ * `plain` appearance (issue #346): tags, not cards.
+ *
+ * The options stop being a grid of equal tracks and become a wrapping row, so
+ * three short labels sit next to each other instead of each claiming an 11rem
+ * column. The gap is a step up from the card grid's so the pills read as
+ * separate tags rather than as a run of text.
+ */
+.optionsPlain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .option {
   display: flex;
   align-items: center;
@@ -82,6 +97,78 @@
   border-color: var(--option-accent);
   background: var(--color-primary-light);
   box-shadow: 0 0 0 1px var(--option-accent);
+}
+
+/*
+ * The plain variant drops every part of the card that made an option read as a
+ * widget: the border, the surface, the selected fill and the ring. What marks
+ * the selection is the `Badge` inside it, which already has its own
+ * difficulty-coloured tint — so a selected Easy is a *coloured* tag against two
+ * quieter ones, which is a clearer "this one" than a blue outline ever was.
+ *
+ * The radio is hidden rather than removed (see the `appearance` prop): it is
+ * the control that carries `name`/`value` and takes arrow keys, so it must stay
+ * focusable. The focus ring therefore has to move to the label, and it
+ * deliberately does *not* use `:has(:focus-visible)` — that would leave a
+ * keyboard user with no visible focus in a browser without `:has()` support.
+ */
+.optionPlain {
+  /* The containing block for `.radioHidden`'s overlay, and load-bearing: an
+   * absolutely positioned element with `inset: 0` resolves against its nearest
+   * *positioned* ancestor, and this label was not one. With nothing positioned
+   * above it, all three radios resolved against the initial containing block —
+   * measured in Chromium at 1280×720 each, i.e. the entire viewport — and stacked
+   * on top of each other with the last one (`hard`) on top. Clicking the "Easy"
+   * tag therefore checked "Hard", and Playwright reported it as
+   * `…<input value="hard">… intercepts pointer events`: every click anywhere on
+   * the page landed on the same radio.
+   *
+   * jsdom cannot see this — there is no layout, so no overlap and no hit testing,
+   * and the unit tests that click a tag pass happily. The browser is the arbiter:
+   * locked in `challenge-create.spec.ts`, which measures each radio's box against
+   * its own tag rather than the viewport. */
+  position: relative;
+
+  min-height: auto;
+  padding: 0;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  /* Keeps the ring off the pill's own edge, so it reads as a focus indicator
+     around the tag rather than as a border it happens to have. */
+  outline-offset: 2px;
+}
+
+.optionPlain:hover {
+  border-color: transparent;
+}
+
+.optionPlain.optionSelected {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+
+.optionPlain:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Visually gone, still a real focusable radio. `appearance: none` removes the
+   native glyph without removing the element, so it keeps its name, value,
+   checked state and keyboard behaviour. `inset: 0` plus `width/height: 100%`
+   makes the whole label clickable as the control's hit area. */
+.radioHidden {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
 }
 
 /*

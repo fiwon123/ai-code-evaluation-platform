@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import languageSource from "../utils/language.ts?raw";
 import globalsCss from "./globals.css?raw";
 
 /**
@@ -67,6 +68,17 @@ function themeTokens(selector: string): Record<string, string> {
   }
   return tokens;
 }
+
+/**
+ * Every language accent, read from the single source of truth rather than a
+ * copied list — a hand-maintained copy would drift, and the drift is exactly
+ * what this check exists to catch.
+ */
+const LANGUAGE_ACCENTS: Record<string, string> = Object.fromEntries(
+  [...languageSource.matchAll(/"?([a-zA-Z0-9#-]+)"?:\s*\{[^}]*?color:\s*"(#[0-9A-Fa-f]{6})"/g)].map(
+    (m) => [m[1]!, m[2]!],
+  ),
+);
 
 const LIGHT = themeTokens(':root,\n[data-theme="light"]');
 const DARK = themeTokens('[data-theme="dark"]');
@@ -223,6 +235,81 @@ describe("code surface syntax contrast", () => {
   });
 });
 
+/**
+ * The status pill pairs, as `{base, strong, tint}` token names.
+ *
+ * `--color-success` / `--color-danger` are *identity* colours: right as a
+ * border, a dot, an accent, or as text on a plain surface. They are not
+ * text-safe on the tinted surface they are normally paired with — light mode
+ * measured 3.00:1 and 3.95:1, both under AA (issue #346) — so each gained a
+ * `-strong` step that keeps the hue and drops the lightness. Dark inverts the
+ * direction, because there the *tint* is the dark one and the text has to get
+ * lighter.
+ */
+const STATUS_PILLS = [
+  { base: "color-success", strong: "color-success-strong", tint: "color-success-light" },
+  { base: "color-warning", strong: "color-warning-strong", tint: "color-warning-light" },
+  { base: "color-danger", strong: "color-danger-strong", tint: "color-danger-light" },
+] as const;
+
+describe("status pill contrast", () => {
+  it.each([
+    ["light", LIGHT],
+    ["dark", DARK],
+  ] as const)("the -strong pill text clears %s-theme AA on its own tint", (_theme, tokens) => {
+    for (const pill of STATUS_PILLS) {
+      const text = tokens[pill.strong];
+      const tint = tokens[pill.tint];
+      expect(text, `--${pill.strong} must exist in the ${_theme} palette`).toBeDefined();
+      expect(tint, `--${pill.tint} must exist in the ${_theme} palette`).toBeDefined();
+      const ratio = contrastRatio(text!, tint!);
+      expect(
+        ratio,
+        `--${pill.strong} (${text}) on --${pill.tint} (${tint}) is only ${ratio.toFixed(2)}:1 — the base --${pill.base} is ${contrastRatio(tokens[pill.base]!, tint!).toFixed(2)}:1, which is why the strong step exists`,
+      ).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+  });
+
+  it.each([
+    ["light", LIGHT],
+    ["dark", DARK],
+  ] as const)("the -strong pill text also clears %s-theme AA on a card surface", (_theme, tokens) => {
+    // A pill does not always sit on its own tint — a status pill on Profile and
+    // SubmissionDetail sits on a card, and the form's error banner is
+    // `--color-danger-strong` on `--color-danger-light` over a surface. Passing
+    // on the tint is not evidence it passes on the surface behind it, so both
+    // are held.
+    for (const pill of STATUS_PILLS) {
+      const text = tokens[pill.strong];
+      const surface = tokens["color-surface"];
+      expect(text, `--${pill.strong} must exist in the ${_theme} palette`).toBeDefined();
+      const ratio = contrastRatio(text!, surface!);
+      expect(
+        ratio,
+        `--${pill.strong} (${text}) on --color-surface (${surface}) is only ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+  });
+
+  it("renders the strong step, so a compliant token nothing uses cannot pass on its own", () => {
+    // The lesson from issue #345: assert the *declaration*, not just the token.
+    // A palette can be perfectly compliant while the component still points at
+    // the failing base token, and every check above would be green.
+    const badge = MODULE_CSS["../components/Badge/Badge.module.css"];
+    expect(badge, "Badge.module.css must be reachable through the glob").toBeTruthy();
+    // `.success`/`.warning`/`.danger` are the pill classes. Match the whole rule
+    // body so a comment mentioning the base token cannot satisfy this.
+    for (const variant of ["success", "warning", "danger"]) {
+      const body = badge.match(new RegExp(`\\.${variant} \\{([^}]*)\\}`))?.[1];
+      expect(body, `Badge.module.css must define a .${variant} rule`).toBeTruthy();
+      expect(
+        body,
+        `.${variant} must paint --color-${variant}-strong; the base --color-${variant} is not AA text on its own tint`,
+      ).toContain(`var(--color-${variant}-strong)`);
+    }
+  });
+});
+
 /** Glob keys are relative to this file (`src/styles/`), e.g. `../pages/...`. */
 function normalise(path: string): string {
   return path.replace(/^\.\.\//, "");
@@ -305,5 +392,48 @@ describe("title gradient is not duplicated per page", () => {
     const scanned = gradientStylesheets();
     expect(Object.keys(scanned).length).toBeGreaterThan(10);
     expect(scanned).toHaveProperty("components/PageTitle/PageTitle.module.css");
+  });
+});
+
+describe("language accent tags (issue #346)", () => {
+  // Issue #346 painted the example buttons' language tags with the brand accent
+  // and wrote the tag's text in `--color-surface`. That was the wrong token: the
+  // accent fill is theme-invariant (a fixed colour per language) but
+  // `--color-surface` flips white -> near-black with the theme, so the text
+  // flipped too and landed at 3.47:1 in dark against Python's #3776AB. A browser
+  // measurement, not a guess.
+  //
+  // `--color-on-accent` is the token for exactly this job, and its own
+  // definition already calls out #3776AB as an accent that must not take dark
+  // ink. Held here so a retune of any accent, or of the token, fails in the
+  // fast suite rather than in a diff nobody reads.
+  for (const [theme, tokens] of [
+    ["light", LIGHT],
+    ["dark", DARK],
+  ] as const) {
+    it(`writes accent tags in a token that does not flip with the ${theme} theme`, () => {
+      const css = MODULE_CSS["../components/ChallengeForm/challenge-form.module.css"]!;
+      const tag = css.slice(css.indexOf(".exampleTag"), css.indexOf("}", css.indexOf(".exampleTag")));
+      expect(tag).toMatch(/color:\s*var\(--color-on-accent\)/);
+      expect(tag).not.toMatch(/color:\s*var\(--color-surface\)/);
+      // The fill is the accent, which is what makes this contrast obligation exist.
+      expect(tag).toMatch(/background:\s*var\(--example-accent\)/);
+    });
+
+    it(`keeps every language accent legible on its own tag in ${theme}`, () => {
+      const ink = tokens["color-on-accent"]!;
+      const failures = Object.entries(LANGUAGE_ACCENTS)
+        .map(([name, accent]) => [name, accent, contrastRatio(ink, accent)] as const)
+        .filter(([, , ratio]) => ratio < 4.5)
+        .map(([name, accent, ratio]) => `${name} ${accent} at ${ratio.toFixed(2)}:1`);
+      expect(failures).toEqual([]);
+    });
+  }
+
+  it("scans the real accent table, not an empty one", () => {
+    // A regex that stopped matching would leave an empty record, and
+    // `expect([]).toEqual([])` above would read as a pass.
+    expect(Object.keys(LANGUAGE_ACCENTS).length).toBeGreaterThanOrEqual(20);
+    expect(LANGUAGE_ACCENTS["python"]).toBe("#3776AB");
   });
 });

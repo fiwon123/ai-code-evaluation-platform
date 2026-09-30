@@ -23,11 +23,13 @@
  * and a counter inside the label would change "Test code (pytest)" into
  * something that no longer matches.
  */
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import Badge from "../Badge/Badge.tsx";
 import BadgeSelect from "../BadgeSelect/BadgeSelect.tsx";
 import Button from "../Button/Button.tsx";
+import CodeArea from "../CodeArea/CodeArea.tsx";
+import CodeBlock from "../CodeBlock/CodeBlock.tsx";
 import {
   Field,
   FieldGroup,
@@ -45,6 +47,7 @@ import {
   LANGUAGES,
   evaluationEstimate,
   languageLabel,
+  languageMeta,
   runnerForLanguage,
   type LanguageExample,
   type LanguageGuide,
@@ -62,7 +65,7 @@ export interface ChallengeFormValue {
 }
 
 /**
- * Difficulty as a badge row over a native radio group.
+ * Difficulty as a row of tags over a native radio group (#346).
  *
  * A `<select>` was three tab stops and no way to see the options without
  * opening it. A `fieldset`/`legend` radio group is one tab stop, arrow keys
@@ -70,13 +73,24 @@ export interface ChallengeFormValue {
  * without inventing a `role` — and the radios keep the `name`/`value` semantics
  * a form posts with.
  *
- * The control itself is unchanged from the hand-rolled version it replaces (same
- * `fieldset`/`legend`, same `name="difficulty"`, same radio children); what is
- * new is that each option is a coloured `Badge` instead of bare text, so
- * Easy/Medium/Hard are distinguishable at a glance and match the pills on the
- * challenges list and a challenge's page. The alternative — hand-rolling a
- * second copy of this markup in the CreateChallenge page for the language grid —
- * is what `BadgeSelect` now exists to prevent.
+ * #346 asked for "tags only, drop the button". There was no button left to drop
+ * by then (#331 had already replaced the buttons with this group); what the
+ * report was reacting to was the *chrome* — each option wore a bordered card
+ * with a visible radio, so a row of three words read as three widgets rather
+ * than three tags. That chrome is what `plain` removes: no card, no raised
+ * surface, no radio, just the `Badge` pill. The radio is still there and still
+ * focusable, and it is what makes the row work, so it is hidden rather than
+ * removed:
+ *
+ *   - Dropping it would mean no `name`/`value` on the control, so `difficulty`
+ *     would never be submitted and every challenge would post the `"medium"`
+ *     default. That is a form-correctness bug, not a look-and-feel one.
+ *   - A non-interactive tag row would also take away arrow-key selection and
+ *     the "selected" announcement, replacing a working control with a
+ *     decoration.
+ *
+ * So `plain` is a presentation mode: the same `BadgeSelect` contract, rendered
+ * as tags.
  */
 export function DifficultyChips({
   value,
@@ -91,6 +105,7 @@ export function DifficultyChips({
       name="difficulty"
       value={value}
       onChange={onChange}
+      appearance="plain"
       options={DIFFICULTIES.map((option) => ({
         value: option.value,
         children: <Badge variant={option.variant}>{option.label}</Badge>,
@@ -160,6 +175,9 @@ export function ChallengeFormFields({
 
   const runner = runnerForLanguage(value.language);
   const promptSize = countText(value.prompt);
+  // Read once rather than per example: the tag's accent and its symbol are the
+  // same two lookups, and every example in the row is for the selected language.
+  const language = languageMeta(value.language);
 
   return (
     <div className={styles.form}>
@@ -219,12 +237,13 @@ export function ChallengeFormFields({
         }
       >
         <Field id={promptId} label="Prompt for the LLM">
-          <TextAreaInput
+          <CodeArea
             id={promptId}
             value={value.prompt}
             onChange={(e) => onChange("prompt", e.target.value)}
             placeholder={guide.prompt}
-            rows={5}
+            rows={9}
+            language={value.language}
           />
         </Field>
         <p className={styles.sectionHint}>
@@ -245,13 +264,13 @@ export function ChallengeFormFields({
         }
       >
         <Field id={testCodeId} label={guide.testLabel}>
-          <TextAreaInput
+          <CodeArea
             id={testCodeId}
             value={value.testCode}
             onChange={(e) => onChange("testCode", e.target.value)}
             placeholder={guide.testCode}
-            rows={6}
-            className={styles.editor}
+            rows={14}
+            language={value.language}
           />
         </Field>
 
@@ -259,15 +278,18 @@ export function ChallengeFormFields({
           <FieldGroup id={examplesId} label="Start from an example">
             <div className={styles.examples}>
               {examples.map((example, index) => (
-                <Button
+                <button
                   key={example.title}
                   type="button"
-                  variant="ghost"
-                  size="sm"
+                  className={styles.example}
+                  style={{ "--example-accent": language.color } as CSSProperties}
                   onClick={() => onApplyExample(index)}
                 >
-                  {example.title}
-                </Button>
+                  <span className={styles.exampleTag} aria-hidden="true">
+                    {language.symbol}
+                  </span>
+                  <span>{example.title}</span>
+                </button>
               ))}
             </div>
           </FieldGroup>
@@ -317,11 +339,15 @@ export function ChallengeFormFields({
             The prompt the field above suggests for this language, so you can see
             what a good one looks like before writing your own.
           </p>
-          <pre className={styles.guidePre}>{guide.prompt}</pre>
+          <CodeBlock code={guide.prompt} language={value.language} />
           <p className={styles.sectionHint}>
             And a starter suite for the same task.
           </p>
-          <pre className={styles.guidePre}>{guide.testCode}</pre>
+          <CodeBlock
+            code={guide.testCode}
+            language={value.language}
+            filename={runner ? runner.testFilename : `test_solution.${guide.extension}`}
+          />
         </div>
       </details>
     </div>

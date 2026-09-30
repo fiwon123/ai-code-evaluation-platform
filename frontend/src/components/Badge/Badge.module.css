@@ -25,9 +25,12 @@
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
+/* All three use the `-strong` step (issue #346). The base `--color-success` /
+ * `--color-danger` are identity colours — fine as an accent, wrong as text on
+ * their own pale tint, where they measure 3.00:1 and 3.95:1. See globals.css. */
 .success {
   background: var(--color-success-light);
-  color: var(--color-success);
+  color: var(--color-success-strong);
 }
 
 .warning {
@@ -37,7 +40,7 @@
 
 .danger {
   background: var(--color-danger-light);
-  color: var(--color-danger);
+  color: var(--color-danger-strong);
 }
 
 .neutral {

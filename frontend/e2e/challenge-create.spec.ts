@@ -69,6 +69,55 @@ test.describe("Challenge create form", () => {
     ).toBeVisible();
   });
 
+  test("each difficulty tag owns its own hit area, so a click selects that difficulty", async ({
+    page,
+  }) => {
+    await openCreateForm(page);
+
+    // Issue #346 renders the difficulty row as plain tags with the radios hidden
+    // behind them. That overlay is an absolutely positioned radio at `inset: 0`,
+    // which resolves against its nearest *positioned* ancestor — and the label was
+    // not one. Measured in Chromium, all three radios came out at 1280×720: the
+    // whole viewport, stacked, last one on top. Clicking "Easy" checked "Hard",
+    // and Playwright reported it as `…<input value="hard">… intercepts pointer
+    // events`.
+    //
+    // This is asserted against geometry rather than inferred from the fact that
+    // `.check()` works, because the bug's signature *is* the geometry: a
+    // `pointer-events` overlay that covers everything still lets the last element
+    // win, so a naive "click works" probe would have passed on whichever tag
+    // happened to be on top.
+    const measured = await page.evaluate(() => {
+      const labels = [...document.querySelectorAll("label")].filter((l) =>
+        l.querySelector<HTMLInputElement>('input[name="difficulty"]'),
+      );
+      return labels.map((label) => {
+        const radio = label.querySelector<HTMLInputElement>('input[name="difficulty"]')!;
+        const r = radio.getBoundingClientRect();
+        const l = label.getBoundingClientRect();
+        return {
+          value: radio.value,
+          // Does the radio stay inside its own tag, or has it escaped to the page?
+          withinOwnTag: r.top >= l.top - 1 && r.left >= l.left - 1,
+          // And is it roughly tag-sized, rather than viewport-sized?
+          notViewportSized: r.width < l.width * 2 && r.height < l.height * 2,
+        };
+      });
+    });
+
+    expect(measured).toHaveLength(3);
+    for (const m of measured) {
+      expect(m.withinOwnTag, `${m.value}'s radio escaped its own tag`).toBe(true);
+      expect(m.notViewportSized, `${m.value}'s radio covers more than its tag`).toBe(true);
+    }
+
+    // The behaviour itself, on each tag in turn — not just the checked one.
+    for (const value of ["easy", "hard", "medium"]) {
+      await page.locator(`label:has(input[name="difficulty"][value="${value}"])`).click();
+      await expect(page.getByRole("radio", { name: new RegExp(value, "i") })).toBeChecked();
+    }
+  });
+
   test("counts the prompt as it is typed and names the runner for the language", async ({
     page,
   }) => {

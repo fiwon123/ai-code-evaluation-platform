@@ -136,11 +136,13 @@ below.
 | `--color-primary-light` | Primary-tinted surfaces |
 | `--color-secondary` | Reserved — secondary text uses `--color-text-secondary`; no current use |
 | `--color-success` | Positive status, pass indicators |
+| `--color-success-strong` | Success text on a tinted background |
 | `--color-success-light` | Success-tinted surfaces |
 | `--color-warning` | Warning status |
 | `--color-warning-strong` | Warning text on a tinted background |
 | `--color-warning-light` | Warning-tinted surfaces |
 | `--color-danger` | Errors, destructive actions |
+| `--color-danger-strong` | Error text on a tinted background |
 | `--color-danger-hover` | Destructive button hover |
 | `--color-danger-light` | Error-tinted surfaces |
 | `--color-accent-teal` | Second stat identity — pure identity, never meaning "good"; pair with a status token when the value is a score |
@@ -278,8 +280,15 @@ values only inside tokens such as borders/shadows.
 - Components live in `src/components/<Name>/<Name>.tsx` with
   `<Name>.module.css`; styles use `@/src/styles/globals.css` tokens only.
 - Buttons: default variant for primary, `variant="danger"` for destructive.
-- Badges/status pills use the `-light` variants with the matching strong text
-  color (e.g. `--color-warning-strong` on `--color-warning-light`).
+- Badges/status pills use the `-light` variants with the matching `-strong` text
+  color (`--color-warning-strong` on `--color-warning-light`, and likewise
+  `-success`/`-danger`). The base token is the *identity* color — right as a
+  border, dot or accent, and as text on a plain surface — but it is not
+  text-safe on its own tint: `#16a34a` on `#dcfce7` is 3.00:1 and `#dc2626` on
+  `#fee2e2` is 3.95:1, both under AA. The `-strong` step keeps the hue and
+  drops the lightness until the pair clears 4.5:1 on the tint it sits on.
+  `theme-contrast.test.ts` holds each pair to its number, so retuning either
+  step cannot quietly reintroduce the failure (issue #346).
 - Focus states: use the existing transition tokens and a visible outline;
   never rely on color alone.
 
