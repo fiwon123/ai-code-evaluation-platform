@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
@@ -9,12 +15,14 @@ import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import StatCard from "../../components/StatCard/StatCard.tsx";
+import Tooltip from "../../components/Tooltip/Tooltip.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
 import { useShareLink } from "../../hooks/useShareLink.ts";
 import { authApi, challengesApi, submissionsApi } from "../../services/api.ts";
 import { extractError, extractFieldErrors } from "../../utils/errors.ts";
+import { languageMeta } from "../../utils/language.ts";
 import type {
   Challenge,
   ChallengeStatsItem,
@@ -38,6 +46,108 @@ const PAGE_SIZE = 10;
 // an abandoned pending row) without a manual page reload.
 const SUBMISSIONS_POLL_INTERVAL_MS = 5_000;
 
+
+/**
+ * One "evaluations by challenge" card (issue #347).
+ *
+ * The old card was a title, a language badge, an average chip, a run line and a
+ * date, all in default styling, and only the title was clickable. The redesign
+ * asks for the language to be the card's identity, the three stats to read
+ * side by side, the whole card to navigate, and a tooltip wherever text is
+ * truncated.
+ *
+ * Three things are deliberate:
+ *
+ * - **The language is the accent, not a badge on top of a card.** The accent
+ *   comes from `languageMeta(language).color` — the same single source the
+ *   language badge, the filter bar and the code header use — so a reader learns
+ *   "blue means Python" once and reads it in every place it appears.
+ * - **The whole card is the link, via a stretched `::after` on the title link.**
+ *   Making the card itself an `<a>` would give a screen reader an accessible
+ *   name made of the title, the description and all four stats, which is a
+ *   sentence nobody wants read aloud. The title stays the link, and its
+ *   `::after` covers the card, so the click target is the whole thing and the
+ *   accessible name is still just the challenge's name.
+ * - **The description is truncated by CSS, not by JavaScript.** Cutting the
+ *   string in the component would throw away the tail for everyone, including
+ *   screen readers and anyone widening the window. The full text stays in the
+ *   DOM behind a one-line clamp, and the tooltip carries it for anyone who
+ *   wants it without hovering.
+ */
+function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
+  const language = languageMeta(item.language);
+  const variant = item.avg_score !== null ? scoreVariant(item.avg_score) : null;
+  const style = { "--card-accent": language.color } as CSSProperties;
+  const duration =
+    item.last_duration_ms !== null ? formatDurationMs(item.last_duration_ms) : "—";
+
+  return (
+    <Card
+      padding="compact"
+      className={styles.statsItem}
+      style={style}
+    >
+      <div className={styles.statsHead}>
+        <LanguageBadge language={item.language} className={styles.statsBadge} />
+        <Link
+          to={`/challenges/${item.challenge_id}`}
+          className={styles.statsTitle}
+        >
+          {item.challenge_title}
+        </Link>
+      </div>
+
+      {item.description && (
+        // Clipped to two lines by CSS, so the full text is still in the DOM and
+        // still announced; the tooltip is for reading it, not for hearing it.
+        <Tooltip label={item.description} placement="bottom">
+          <p className={styles.statsDescription}>{item.description}</p>
+        </Tooltip>
+      )}
+
+      <dl className={styles.statsRow}>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Score</dt>
+          <dd
+            className={`${styles.statValue} ${variant ? styles[`chip${variant}`] : ""}`}
+          >
+            {item.avg_score !== null ? `${item.avg_score}%` : "—"}
+          </dd>
+        </div>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Runs</dt>
+          <dd className={styles.statValue}>{item.total_runs}</dd>
+        </div>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Last run</dt>
+          <dd
+            className={styles.statValue}
+            // "—" is the em dash for "not measured", which the tooltip has to
+            // say out loud: on its own it reads as a missing value rather than a
+            // run that never produced a result.
+            {...(item.last_duration_ms === null
+              ? { "aria-label": "last run: not measured" }
+              : {})}
+          >
+            {duration}
+          </dd>
+        </div>
+      </dl>
+
+      <p className={styles.metaDate}>
+        Last executed {formatRelativeTime(item.last_run_at)}
+        {item.failed_runs > 0 && (
+          <>
+            {" · "}
+            <span className={styles.failedRuns}>
+              {item.failed_runs} failed
+            </span>
+          </>
+        )}
+      </p>
+    </Card>
+  );
+}
 
 function Profile() {
   const { user } = useAuth();
@@ -414,49 +524,17 @@ function Profile() {
             <Link to="/challenges">Browse challenges</Link>
           </Card>
         ) : (
-          <div className={styles.statsGrid}>
-            {challengeStats.map((item) => {
-              const variant =
-                item.avg_score !== null ? scoreVariant(item.avg_score) : null;
-              return (
-                <Card
-                  key={item.challenge_id}
-                  padding="compact"
-                  className={styles.statsItem}
-                >
-                  <Link
-                    to={`/challenges/${item.challenge_id}`}
-                    className={styles.statsTitle}
-                  >
-                    {item.challenge_title}
-                  </Link>
-                  <div className={styles.statsMeta}>
-                    <LanguageBadge language={item.language} />
-                    {item.avg_score !== null && (
-                      <span
-                        className={`${styles.scoreChip} ${variant ? styles[`chip${variant}`] : ""}`}
-                      >
-                        {item.avg_score}% avg
-                      </span>
-                    )}
-                  </div>
-                  <p className={styles.statsLine}>
-                    {item.best_score !== null && (
-                      <>
-                        best <strong>{item.best_score}%</strong> ·{" "}
-                      </>
-                    )}
-                    {item.total_runs} run{item.total_runs === 1 ? "" : "s"}
-                    {item.failed_runs > 0 && ` · ${item.failed_runs} failed`}
-                    {item.completed_runs === 0 && " · no completed runs"}
-                  </p>
-                  <p className={styles.metaDate}>
-                    Last run {formatRelativeTime(item.last_run_at)}
-                  </p>
-                </Card>
-              );
-            })}
-          </div>
+          <ul className={styles.statsGrid}>
+            {challengeStats.map((item) => (
+              // No class on the `<li>`: it is the grid *item*, and the `Card`
+              // inside it is the grid *cell's content*. Styling both put the
+              // accent bar and the language wash on each, so both rendered
+              // twice — which is exactly what the first version of this did.
+              <li key={item.challenge_id}>
+                <EvaluationCard item={item} />
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

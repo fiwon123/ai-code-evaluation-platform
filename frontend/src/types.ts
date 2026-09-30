@@ -197,6 +197,8 @@ export interface ProviderComparison {
 export interface ChallengeStatsItem {
   challenge_id: string;
   challenge_title: string;
+  /** Carried for the card's truncated description (#347); `""` when unset. */
+  description: string;
   language: string;
   total_runs: number;
   completed_runs: number;
@@ -204,6 +206,12 @@ export interface ChallengeStatsItem {
   avg_score: number | null;
   best_score: number | null;
   last_run_at: string;
+  /**
+   * Wall-clock of the most recent run. Null when that run never produced a
+   * result, which the card renders as an em dash — a `0` would read as
+   * "instant" rather than "not measured".
+   */
+  last_duration_ms: number | null;
 }
 
 export interface SubmissionStats {
