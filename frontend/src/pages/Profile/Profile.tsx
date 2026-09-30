@@ -511,10 +511,12 @@ function SubmissionListCard({
       <div className={styles.listFoot}>
         <RelativeTime iso={submission.created_at} />
         {submission.status === "completed" && result && (
-          <SubmissionShareActions
-            submissionId={submission.id}
-            initialToken={result.share_token ?? null}
-          />
+          <span className={styles.listShare}>
+            <SubmissionShareActions
+              submissionId={submission.id}
+              initialToken={result.share_token ?? null}
+            />
+          </span>
         )}
       </div>
     </Card>

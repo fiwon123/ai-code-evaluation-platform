@@ -285,3 +285,261 @@ test.describe("Profile evaluation cards", () => {
     expect(overflow).toBe(true);
   });
 });
+
+/**
+ * The two dashboard lists (issue #348).
+ *
+ * Everything here is a measurement, because "aligned" is not a property a DOM
+ * assertion can make. The unit tests check that each card *says* the right
+ * things; what this file has to settle is that the two columns share one height
+ * rhythm, and that is a box-model fact.
+ *
+ * The fixture carries submissions of deliberately mixed height — two completed
+ * with results (test count, duration, tooltip and share controls) and one still
+ * processing with none of them. A fixture of uniform rows cannot tell a fixed
+ * rhythm from an accidental one, and the old layout's bug only appeared in the
+ * mixed case.
+ *
+ * Three defects were found here that no unit test could see, each of which
+ * asserted the card was aligned while it was not:
+ *
+ *  1. Each column sized itself to its own tallest card (224px against 233px), so
+ *     *every* row sat 9px off, not merely the last.
+ *  2. The share controls overhung the card's own box by 9px at 412px wide —
+ *     `Shared`, `Copy link` and `Revoke` beside a date in a non-wrapping flex row
+ *     inside a card narrower than their combined width.
+ *  3. The "My challenges" column header was 44px and the other 24px, because one
+ *     holds a `New` button and the other only a heading. That alone pushed the
+ *     right column's first card 20px above the left one's, with the cards
+ *     themselves irrelevant to it.
+ */
+async function openLists(page: Page) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => window.localStorage.setItem("theme", "light"));
+  await mockApi(page, undefined, { auth: true });
+  await page.goto("/profile");
+  // Both columns in full, not just one card. The submissions' shortest card is
+  // the processing one and the challenges' tallest is a two-line title, so waiting
+  // on a single card measures the page mid-load.
+  await expect(page.getByRole("heading", { name: "Recent submissions" })).toBeVisible();
+  await expect(page.locator('[class*="listCard"]')).toHaveCount(6);
+}
+
+/**
+ * A submission row, found by its status badge.
+ *
+ * Not by its link text: `SubmissionRead` carries no `challenge_title`, so a
+ * submission card names no challenge and its link is addressed only by id.
+ * Keyed on the badge because "completed" appears once per row and nowhere else
+ * in the column.
+ */
+function submissionRow(page: Page, status: "completed" | "processing" | "failed") {
+  return column(page, "Recent submissions").filter({
+    has: page.getByText(status, { exact: true }),
+  });
+}
+
+/** One column's cards, scoped by its heading. */
+function column(page: Page, heading: string) {
+  return page
+    .getByRole("heading", { name: heading })
+    .locator("xpath=ancestor::section[1]")
+    .locator('[class*="listCard"]');
+}
+
+/** `top`/`bottom` for every card in a column, in document order. */
+async function edges(page: Page, heading: string) {
+  return column(page, heading).evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
+    }),
+  );
+}
+
+/** True when the two lists sit side by side rather than stacked. */
+async function sideBySide(page: Page) {
+  return page.evaluate(() => {
+    const pick = (h2: string) =>
+      Array.from(document.querySelectorAll("section")).find(
+        (s) => s.querySelector("h2")?.textContent === h2,
+      )!.getBoundingClientRect();
+    return Math.abs(pick("My challenges").top - pick("Recent submissions").top) < 4;
+  });
+}
+
+test.describe("Profile list alignment", () => {
+  test("both columns give every card the same height", async ({ page }) => {
+    await openLists(page);
+    for (const heading of ["My challenges", "Recent submissions"]) {
+      const heights = await column(page, heading).evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().height)),
+      );
+      expect(heights.length, `${heading} should have cards`).toBeGreaterThan(0);
+      // A tolerance rather than exact equality: sub-pixel rounding on a
+      // fractional column width is real, and `toBe` would fail on the browser's
+      // arithmetic instead of on a regression.
+      expect(
+        Math.max(...heights) - Math.min(...heights),
+        `${heading} card heights differ: ${heights.join(", ")}`,
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("the two columns' cards line up row by row", async ({ page }) => {
+    await openLists(page);
+    if (!(await sideBySide(page))) {
+      test.skip(true, "one column at this width — there is nothing to line up");
+    }
+    // The actual issue: side by side, the columns must not stair-step. Compared
+    // row by row rather than as a set, because "aligned" for two lists of
+    // possibly-unequal length means the rows they share are in the same place.
+    expect(await edges(page, "My challenges")).toEqual(await edges(page, "Recent submissions"));
+  });
+
+  test("no card's controls overhang its own box", async ({ page }) => {
+    // Found here at 9px on a Pixel 7 and invisible everywhere else: the share
+    // controls sat in a non-wrapping flex row beside a date, and the card is
+    // narrower than their combined width. A card whose contents extend past its
+    // bottom is not aligned with anything, however uniform its neighbours are.
+    await openLists(page);
+    const overhang = await page.locator('[class*="listCard"]').evaluateAll((els) =>
+      els.flatMap((el) => {
+        const card = el.getBoundingClientRect();
+        return Array.from(el.querySelectorAll('[class*="listFoot"], [class*="listStats"], [class*="listShare"]'))
+          .map((child) => {
+            const r = child.getBoundingClientRect();
+            return Math.round(r.bottom - card.bottom);
+          })
+          .filter((over) => over > 1);
+      }),
+    );
+    expect(overhang, "controls sticking out past their card").toEqual([]);
+  });
+
+  test("the columns stay uniform when they stack into one", async ({ page }) => {
+    // Below the two-column breakpoint the cross-column assertion cannot apply, so
+    // each column is held to its own internal uniformity — and to the 44px AAA tap
+    // target, which is the one requirement a phone actually adds.
+    // Sets the viewport itself rather than relying on which project is running:
+    // as a desktop-only assertion it would silently pass on a wide screen and as
+    // an unconditional one it fails on a wide screen. Asking for the phone width
+    // makes it mean the same thing in both projects.
+    await page.setViewportSize({ width: 412, height: 915 });
+    await openLists(page);
+    expect(await sideBySide(page), "columns should be stacked at 412px").toBe(false);
+    for (const heading of ["My challenges", "Recent submissions"]) {
+      const boxes = await column(page, heading).evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { h: Math.round(r.height), w: Math.round(r.width) };
+        }),
+      );
+      expect(
+        Math.max(...boxes.map((b) => b.h)) - Math.min(...boxes.map((b) => b.h)),
+        `${heading} heights differ once stacked`,
+      ).toBeLessThanOrEqual(1);
+      expect(Math.min(...boxes.map((b) => b.w))).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("a completed row carries its test count, duration and breakdown", async ({ page }) => {
+    await openLists(page);
+    const row = submissionRow(page, "completed");
+    // `exact`: the bubble's own text contains the word "Tests" ("118 of 120 tests
+    // passed"), and a substring match would make this assert against whichever of
+    // the two happened to come first in the DOM.
+    await expect(row.getByText("Tests", { exact: true })).toBeVisible();
+    await expect(row.getByText("118/120")).toBeVisible();
+    await expect(row.getByText("Duration")).toBeVisible();
+    await expect(row.getByText("4.2s")).toBeVisible();
+    // The digest the count stands in for, without a mouse in the way.
+    await row.getByText("118/120").hover();
+    await expect(page.getByRole("tooltip")).toContainText("118 of 120 tests passed");
+    await expect(page.getByRole("tooltip")).toContainText("FAILED test_duplicate_indices");
+  });
+
+  test("the breakdown is reachable and dismissible from the keyboard", async ({ page }) => {
+    // "Keyboard-accessible" here is a claim about a real tab stop, not about an
+    // aria attribute that happens to be present. `Tooltip` moves the stop onto its
+    // own wrapper because a `<dd>` cannot hold focus.
+    await openLists(page);
+    const value = page.locator('[class*="statMore"]').first();
+    // Focused on whatever actually carries the tab stop, rather than assuming
+    // the value element is it: `Tooltip` moves the stop to its wrapper because a
+    // `<dd>` cannot hold focus. Focusing the wrong node would make this test pass
+    // for the wrong reason, or fail for one.
+    await value.evaluate((el) => {
+      const stop = (el.closest("[tabindex]") ?? el) as HTMLElement;
+      stop.focus();
+    });
+    // The bubble is a *sibling* of the trigger inside the wrapper, not an
+    // ancestor, so it is asserted by role rather than by walking up from the
+    // value. The closed bubble is `visibility: hidden`, which is what makes the
+    // visible/hidden pair below a real check of the open state.
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toBeHidden();
+  });
+
+  test("the breakdown bubble does not swallow the click meant for the row", async ({ page }) => {
+    // #347's bug in a new place. Asserted by the navigation itself: a full-card
+    // overlay still lets the topmost element win, so "does the click work" is not
+    // a sufficient probe on its own.
+    await openLists(page);
+    const row = submissionRow(page, "completed");
+    await row.getByText("118/120").hover();
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await row.locator('[class*="listLink"]').click({ position: { x: 40, y: 8 } });
+    await expect(page).toHaveURL(/\/submissions\//);
+  });
+
+  test("a submission row names its language, provider and model", async ({ page }) => {
+    await openLists(page);
+    const row = submissionRow(page, "completed");
+    await expect(row.getByText("Python")).toBeVisible();
+    await expect(row.getByText("demo · demo")).toBeVisible();
+    // A row with no model shows the provider alone, not a trailing separator.
+    const failed = submissionRow(page, "failed");
+    await expect(failed.getByText("anthropic · claude-sonnet-4")).toBeVisible();
+    // An in-flight row reports progress instead: the model may not even have
+    // been chosen yet, and a stale provider next to a live timer reads as a
+    // claim about work that has not happened.
+    await expect(submissionRow(page, "processing").getByText(/^waiting /)).toBeVisible();
+  });
+
+  test("a challenge card joins its own rollup, and admits when it has none", async ({ page }) => {
+    // `c-easy-1` has a rollup entry and `c-med-1` does not, so both branches of
+    // the join are on screen at once. A fixture where every challenge has stats
+    // cannot tell a working join from a constant.
+    await openLists(page);
+    const joined = column(page, "My challenges").filter({
+      has: page.getByRole("link", { name: "Two Sum" }),
+    });
+    await expect(joined.getByText("3/4")).toBeVisible();
+    await expect(joined.getByText(/Last evaluated/)).toBeVisible();
+    await expect(joined.getByText("100%")).toBeVisible();
+
+    const unjoined = column(page, "My challenges").filter({
+      has: page.getByRole("link", { name: "LRU Cache" }),
+    });
+    await expect(unjoined.getByText("Not evaluated yet")).toBeVisible();
+    await expect(unjoined.getByText(/^Created/)).toBeVisible();
+    // Difficulty comes from the shared vocabulary, so the pill is the one #346
+    // held to contrast rather than a local mapping that could drift from it.
+    await expect(unjoined.getByText("Medium")).toBeVisible();
+  });
+
+  test("the em dash stands in for a value that was never measured", async ({ page }) => {
+    // The in-flight row has no result, so no score, no duration and no test count.
+    // All three must read "no value" rather than `0` — a zero score is a claim
+    // about quality, and a zero duration reads as instant.
+    await openLists(page);
+    const processing = submissionRow(page, "processing");
+    // Each dash is labelled, so a screen reader hears why the value is missing
+    // rather than announcing an em dash three times in a row.
+    await expect(processing.getByLabel("no score yet")).toHaveText("—");
+    await expect(processing.getByLabel("not measured")).toHaveText("—");
+    await expect(processing.getByLabel("no test results yet")).toHaveText("—");
+  });
+});

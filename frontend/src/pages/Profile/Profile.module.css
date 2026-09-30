@@ -137,6 +137,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Both column headers, same height (#348).
+
+     The left one holds a "New" link whose `min-height` is one control tall; the
+     right one holds only its heading. Without this they measured 44px and 24px,
+     which pushed the right column's first card 20px above the left column's — the
+     stair-step the issue is about, and it had nothing to do with the cards. A
+     heading line box is not a height a column can be built on. */
+  min-height: var(--control-height);
 }
 
 .colTitle {
@@ -181,12 +189,27 @@
   grid-auto-rows: 1fr;
 }
 
+/* The row minimum both columns are floored to.
+   Measured, not guessed: with the share controls on their own row, the tallest
+   natural card is 233px (a submission with a two-line body and a tooltip) and
+   the tallest challenge card is 224px. Two columns that each size to their own
+   tallest therefore start every row 9px apart — the exact stair-step the issue is
+   about, reintroduced from the other direction. Flooring both to one value above
+   the tallest natural card makes them identical by construction instead of by
+   coincidence, and `height: 100%` still lets content that exceeds it grow, which
+   `e2e/profile.spec.ts` measures rather than assumes. */
+.challengeList,
+.submissionList {
+  --list-card-min: 248px;
+}
+
 .listCard {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   height: 100%;
+  min-height: var(--list-card-min);
 }
 
 /* One badge line tall, in both cards, so row 1 cannot be the thing that makes
@@ -277,15 +300,30 @@
   cursor: help;
 }
 
+/* The meta line — "Last evaluated 2d ago", or the live "waiting" count — and the
+   share controls share this row. They are in the same flex row with `gap` and no
+   wrapping, so at a narrow viewport the buttons used to overflow the card's box
+   entirely: `Shared`, `Copy link` and `Revoke` are ~200px of controls next to a
+   date, and the card is narrower than that. Measured at 9px of overhang on a
+   Pixel 7 before this moved.
+
+   So the controls wrap to their own line instead, and the meta line keeps its own
+   row with the height that row needs. `margin-top: auto` parks whichever row is
+   last at the bottom of the card, which is what lines the columns up. */
 .listFoot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  /* Parks the footer at the bottom of whatever height the grid row gave this
-     card, which is what lines the columns up. */
+  flex-wrap: wrap;
   margin-top: auto;
-  min-height: var(--control-height);
+}
+
+.listShare {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
 }
 
 /* "Not evaluated yet" — the honest answer for a challenge with no runs. The
