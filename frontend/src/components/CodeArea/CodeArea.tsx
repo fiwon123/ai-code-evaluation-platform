@@ -94,19 +94,27 @@ function CodeArea({
   // array as its `toString`, which is at least visible rather than blank.
   const text = typeof value === "string" ? value : String(value ?? "");
 
-  // Tokenize the live value, not a debounced copy. The paint sits one paint
-  // frame behind React's render anyway, and debouncing here would show
-  // unhighlighted text while typing — the exact moment a user is looking at it.
-  const tokens = useMemo(() => highlight(text, language), [text, language]);
-
   // A trailing newline is the common case (every example test suite ends in
   // one), and a `<pre>` collapses a trailing newline, so the final — empty —
   // line would have no line box and the paint would stop a line short of where
   // the caret actually is. One extra newline gives that last line its box.
+  //
+  // The highlighter runs on `painted`, not on `text`, and that ordering is
+  // load-bearing: `painted` is what the tokenized branch renders, so tokenizing
+  // `text` instead would drop the padding for every language the catalog can
+  // highlight — i.e. for every language this component is actually used with,
+  // and for exactly the trailing newline that motivated the fix. Only the
+  // unhighlightable fallback would have been padded, which is the path nobody
+  // takes. Locked by CodeArea.test.tsx.
   const painted = useMemo(
     () => (text.endsWith("\n") ? `${text}\n` : text),
     [text],
   );
+
+  // Tokenize the live value, not a debounced copy. The paint sits one paint
+  // frame behind React's render anyway, and debouncing here would show
+  // unhighlighted text while typing — the exact moment a user is looking at it.
+  const tokens = useMemo(() => highlight(painted, language), [painted, language]);
 
   const handleScroll = useCallback(
     (event: UIEvent<HTMLTextAreaElement>) => {
