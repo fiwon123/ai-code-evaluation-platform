@@ -290,9 +290,6 @@
 
 .statsItem {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   height: 100%;
   /* The language is the card's accent (#347), from `languageMeta(language).color`
      via `--card-accent` — the single source every other language cue in the app
@@ -328,6 +325,15 @@
 
 .statsItem:hover::before {
   width: 5px;
+}
+
+/* The card's own flex column, moved onto an inner div so the hover and focus
+   handlers have somewhere to live that is not the shared Card primitive. */
+.statsBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
 }
 
 .statsHead {
@@ -377,17 +383,14 @@
   text-decoration: none;
 }
 
-/* The focus ring belongs on the card, since the card is what the pointer
-   activates — the title's own ring would draw a small box inside a big target
-   and read as a different element. */
-.statsTitle:focus-visible {
-  outline: none;
-}
-
-.statsItem:has(.statsTitle:focus-visible) {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
+/* No focus rule of our own: the title link is the one focusable element on the
+   card, and `styles/focus.css` already rings it in the app's standard 3px
+   `--color-focus-ring`. A ring on the stretched `::after` was tried and left
+   two rings — the shared one on the title plus ours — which reads as two things
+   being focused. Ringing the card itself instead needs `outline: none` on the
+   title to suppress the shared rule, and `styles/focus-ring.test.ts` is right
+   to refuse that: the answer is not to delete the ring from the rule that owns
+   it, but to let the one ring that already exists do its job. */
 
 .statsDescription {
   margin: 0;

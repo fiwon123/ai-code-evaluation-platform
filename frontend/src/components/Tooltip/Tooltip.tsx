@@ -20,6 +20,35 @@ interface TooltipProps {
   className?: string;
   /** Which side of the trigger the bubble sits on. */
   placement?: "top" | "bottom";
+  /**
+   * Controlled visibility. Omit it and the tooltip manages itself.
+   *
+   * This exists for one case: a trigger that cannot own the pointer. A card with
+   * a stretched link over it has a transparent `::after` covering the whole
+   * surface, so the pointer never reaches anything inside — hovering the card
+   * hits the link's overlay, and a tooltip hung on a child would open for a
+   * keyboard user and never for a mouse. The card then drives `open` from its own
+   * hover and focus instead, and passes it down.
+   *
+   * Pair it with `onOpenChange`, or Escape will close the bubble and the parent
+   * will open it again on the next hover.
+   */
+  open?: boolean;
+  /** Notified whenever the tooltip would change visibility, controlled or not. */
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Let pointer events fall through the bubble to whatever is beneath it.
+   *
+   * WCAG 1.4.13 asks for the bubble to be hoverable — the pointer must be able
+   * to travel into it without it vanishing — and it stays hoverable whether or
+   * not the bubble takes the pointer, as long as the surface it sits on is still
+   * hovered. Taking the pointer is what breaks things: a bubble over a card with
+   * a stretched link swallows the click meant for the card, and a bubble that
+   * appears between mousedown and mouseup cancels the click outright, so the
+   * card stops responding to clicks. Use this for a bubble that explains content
+   * rather than offering actions.
+   */
+  passThrough?: boolean;
 }
 
 /** Elements that are focusable without a `tabIndex` of their own. */
@@ -74,13 +103,29 @@ export default function Tooltip({
   children,
   className = "",
   placement = "top",
+  open: controlledOpen,
+  onOpenChange,
+  passThrough = false,
 }: TooltipProps) {
   const id = useId();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const wrapper = useRef<HTMLSpanElement>(null);
 
-  const show = useCallback(() => setOpen(true), []);
-  const hide = useCallback(() => setOpen(false), []);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      // In controlled mode the parent owns the state; telling it is the whole
+      // job, and writing the internal copy anyway would let the two drift.
+      if (controlledOpen === undefined) {
+        setUncontrolledOpen(next);
+      }
+      onOpenChange?.(next);
+    },
+    [controlledOpen, onOpenChange],
+  );
+
+  const show = useCallback(() => setOpen(true), [setOpen]);
+  const hide = useCallback(() => setOpen(false), [setOpen]);
 
   // Escape dismisses from anywhere in the widget, without moving focus. A
   // window listener rather than one on the wrapper, because the pointer can be
@@ -96,7 +141,7 @@ export default function Tooltip({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [open, setOpen]);
 
   const focusable = isFocusable(Children.only(children));
 
@@ -111,7 +156,9 @@ export default function Tooltip({
     : children;
 
   const classes = [styles.wrapper, className].filter(Boolean).join(" ");
-  const bubbleClasses = [styles.bubble, styles[placement]].filter(Boolean).join(" ");
+  const bubbleClasses = [styles.bubble, styles[placement], passThrough && styles.passThrough]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <span

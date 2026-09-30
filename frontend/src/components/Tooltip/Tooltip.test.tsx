@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import Tooltip from "./Tooltip.tsx";
 
@@ -257,5 +257,67 @@ describe("Tooltip", () => {
       </Tooltip>,
     );
     expect(bubbleOf().className).toContain("bottom");
+  });
+
+  describe("passThrough", () => {
+    it("does not take pointer events, so the surface beneath stays activatable", () => {
+      // WCAG 1.4.13 wants the bubble hoverable, and it stays hoverable with
+      // `pointer-events: none`: the bubble lives inside the surface that opened
+      // it, so the pointer travelling onto it never leaves that surface. What
+      // `none` avoids is a bubble swallowing the click meant for the surface.
+      const { getByRole } = render(
+        <Tooltip label="a long explanation" passThrough>
+          <button type="button">trigger</button>
+        </Tooltip>,
+      );
+      expect(getByRole("tooltip", { hidden: true }).className).toMatch(/passThrough/);
+    });
+
+    it("takes pointer events by default, for a bubble that offers actions", () => {
+      // The default is the opposite on purpose: a bubble with a link in it has to
+      // be clickable, so opting out is the caller's decision.
+      const { getByRole } = render(
+        <Tooltip label="an explanation">
+          <button type="button">trigger</button>
+        </Tooltip>,
+      );
+      expect(getByRole("tooltip", { hidden: true }).className).not.toMatch(/passThrough/);
+    });
+  });
+
+  describe("controlled open", () => {
+    it("shows the bubble when the caller says so, without the pointer", () => {
+      const { getByRole } = render(
+        <Tooltip label="an explanation" open>
+          <button type="button">trigger</button>
+        </Tooltip>,
+      );
+      expect(getByRole("tooltip", { hidden: true })).toHaveAttribute("data-open");
+    });
+
+    it("reports Escape to the caller, or it would reopen on the next hover", () => {
+      // Without this, pressing Escape closes the bubble, the caller still thinks
+      // it is open, and the next hover turns it straight back on.
+      const onOpenChange = vi.fn();
+      render(
+        <Tooltip label="an explanation" open onOpenChange={onOpenChange}>
+          <button type="button">trigger</button>
+        </Tooltip>,
+      );
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it("stays put when the caller keeps saying it is open", () => {
+      // A controlled tooltip obeys the caller: a local Escape that the parent
+      // overwrites on the next render is not a dismissal, it is a flicker.
+      const { getByRole } = render(
+        <Tooltip label="an explanation" open onOpenChange={() => {}}>
+          <button type="button">trigger</button>
+        </Tooltip>,
+      );
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(getByRole("tooltip", { hidden: true })).toHaveAttribute("data-open");
+    });
   });
 });

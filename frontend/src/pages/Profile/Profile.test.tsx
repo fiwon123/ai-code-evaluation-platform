@@ -121,6 +121,27 @@ beforeEach(() => {
   challenges.current = [];
 });
 
+/**
+ * The bubble belonging to a specific trigger.
+ *
+ * A card has two tooltips — the score's and the description's — so
+ * `getByRole("tooltip")` is ambiguous by design. Resolving from the trigger
+ * (its wrapper is the Tooltip's own element) keeps each assertion about the
+ * trigger it names, which is also how a reader meets them.
+ */
+function bubbleFor(trigger: Element): HTMLElement {
+  return trigger.parentElement!.querySelector<HTMLElement>(
+    '[role="tooltip"]',
+  )!;
+}
+
+/** The `<dd>` values, with each tooltip's bubble text left out. */
+function statValues(list: HTMLElement): string[] {
+  return within(list)
+    .getAllByRole("definition")
+    .map((d) => (d.querySelector("[class*='statValueInner']") ?? d).textContent ?? "");
+}
+
 describe("Profile: evaluations by challenge cards (#347)", () => {
   it("renders the cards as a list, so a screen reader announces a set", async () => {
     stats.current = [stat(), stat({ challenge_id: "c2", challenge_title: "Three Sum" })];
@@ -156,12 +177,24 @@ describe("Profile: evaluations by challenge cards (#347)", () => {
     const list = card.querySelector("dl")!;
     expect(list).toBeTruthy();
     const terms = within(list).getAllByRole("term").map((t) => t.textContent);
-    expect(terms).toEqual(["Score", "Runs", "Last run"]);
+    expect(terms).toEqual(["Score", "Best", "Runs", "Last run"]);
 
-    const values = within(list)
-      .getAllByRole("definition")
-      .map((d) => d.textContent);
-    expect(values).toEqual(["75%", "3", "1.2s"]);
+    expect(statValues(list)).toEqual(["75%", "100%", "2/3", "1.2s"]);
+  });
+
+  it("treats an absent duration as unmeasured, not as a number", async () => {
+    // Regression lock. The API sends `null`, and a `!== null` check treats a
+    // *missing* field as a value: `formatDurationMs(undefined)` printed "NaNs"
+    // on the card. An absent field and a null one mean the same thing.
+    stats.current = [
+      stat({ last_duration_ms: undefined as unknown as number | null }),
+    ];
+    await renderProfile();
+
+    expect(statValues(firstCard().querySelector<HTMLElement>("dl")!)[3]).toBe("—");
+    expect(
+      within(firstCard()).getByLabelText("last run: not measured"),
+    ).toBeTruthy();
   });
 
   it("says 'not measured' rather than printing a zero duration", async () => {
@@ -170,11 +203,8 @@ describe("Profile: evaluations by challenge cards (#347)", () => {
     stats.current = [stat({ last_duration_ms: null })];
     await renderProfile();
 
-    const list = firstCard().querySelector("dl")!;
-    const values = within(list)
-      .getAllByRole("definition")
-      .map((d) => d.textContent);
-    expect(values).toEqual(["75%", "3", "—"]);
+    const list = firstCard().querySelector<HTMLElement>("dl")!;
+    expect(statValues(list)).toEqual(["75%", "100%", "2/3", "—"]);
     // And the em dash is explained, because on its own it is just a missing value.
     expect(
       within(list).getByLabelText("last run: not measured"),
@@ -214,29 +244,69 @@ describe("Profile: evaluations by challenge cards (#347)", () => {
       "Find two numbers that add up to a target.",
     );
 
-    // And it is described, so a keyboard user can reach it without a pointer.
-    const bubble = within(card).getByRole("tooltip", { hidden: true });
+    // And it is described, so a keyboard user is pointed at the full text.
+    // The bubble belongs to the description, which is what carries the
+    // `aria-describedby`.
+    const bubble = bubbleFor(description);
     expect(bubble).toHaveTextContent("Find two numbers that add up to a target.");
     expect(description).toHaveAttribute("aria-describedby", bubble.id);
   });
 
-  it("opens the description tooltip on focus, not only on hover", async () => {
+  it("does not open the description on a bare focus event, which is what a click is", async () => {
     // The requirement was "tooltips assist truncated content, keyboard
-    // accessible" — a hover-only tooltip satisfies half of it.
+    // accessible", so the keyboard path must open the bubble — but a mouse press
+    // focuses the title too, and opening a bubble under the cursor as someone
+    // clicks cancels the click: mousedown and mouseup land on different elements
+    // and the browser never fires a click, so the card stops working for the
+    // mouse. Hence `:focus-visible`, not "was focused".
+    //
+    // This asserts the half jsdom can see: jsdom's `:focus-visible` never matches,
+    // which is exactly what a click looks like here, so the bubble must stay shut.
+    // The keyboard half cannot be asserted in jsdom and is covered in
+    // `e2e/profile.spec.ts` with a real browser and real Tab focus.
     await renderProfile();
     const card = firstCard();
-    const bubble = within(card).getByRole("tooltip", { hidden: true });
+    const bubble = bubbleFor(card.querySelector('[class*="statsDescription"]')!);
 
-    const trigger = card.querySelector<HTMLElement>(
-      '[class*="statsDescription"]',
-    )!.parentElement!;
-    trigger.focus();
-    fireEvent.focus(trigger);
+    fireEvent.focus(card.querySelector('[class*="statsTitle"]')!);
+    expect(bubble).not.toHaveAttribute("data-open");
+  });
 
+  it("keeps the description dismissed after Escape, even while still hovered", async () => {
+    // Regression lock, found in a real browser rather than jsdom. Closing the
+    // bubble moves the element under the pointer, so the browser fires another
+    // mouseover at the card — and a card that cleared its own "dismissed" flag
+    // on hover reopened the bubble immediately. WCAG 1.4.13 wants it dismissed
+    // until the pointer leaves.
+    await renderProfile();
+    const card = firstCard();
+    const body = card.querySelector<HTMLElement>('[class*="statsBody"]')!;
+    const bubble = bubbleFor(card.querySelector('[class*="statsDescription"]')!);
+
+    fireEvent.mouseEnter(body);
     expect(bubble).toHaveAttribute("data-open");
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(bubble).not.toHaveAttribute("data-open");
+
+    // Still hovering: another mouseover must not undo the dismissal.
+    fireEvent.mouseEnter(body);
+    expect(bubble).not.toHaveAttribute("data-open");
+
+    // Leaving and coming back brings it back, which is the "persistent" half.
+    fireEvent.mouseLeave(body);
+    fireEvent.mouseEnter(body);
+    expect(bubble).toHaveAttribute("data-open");
+  });
+
+  it("opens the description tooltip when the card is hovered", async () => {
+    await renderProfile();
+    const card = firstCard();
+    const bubble = bubbleFor(card.querySelector('[class*="statsDescription"]')!);
+    expect(bubble).not.toHaveAttribute("data-open");
+
+    fireEvent.mouseEnter(card.querySelector('[class*="statsBody"]')!);
+    expect(bubble).toHaveAttribute("data-open");
   });
 
   it("reports failed runs, since a card that hides them flatters the score", async () => {
@@ -258,14 +328,45 @@ describe("Profile: evaluations by challenge cards (#347)", () => {
     expect(container.querySelector('[class*="statsDescription"]')).toBeNull();
   });
 
+  it("keeps the best score, which the old card printed and the redesign nearly lost", async () => {
+    // Regression lock. The old card wrote "best 90% · 3 runs · 1 failed" as a
+    // line of text. A redesign that drops a field because it no longer fits the
+    // new layout is still a data loss, so Best is a stat of its own.
+    stats.current = [stat({ avg_score: 75, best_score: 100 })];
+    await renderProfile();
+
+    const terms = within(firstCard().querySelector<HTMLElement>("dl")!)
+      .getAllByRole("term")
+      .map((t) => t.textContent);
+    expect(terms).toEqual(["Score", "Best", "Runs", "Last run"]);
+    expect(statValues(firstCard().querySelector<HTMLElement>("dl")!)[1]).toBe("100%");
+  });
+
+  it("counts completed runs, not just attempted ones", async () => {
+    // An average over three completed runs is a different claim from an average
+    // over four attempts, and the old card made the reader subtract to find out.
+    stats.current = [stat({ total_runs: 4, completed_runs: 3 })];
+    await renderProfile();
+
+    expect(statValues(firstCard().querySelector<HTMLElement>("dl")!)[2]).toBe("3/4");
+  });
+
+  it("says why a score is blank rather than showing a bare em dash", async () => {
+    stats.current = [stat({ avg_score: null, best_score: null, completed_runs: 0 })];
+    await renderProfile();
+
+    // Not a tooltip: the em dash is the app's "no value", and a blank score needs
+    // saying out loud for the same reason a blank duration does.
+    expect(
+      within(firstCard()).getByLabelText("no completed runs yet"),
+    ).toHaveTextContent("—");
+  });
+
   it("shows an em dash rather than a score when nothing has completed", async () => {
     // avg_score is null, not 0, and 0% would be a claim about quality.
     stats.current = [stat({ avg_score: null, best_score: null, completed_runs: 0 })];
     await renderProfile();
 
-    const values = within(firstCard().querySelector("dl")!)
-      .getAllByRole("definition")
-      .map((d) => d.textContent);
-    expect(values[0]).toBe("—");
+    expect(statValues(firstCard().querySelector<HTMLElement>("dl")!)[0]).toBe("—");
   });
 });

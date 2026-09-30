@@ -74,3 +74,10 @@
     transition: none;
   }
 }
+
+/* The bubble does not take the pointer, so whatever is underneath stays
+   activatable. Hoverability is unaffected: the bubble lives inside the surface
+   that opened it, so the pointer travelling onto it never leaves that surface. */
+.passThrough {
+  pointer-events: none;
+}

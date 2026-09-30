@@ -971,10 +971,8 @@ async def test_submission_stats_duration_is_null_without_a_measured_run(
 ) -> None:
     """A run that never produced a result row has no duration, and the card has
     to be able to say "—" rather than print a zero that looks like "instant"."""
-    token, user = await register_user(db_client)
+    token, _user = await register_user(db_client)
     challenge = await create_challenge(db_client, token)
-    uid = uuid.UUID(user["id"])
-    cid = uuid.UUID(challenge["id"])
 
     submission = await create_submission(db_client, token, challenge["id"])
     await db_client.patch(

@@ -78,15 +78,72 @@ function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
   const language = languageMeta(item.language);
   const variant = item.avg_score !== null ? scoreVariant(item.avg_score) : null;
   const style = { "--card-accent": language.color } as CSSProperties;
-  const duration =
-    item.last_duration_ms !== null ? formatDurationMs(item.last_duration_ms) : "—";
+
+  // `null` *and* `undefined`. The API sends `null` for "no value", but a field
+  // that is simply absent — an older cached response, a partial payload — says
+  // the same thing, and `undefined !== null` is true, so a plain `!== null` check
+  // formats `undefined` and printed "NaNs" on the card.
+  const blank = (value: number | null | undefined) =>
+    value === null || value === undefined;
+  const duration = blank(item.last_duration_ms)
+    ? "—"
+    : formatDurationMs(item.last_duration_ms);
+  const percent = (value: number | null) => (blank(value) ? "—" : `${value}%`);
+
+  // The description is the only truncated text on the card, so it is the only
+  // thing that needs a bubble — and the card, not the description, is what
+  // triggers it. The stretched `::after` over the title is a transparent box
+  // covering this whole surface, so the pointer never reaches anything inside
+  // the card: a tooltip hung on the description would open for a keyboard user
+  // and never for a mouse. Hovering or focusing anywhere on the card opens it
+  // instead, and Escape dismisses it until the pointer leaves (WCAG 1.4.13:
+  // dismissible, hoverable, persistent).
+  const [descVisible, setDescVisible] = useState(false);
+  const [descDismissed, setDescDismissed] = useState(false);
+  // Re-entering the card must NOT clear `descDismissed`. It did, and it made
+  // Escape look broken in a real browser: closing the bubble changes which
+  // element is under the pointer, the browser fires another mouseover at the
+  // card, and the card reopened the bubble it had just dismissed. WCAG 1.4.13
+  // wants the opposite — dismissed until the pointer leaves.
+  const showDescription = () => setDescVisible(true);
+  const leaveDescription = () => {
+    setDescVisible(false);
+    setDescDismissed(false);
+  };
+  const focusDescription = () => {
+    setDescVisible(true);
+    setDescDismissed(false);
+  };
 
   return (
-    <Card
-      padding="compact"
-      className={styles.statsItem}
-      style={style}
-    >
+    <Card padding="compact" className={styles.statsItem} style={style}>
+      {/* The hover and focus handlers live on an inner div rather than on
+          `Card` itself: widening a shared primitive's props to carry this one
+          card's behaviour is worse than one wrapper element. It spans the card's
+          content, which is also the right area to react to — the padding is not
+          text anyone is trying to read. */}
+      <div
+        className={styles.statsBody}
+        onMouseEnter={showDescription}
+        onMouseLeave={leaveDescription}
+        onFocus={(event) => {
+          // `:focus-visible` and not simply "was focused": a mouse press focuses
+          // the title too, and popping a tooltip open under someone's cursor as
+          // they click cancels the click — mousedown and mouseup then land on
+          // different elements and the browser never fires a click at all, so the
+          // card would silently stop working for the mouse.
+          if ((event.target as HTMLElement).matches(":focus-visible")) {
+            focusDescription();
+          }
+        }}
+        onBlur={(event) => {
+          // Only when focus has left the card, so tabbing between the title and
+          // anything inside does not flicker the bubble closed.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            leaveDescription();
+          }
+        }}
+      >
       <div className={styles.statsHead}>
         <LanguageBadge language={item.language} className={styles.statsBadge} />
         <Link
@@ -100,7 +157,23 @@ function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
       {item.description && (
         // Clipped to two lines by CSS, so the full text is still in the DOM and
         // still announced; the tooltip is for reading it, not for hearing it.
-        <Tooltip label={item.description} placement="bottom">
+        <Tooltip
+          label={item.description}
+          placement="bottom"
+          // Explanatory text, not actions: the bubble must not swallow the click
+          // meant for the card underneath it.
+          passThrough
+          open={descVisible && !descDismissed}
+          onOpenChange={(next) => {
+            if (next) {
+              showDescription();
+            } else {
+              // Escape, or the pointer leaving the description: keep it closed
+              // until the pointer leaves the card and comes back.
+              setDescDismissed(true);
+            }
+          }}
+        >
           <p className={styles.statsDescription}>{item.description}</p>
         </Tooltip>
       )}
@@ -110,22 +183,41 @@ function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
           <dt className={styles.statLabel}>Score</dt>
           <dd
             className={`${styles.statValue} ${variant ? styles[`chip${variant}`] : ""}`}
+            // The em dash is "no value here", which is not 0% — a claim about
+            // quality rather than an absence of one. Say which, for the same
+            // reason the duration below does.
+            {...(blank(item.avg_score)
+              ? { "aria-label": "no completed runs yet" }
+              : {})}
           >
-            {item.avg_score !== null ? `${item.avg_score}%` : "—"}
+            {percent(item.avg_score)}
           </dd>
         </div>
         <div className={styles.stat}>
+          <dt className={styles.statLabel}>Best</dt>
+          {/* The old card printed "best 90%" in its meta line. A redesign that
+              drops a field because it no longer fits the new layout is still a
+              data loss, so Best is a stat of its own. */}
+          <dd className={styles.statValue}>{percent(item.best_score)}</dd>
+        </div>
+        <div className={styles.stat}>
           <dt className={styles.statLabel}>Runs</dt>
-          <dd className={styles.statValue}>{item.total_runs}</dd>
+          {/* Completed of total, not the total alone: the old card said
+              "3 runs" beside "1 failed" and left the reader to subtract, and an
+              average over three completed runs means something different from an
+              average over four attempted ones. */}
+          <dd className={styles.statValue}>
+            {item.completed_runs}/{item.total_runs}
+          </dd>
         </div>
         <div className={styles.stat}>
           <dt className={styles.statLabel}>Last run</dt>
           <dd
             className={styles.statValue}
-            // "—" is the em dash for "not measured", which the tooltip has to
-            // say out loud: on its own it reads as a missing value rather than a
-            // run that never produced a result.
-            {...(item.last_duration_ms === null
+            // "—" is the em dash for "not measured", which has to be said out
+            // loud: on its own it reads as a missing value rather than a run that
+            // never produced a result.
+            {...(blank(item.last_duration_ms)
               ? { "aria-label": "last run: not measured" }
               : {})}
           >
@@ -145,6 +237,7 @@ function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
           </>
         )}
       </p>
+      </div>
     </Card>
   );
 }
