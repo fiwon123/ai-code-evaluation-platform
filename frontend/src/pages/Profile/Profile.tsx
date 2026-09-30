@@ -21,6 +21,7 @@ import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
 import { useShareLink } from "../../hooks/useShareLink.ts";
 import { authApi, challengesApi, submissionsApi } from "../../services/api.ts";
+import { DIFFICULTY_VARIANT, difficultyLabel } from "../../utils/difficulty.ts";
 import { extractError, extractFieldErrors } from "../../utils/errors.ts";
 import { languageMeta } from "../../utils/language.ts";
 import type {
@@ -45,6 +46,50 @@ const PAGE_SIZE = 10;
 // interval so rows flip to their terminal state (e.g. the recovery sweep fails
 // an abandoned pending row) without a manual page reload.
 const SUBMISSIONS_POLL_INTERVAL_MS = 5_000;
+
+/**
+ * Whether a numeric field has no value at all — `null` *and* `undefined`.
+ *
+ * The API sends `null` for "no value", but a field that is simply absent — an
+ * older cached response, a partial payload — says the same thing, and
+ * `undefined !== null` is true, so a plain `!== null` check formats `undefined`
+ * and printed "NaNs" on a card. Shared by the three cards below rather than
+ * redeclared per card, because the bug it prevents is invisible in one card and
+ * a copy in each is a copy that can drift.
+ *
+ * A type predicate, so `!blank(x)` narrows `x` for the formatters that take a
+ * `number`. A plain `boolean` return leaves `number | null | undefined` in the
+ * false branch and every caller has to cast.
+ */
+function blank(value: number | null | undefined): value is null | undefined {
+  return value === null || value === undefined;
+}
+
+/** A percentage or the em dash for "not measured" (#347, #348). */
+function percent(value: number | null | undefined): string {
+  return blank(value) ? "—" : `${value}%`;
+}
+
+/**
+ * A relative time that also states the date it is relative to.
+ *
+ * "2 months ago" is unverifiable on its own — it is true of a great many
+ * instants, it does not survive a paste into a bug report, and a screen reader
+ * reads the words rather than the number. `<time dateTime>` carries the exact
+ * value alongside the human phrasing, which is what the element is for.
+ *
+ * It also makes the claim testable: asserting that the footer says "Last
+ * evaluated" says nothing about *which* date, and a card that printed the
+ * created date under that label passes such a test forever.
+ */
+function RelativeTime({ iso, prefix }: { iso: string; prefix?: string }) {
+  return (
+    <time className={styles.metaDate} dateTime={iso}>
+      {prefix ? `${prefix} ` : ""}
+      {formatRelativeTime(iso)}
+    </time>
+  );
+}
 
 
 /**
@@ -79,16 +124,9 @@ function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
   const variant = item.avg_score !== null ? scoreVariant(item.avg_score) : null;
   const style = { "--card-accent": language.color } as CSSProperties;
 
-  // `null` *and* `undefined`. The API sends `null` for "no value", but a field
-  // that is simply absent — an older cached response, a partial payload — says
-  // the same thing, and `undefined !== null` is true, so a plain `!== null` check
-  // formats `undefined` and printed "NaNs" on the card.
-  const blank = (value: number | null | undefined) =>
-    value === null || value === undefined;
   const duration = blank(item.last_duration_ms)
     ? "—"
     : formatDurationMs(item.last_duration_ms);
-  const percent = (value: number | null) => (blank(value) ? "—" : `${value}%`);
 
   // The description is the only truncated text on the card, so it is the only
   // thing that needs a bubble — and the card, not the description, is what
@@ -237,6 +275,249 @@ function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
           </>
         )}
       </p>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * One "my challenges" row (issue #348).
+ *
+ * The issue asks for language, difficulty, recency, run count, best score and
+ * status. Five of those six exist in the data. The sixth — a status — does not:
+ * `Challenge` has no status field, and none of the API responses carry one. So
+ * rather than invent an "active"/"stale" label from a threshold of my own, this
+ * card reports the two facts that are actually knowable — when the challenge was
+ * created, and whether it has ever been evaluated — and the second of those is
+ * the same signal a reader would call "stale" anyway.
+ *
+ * The run numbers come from `challengeStats`, which is a rollup over *all* of
+ * the user's submissions rather than the visible page, so "best score" here
+ * really is the best score and not the best score on page 3.
+ *
+ * Structure is deliberately identical to `SubmissionListCard` below — badges
+ * and one prominent value, then a text line, then two named stats, then a meta
+ * footer. See the alignment note on `.listCard` in the CSS module.
+ */
+function ChallengeListCard({
+  challenge,
+  stat,
+}: {
+  challenge: Challenge;
+  stat: ChallengeStatsItem | undefined;
+}) {
+  const neverEvaluated = !stat || stat.total_runs === 0;
+  const variant = stat?.best_score != null ? scoreVariant(stat.best_score) : null;
+
+  return (
+    <Card padding="compact" className={styles.listCard}>
+      <div className={styles.listHead}>
+        <span className={styles.listBadges}>
+          <LanguageBadge language={challenge.language} />
+          {/* `DIFFICULTY_VARIANT`/`difficultyLabel` rather than a second copy of
+              the easy/medium/hard vocabulary: #346 moved those pills onto the
+              `-strong` tokens for contrast, and a local mapping here would be
+              one more place to forget that. Unknown values fall back to a
+              neutral pill and their own label, never to a wrong colour. */}
+          <Badge variant={DIFFICULTY_VARIANT[challenge.difficulty] ?? "neutral"}>
+            {difficultyLabel(challenge.difficulty)}
+          </Badge>
+        </span>
+        <span
+          className={`${styles.listValue} ${variant ? styles[`chip${variant}`] : ""}`}
+          {...(blank(stat?.best_score)
+            ? { "aria-label": "no completed runs yet" }
+            : {})}
+        >
+          {percent(stat?.best_score)}
+        </span>
+      </div>
+
+      <Link
+        to={`/challenges/${challenge.id}`}
+        className={styles.listTitle}
+      >
+        {challenge.title}
+      </Link>
+
+      <dl className={styles.listStats}>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Runs</dt>
+          {/* Completed of total, matching the #347 card: an average over three
+              completed runs is a different claim from one over four attempts. */}
+          <dd className={styles.statValue}>
+            {stat ? `${stat.completed_runs}/${stat.total_runs}` : "—"}
+          </dd>
+        </div>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Failed</dt>
+          <dd
+            className={styles.statValue}
+            {...(blank(stat?.failed_runs) || (stat?.failed_runs ?? 0) === 0
+              ? { "aria-label": "no failed runs" }
+              : {})}
+          >
+            {blank(stat?.failed_runs) ? "—" : `${stat?.failed_runs}`}
+          </dd>
+        </div>
+      </dl>
+
+      <div className={styles.listFoot}>
+        {neverEvaluated ? (
+          <RelativeTime iso={challenge.created_at} prefix="Created" />
+        ) : (
+          <RelativeTime iso={stat.last_run_at} prefix="Last evaluated" />
+        )}
+        {neverEvaluated && (
+          <span className={styles.neutralTag}>Not evaluated yet</span>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The longer text a submission's test summary stands in for.
+ *
+ * `logs_summary` is the runner's own digest of which tests failed and why, and it
+ * exists precisely so a row can explain itself without opening the report. It is
+ * empty on rows written before summaries existed, hence the counts first: they
+ * are always there, and the digest is the bonus.
+ */
+function runDetail(submission: Submission): string | null {
+  const result = submission.evaluation_result;
+  if (!result) {
+    return null;
+  }
+  const counts = `${result.passed_tests} of ${result.total_tests} tests passed`;
+  const summary = result.logs_summary?.trim();
+  return summary ? `${counts}. ${summary}` : counts;
+}
+
+/**
+ * One "recent submissions" row (issue #348).
+ *
+ * Everything the old row showed is still here — status pill, score, duration,
+ * relative time (or a live "waiting" count for an in-flight run), the delayed
+ * and stuck escalations, and the share controls — because a redesign that drops
+ * a field because it stopped fitting is data loss, not design. On top of that:
+ * the language, a real pass/fail test count, and the provider and model that
+ * produced the run.
+ *
+ * The tooltip is on the test count and nowhere else, because that is the only
+ * number here whose full story is longer than the number. It is not on the card,
+ * because the card already has a link and three buttons and a bubble over those
+ * is the #347 bug all over again — `Tooltip` takes a `tabIndex` on its own
+ * wrapper when the trigger cannot hold focus, so wrapping a `<dd>` still leaves
+ * this reachable from the keyboard in one tab stop.
+ */
+function SubmissionListCard({
+  submission,
+  now,
+}: {
+  submission: Submission;
+  /**
+   * The page's shared clock (`useNow`), not `Date.now()`.
+   *
+   * `useNow` ticks once a second and only while something is in flight, which is
+   * what keeps "waiting 1m 20s" alive without re-rendering the page for terminal
+   * rows. Calling `Date.now()` inside the card instead is a frozen clock: the
+   * value is sampled once per render, and the card only re-renders when the page
+   * does — so if nothing else ticks, the elapsed time never moves.
+   */
+  now: number;
+}) {
+  const inProgress =
+    submission.status === "pending" || submission.status === "processing";
+  const delayed = inProgress && isDelayed(submission.created_at, now);
+  const stuck =
+    submission.status === "pending" && isSeverelyDelayed(submission.created_at, now);
+  const result = submission.evaluation_result;
+  const durationMs = result?.metrics.duration_ms;
+  const variant = submission.score != null ? scoreVariant(submission.score) : null;
+  const detail = runDetail(submission);
+
+  // What ran the code, when the submission does not say. `provider`/`model` are
+  // nullable and a row written before the model column existed has no model, so
+  // this degrades to the provider rather than to a dash.
+  const runner = [submission.provider, submission.model]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+
+  return (
+    <Card padding="compact" className={styles.listCard}>
+      {/* Row 1 and row 2 are the link, as before: the row was clickable and
+          nothing about this issue says it should stop being. Rows 3 and 4 sit
+          outside it — a `<button>` may not live inside an `<a>`, and the share
+          controls and the tooltip's tab stop both have to be real controls. */}
+      <Link
+        to={`/submissions/${submission.id}`}
+        className={styles.listLink}
+      >
+        <span className={styles.listHead}>
+          <span className={styles.listBadges}>
+            <Badge variant={statusVariant(submission.status)}>
+              {submission.status}
+            </Badge>
+            <LanguageBadge language={submission.language} />
+            {(stuck || delayed) && (
+              <span className={stuck ? styles.stuckTag : styles.delayedTag}>
+                {stuck ? "stuck" : "delayed"}
+              </span>
+            )}
+          </span>
+          <span
+            className={`${styles.listValue} ${variant ? styles[`chip${variant}`] : ""}`}
+            {...(blank(submission.score)
+              ? { "aria-label": "no score yet" }
+              : {})}
+          >
+            {percent(submission.score)}
+          </span>
+        </span>
+        <span className={styles.listBody}>
+          {inProgress
+            ? `waiting ${formatElapsed(submission.created_at, now)}`
+            : (runner || submission.challenge_id)}
+        </span>
+      </Link>
+
+      <dl className={styles.listStats}>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Tests</dt>
+          <dd className={styles.statValue}>
+            {detail ? (
+              <Tooltip label={detail} placement="top" passThrough>
+                <span className={styles.statMore}>{result!.passed_tests}/{result!.total_tests}</span>
+              </Tooltip>
+            ) : (
+              <span aria-label="no test results yet">—</span>
+            )}
+          </dd>
+        </div>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Duration</dt>
+          <dd
+            className={styles.statValue}
+            {...(typeof durationMs !== "number"
+              ? { "aria-label": "not measured" }
+              : {})}
+          >
+            {typeof durationMs === "number" ? formatDurationMs(durationMs) : "—"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className={styles.listFoot}>
+        <RelativeTime iso={submission.created_at} />
+        {submission.status === "completed" && result && (
+          <span className={styles.listShare}>
+            <SubmissionShareActions
+              submissionId={submission.id}
+              initialToken={result.share_token ?? null}
+            />
+          </span>
+        )}
       </div>
     </Card>
   );
@@ -432,6 +713,16 @@ function Profile() {
       });
     return () => controller.abort();
   }, [user]);
+
+  // Per-challenge rollup keyed by id, for the "My challenges" cards (#348). It is
+  // a separate fetch that is deliberately non-fatal above, so this map is
+  // legitimately empty whenever `/api/submissions/stats` failed — which is why
+  // every card treats a missing entry as "not evaluated" rather than as an
+  // error, and why no card renders a zero where a rollup would have been.
+  const statsByChallenge = useMemo(
+    () => new Map(challengeStats.map((item) => [item.challenge_id, item])),
+    [challengeStats],
+  );
 
   const stats = useMemo(() => {
     const completed = submissions.filter((s) => s.status === "completed");
@@ -648,17 +939,11 @@ function Profile() {
             <>
               <div className={styles.challengeList}>
                 {challenges.map((challenge) => (
-                  <Card key={challenge.id} padding="compact" className={styles.challengeItem}>
-                    <Link to={`/challenges/${challenge.id}`} className={styles.challengeTitle}>
-                      {challenge.title}
-                    </Link>
-                    <div className={styles.challengeMeta}>
-                      <LanguageBadge language={challenge.language} />
-                      <span className={styles.metaDate}>
-                        {formatRelativeTime(challenge.created_at)}
-                      </span>
-                    </div>
-                  </Card>
+                  <ChallengeListCard
+                    key={challenge.id}
+                    challenge={challenge}
+                    stat={statsByChallenge.get(challenge.id)}
+                  />
                 ))}
               </div>
               <Pagination
@@ -688,75 +973,13 @@ function Profile() {
           ) : (
             <>
               <div className={styles.submissionList}>
-                {submissions.map((submission) => {
-                  const inProgress =
-                    submission.status === "pending" ||
-                    submission.status === "processing";
-                  const durationMs =
-                    submission.evaluation_result?.metrics.duration_ms;
-                  return (
-                    <Card
-                      key={submission.id}
-                      padding="compact"
-                      className={styles.submissionItem}
-                    >
-                      <Link
-                        to={`/submissions/${submission.id}`}
-                        className={styles.submissionLink}
-                      >
-                        <span className={styles.submissionTop}>
-                          <Badge variant={statusVariant(submission.status)}>
-                            {submission.status}
-                          </Badge>
-                          {inProgress ? (
-                            <span className={styles.waitingText}>
-                              waiting {formatElapsed(submission.created_at, now)}
-                            </span>
-                          ) : (
-                            <span className={styles.metaDate}>
-                              {formatRelativeTime(submission.created_at)}
-                            </span>
-                          )}
-                          {inProgress && isDelayed(submission.created_at, now) && (
-                            <span
-                              className={
-                                submission.status === "pending" &&
-                                isSeverelyDelayed(submission.created_at, now)
-                                  ? styles.stuckTag
-                                  : styles.delayedTag
-                              }
-                            >
-                              {submission.status === "pending" &&
-                              isSeverelyDelayed(submission.created_at, now)
-                                ? "stuck"
-                                : "delayed"}
-                            </span>
-                          )}
-                        </span>
-                        <span className={styles.submissionScore}>
-                          {submission.score !== null
-                            ? `${submission.score}%`
-                            : "—"}
-                          {typeof durationMs === "number" && (
-                            <span className={styles.durationText}>
-                              {" "}
-                              · {formatDurationMs(durationMs)}
-                            </span>
-                          )}
-                        </span>
-                      </Link>
-                      {submission.status === "completed" &&
-                        submission.evaluation_result && (
-                          <SubmissionShareActions
-                            submissionId={submission.id}
-                            initialToken={
-                              submission.evaluation_result.share_token ?? null
-                            }
-                          />
-                        )}
-                    </Card>
-                  );
-                })}
+                {submissions.map((submission) => (
+                  <SubmissionListCard
+                    key={submission.id}
+                    submission={submission}
+                    now={now}
+                  />
+                ))}
               </div>
               <Pagination
                 page={submissionPage}

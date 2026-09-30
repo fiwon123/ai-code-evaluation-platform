@@ -13,7 +13,11 @@
 
 .primary {
   background: var(--color-primary-light);
-  color: var(--color-primary);
+  /* The `-strong` step, like the three below (#348). `--color-primary` measured
+     3.13:1 as text on `--color-primary-light` in the dark theme, and "processing"
+     is the only status that paints this variant — so the one status pill left
+     out of #346's contrast fix was the one that failed. */
+  color: var(--color-primary-strong);
 }
 
 /* Light mode: calm neutral tag — the blue-on-pale-blue pill blended into the

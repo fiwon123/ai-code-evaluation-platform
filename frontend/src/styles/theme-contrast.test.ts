@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { SubmissionStatus } from "../types.ts";
+import { statusVariant } from "../utils/formatting.ts";
 import languageSource from "../utils/language.ts?raw";
 import globalsCss from "./globals.css?raw";
 
@@ -247,6 +249,12 @@ describe("code surface syntax contrast", () => {
  * lighter.
  */
 const STATUS_PILLS = [
+  // `primary` was missing here until #348, and that omission is why the dark
+  // theme's "processing" pill shipped at 3.13:1: it is the only status that
+  // paints the primary variant, and the only family with no `-strong` step. The
+  // list is now every family that `statusVariant` can return, so a status cannot
+  // be added without its contrast being held.
+  { base: "color-primary", strong: "color-primary-strong", tint: "color-primary-light" },
   { base: "color-success", strong: "color-success-strong", tint: "color-success-light" },
   { base: "color-warning", strong: "color-warning-strong", tint: "color-warning-light" },
   { base: "color-danger", strong: "color-danger-strong", tint: "color-danger-light" },
@@ -291,6 +299,30 @@ describe("status pill contrast", () => {
     }
   });
 
+  it("covers every status `statusVariant` can return", () => {
+    // This is the lock that would have prevented the bug #348 fixed. The dark
+    // "processing" pill shipped at 3.13:1 for as long as `STATUS_PILLS` listed
+    // three families instead of four — and it shipped *green*, because the list
+    // and the thing it was supposed to describe were two separate hand-kept
+    // inventories with no assertion connecting them. Adding a `SubmissionStatus`
+    // or a variant to `statusVariant` without a pill entry here is now a
+    // failure rather than a silent hole in the coverage.
+    const STATUSES: SubmissionStatus[] = [
+      "pending",
+      "processing",
+      "completed",
+      "failed",
+    ];
+    const covered = new Set(STATUS_PILLS.map((pill) => pill.base));
+    for (const status of STATUSES) {
+      const variant = statusVariant(status);
+      expect(
+        covered.has(`color-${variant}` as (typeof STATUS_PILLS)[number]["base"]),
+        `status "${status}" paints the .${variant} badge, so --color-${variant}-strong/-light must be in STATUS_PILLS and held to AA in both themes`,
+      ).toBe(true);
+    }
+  });
+
   it("renders the strong step, so a compliant token nothing uses cannot pass on its own", () => {
     // The lesson from issue #345: assert the *declaration*, not just the token.
     // A palette can be perfectly compliant while the component still points at
@@ -299,7 +331,7 @@ describe("status pill contrast", () => {
     expect(badge, "Badge.module.css must be reachable through the glob").toBeTruthy();
     // `.success`/`.warning`/`.danger` are the pill classes. Match the whole rule
     // body so a comment mentioning the base token cannot satisfy this.
-    for (const variant of ["success", "warning", "danger"]) {
+    for (const variant of ["primary", "success", "warning", "danger"]) {
       const body = badge.match(new RegExp(`\\.${variant} \\{([^}]*)\\}`))?.[1];
       expect(body, `Badge.module.css must define a .${variant} rule`).toBeTruthy();
       expect(
