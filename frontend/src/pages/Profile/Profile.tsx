@@ -70,6 +70,27 @@ function percent(value: number | null | undefined): string {
   return blank(value) ? "—" : `${value}%`;
 }
 
+/**
+ * A relative time that also states the date it is relative to.
+ *
+ * "2 months ago" is unverifiable on its own — it is true of a great many
+ * instants, it does not survive a paste into a bug report, and a screen reader
+ * reads the words rather than the number. `<time dateTime>` carries the exact
+ * value alongside the human phrasing, which is what the element is for.
+ *
+ * It also makes the claim testable: asserting that the footer says "Last
+ * evaluated" says nothing about *which* date, and a card that printed the
+ * created date under that label passes such a test forever.
+ */
+function RelativeTime({ iso, prefix }: { iso: string; prefix?: string }) {
+  return (
+    <time className={styles.metaDate} dateTime={iso}>
+      {prefix ? `${prefix} ` : ""}
+      {formatRelativeTime(iso)}
+    </time>
+  );
+}
+
 
 /**
  * One "evaluations by challenge" card (issue #347).
@@ -342,11 +363,11 @@ function ChallengeListCard({
       </dl>
 
       <div className={styles.listFoot}>
-        <span className={styles.metaDate}>
-          {neverEvaluated
-            ? `Created ${formatRelativeTime(challenge.created_at)}`
-            : `Last evaluated ${formatRelativeTime(stat.last_run_at)}`}
-        </span>
+        {neverEvaluated ? (
+          <RelativeTime iso={challenge.created_at} prefix="Created" />
+        ) : (
+          <RelativeTime iso={stat.last_run_at} prefix="Last evaluated" />
+        )}
         {neverEvaluated && (
           <span className={styles.neutralTag}>Not evaluated yet</span>
         )}
@@ -488,9 +509,7 @@ function SubmissionListCard({
       </dl>
 
       <div className={styles.listFoot}>
-        <span className={styles.metaDate}>
-          {formatRelativeTime(submission.created_at)}
-        </span>
+        <RelativeTime iso={submission.created_at} />
         {submission.status === "completed" && result && (
           <SubmissionShareActions
             submissionId={submission.id}

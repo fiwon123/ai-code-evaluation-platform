@@ -196,16 +196,23 @@ describe("Profile", () => {
     // Difficulty comes from `DIFFICULTY_VARIANT`, so the pill colour is the one
     // #346 held to contrast rather than a local guess.
     expect(screen.getByText("Hard")).toBeInTheDocument();
-    // Completed of total, not the bare total. `getAllByText` because "3/4" is
-    // also on the #347 "evaluations by challenge" card for this same challenge —
-    // two cards, two independent renderings of one rollup, so a singular
-    // matcher here would be asserting about a DOM that has genuinely two of.
-    expect(screen.getAllByText("3/4").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("1").length).toBeGreaterThan(0);
+    // Completed of total, not the bare total — and scoped to this column, because
+    // the "evaluations by challenge" section renders its own `3/4` from the same
+    // rollup and would answer for it.
+    expect(myChallenges().getByText("3/4")).toBeInTheDocument();
+    expect(myChallenges().getByText("1")).toBeInTheDocument();
     // Last *evaluated*, which is a different date from the created date the old
     // card showed — and the one the issue asked for.
-    expect(screen.getByText(/Last evaluated/)).toBeInTheDocument();
-    expect(screen.queryByText(/^Created /)).not.toBeInTheDocument();
+    //
+    // Asserted on the `dateTime` attribute, not on the words. A test that only
+    // checks the footer says "Last evaluated" is satisfied by a card printing the
+    // *created* date under that label, which is precisely the confusion this
+    // issue is about; the relative string itself cannot carry the assertion,
+    // because "10d ago" and "20d ago" land in the same bucket at some point and
+    // the two would quietly agree.
+    const evaluated = myChallenges().getByText(/Last evaluated/).closest("time");
+    expect(evaluated?.getAttribute("dateTime")).toBe("2026-09-20T00:00:00Z");
+    expect(myChallenges().queryByText(/^Created /)).not.toBeInTheDocument();
   });
 
   it("says a never-evaluated challenge has never been evaluated (#348)", async () => {
@@ -215,8 +222,13 @@ describe("Profile", () => {
     // claim about quality and this is an absence of data.
     renderPage();
     await screen.findByText("alice");
-    expect(screen.getByText("Not evaluated yet")).toBeInTheDocument();
-    expect(screen.getByText(/^Created /)).toBeInTheDocument();
+    expect(myChallenges().getByText("Not evaluated yet")).toBeInTheDocument();
+    // The created date, not an evaluated one — there is no evaluated date to
+    // report, and inventing a relative string for a run that never happened
+    // would be the same zero-as-data mistake one row up.
+    expect(
+      myChallenges().getByText(/^Created /).closest("time")?.getAttribute("dateTime"),
+    ).toBe("2026-09-10T00:00:00Z");
     // The em dash is there — several times, in fact, because every absent field
     // on both cards renders one.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
@@ -237,7 +249,7 @@ describe("Profile", () => {
     } as never);
     renderPage();
     await screen.findByText("alice");
-    expect(screen.getByText("Quantum")).toBeInTheDocument();
+    expect(myChallenges().getByText("Quantum")).toBeInTheDocument();
   });
 
   it("renders a difficulty of missing as Unknown rather than throwing (#348)", async () => {
@@ -251,7 +263,7 @@ describe("Profile", () => {
     } as never);
     renderPage();
     await screen.findByText("alice");
-    expect(screen.getByText("Unknown")).toBeInTheDocument();
+    expect(myChallenges().getByText("Unknown")).toBeInTheDocument();
   });
 
   it("shows only the user's own challenges", async () => {
@@ -260,6 +272,22 @@ describe("Profile", () => {
     expect(screen.getByText("My Challenge")).toBeInTheDocument();
     expect(screen.queryByText("Someone Else's")).not.toBeInTheDocument();
   });
+
+/**
+ * The "My challenges" column, scoped by its heading.
+ *
+ * This exists because a loose `getAllByText` on this page is not a weaker
+ * assertion, it is a *wrong* one. The #347 "Evaluations by challenge" section
+ * renders its own `3/4` from the same rollup, so `getAllByText("3/4")` stays
+ * green after the challenge card is mutated to print a bare total — the other
+ * card satisfies it. A mutation check is what caught that: the test passed with
+ * `completed_runs/total_runs` replaced by `total_runs`.
+ */
+function myChallenges() {
+  return within(
+    screen.getByRole("heading", { name: "My challenges" }).closest("section")!,
+  );
+}
 
   it("computes stats: 1 challenge, 3 submissions, avg 100%, 33% completion", async () => {
     renderPage();

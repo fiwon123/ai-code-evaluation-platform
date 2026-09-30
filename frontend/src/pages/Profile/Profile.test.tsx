@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Profile from "./Profile.tsx";
 import profileCss from "./Profile.module.css?raw";
+import profileSource from "./Profile.tsx?raw";
 import { ToastProvider } from "../../components/Toast/ToastContext.tsx";
 import { languageMeta } from "../../utils/language.ts";
 
@@ -368,5 +369,52 @@ describe("Profile: evaluations by challenge cards (#347)", () => {
     await renderProfile();
 
     expect(statValues(firstCard().querySelector<HTMLElement>("dl")!)[0]).toBe("—");
+  });
+});
+
+/**
+ * Source-level locks for two #348 properties that no rendered assertion can see.
+ *
+ * Both are things the *build* cannot observe and jsdom actively hides:
+ *
+ *  - A CSS module's class names are hashed per build, so "the difficulty pill
+ *    painted the danger tint" is unobservable here — the DOM says
+ *    `_badge_x_1` either way. What *is* observable from source is whether the
+ *    card reads the shared `DIFFICULTY_VARIANT` mapping or hand-rolls its own,
+ *    and the hand-rolled copy is the real risk: it would drift from
+ *    `utils/difficulty.ts` silently, and #346's contrast work would not reach it.
+ *  - `Date.now()` inside a card compiles, runs, and renders a plausible value.
+ *    The bug is temporal: the page's `useNow` only re-renders while something is
+ *    in flight, so a card sampling the clock itself shows a "waiting 0s" that
+ *    never moves. jsdom cannot catch that either, because nothing advances.
+ */
+describe("Profile list cards, at the source level", () => {
+  // Comments are stripped first, for the reason `theme-contrast.test.ts` gives:
+  // prose that merely *mentions* a pattern is not a use of it. This file's own
+  // doc comment names `Date.now()` to explain why the card must not call it, and
+  // a raw substring check reads that explanation as the bug.
+  const body = (name: string) => {
+    const start = profileSource.indexOf(`function ${name}(`);
+    expect(start, `Profile.tsx must define ${name}`).toBeGreaterThan(-1);
+    const next = profileSource.indexOf("\nfunction ", start + 1);
+    return profileSource
+      .slice(start, next === -1 ? undefined : next)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
+  };
+
+  it("reads the shared difficulty vocabulary instead of a local mapping", () => {
+    const source = body("ChallengeListCard");
+    expect(source).toContain("DIFFICULTY_VARIANT[");
+    expect(source).toContain("difficultyLabel(");
+    // A local map would be an object literal of easy/medium/hard next to the pill.
+    expect(source).not.toMatch(/hard:\s*"(success|danger|warning)"/);
+  });
+
+  it("takes the page clock rather than reading Date.now() inside the card", () => {
+    const source = body("SubmissionListCard");
+    expect(source).toMatch(/\bnow:\s*number/);
+    // The frozen-clock bug, spelled out.
+    expect(source).not.toMatch(/Date\.now\(\)/);
   });
 });
