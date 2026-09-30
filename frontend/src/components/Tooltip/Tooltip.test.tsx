@@ -163,6 +163,28 @@ describe("Tooltip", () => {
     expect(bubble).not.toHaveAttribute("data-open");
   });
 
+  it("closes when focus is taken away with no relatedTarget to point at", () => {
+    // `relatedTarget` is null whenever focus is taken *away* rather than moved:
+    // the address bar, another window, the devtools, or (in jsdom) any plain
+    // blur. A guard written as "not inside the wrapper" reads null as "inside"
+    // and leaves the tooltip stuck open for good — which is what this component
+    // did until the guard was inverted.
+    render(
+      <Tooltip label="Described">
+        <button type="button">One</button>
+      </Tooltip>,
+    );
+
+    const bubble = bubbleOf();
+    const one = screen.getByRole("button", { name: "One" });
+
+    focus(one);
+    expect(bubble).toHaveAttribute("data-open");
+
+    blur(one, null);
+    expect(bubble).not.toHaveAttribute("data-open");
+  });
+
   it("dismisses on Escape without moving focus", () => {
     // The one behaviour a hover-only tooltip cannot provide at all. Focus must
     // not move: 1.4.13 asks for dismissible *without moving focus*, so the next

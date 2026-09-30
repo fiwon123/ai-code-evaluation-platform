@@ -125,26 +125,24 @@ export default function Tooltip({
       onMouseLeave={hide}
       onFocus={show}
       onBlur={(event) => {
-        // Close only when focus has left the widget entirely — a `blur` landing
-        // on something inside must not close it.
+        // Close only when focus has left the widget entirely, so a `blur`
+        // landing on something inside does not close it.
         //
-        // `null` is a real case, not a degenerate one: browsers report a
-        // `relatedTarget` of null whenever focus is being taken *away* — to the
-        // document body, the address bar, another window, or the devtools. In
-        // jsdom a plain `.focus()` reports null too. Treating null as "inside"
-        // would leave the tooltip stuck open after focus leaves for good, and
-        // would make this component untestable without `fireEvent.blur`
-        // everywhere.
+        // `relatedTarget` is null whenever focus is taken *away* rather than
+        // moved — the address bar, another window, the devtools — and
+        // `Node.contains(null)` is false, so null falls into the "left it" branch
+        // and closes. That is the right answer, and it is the common case, so it
+        // is worth being explicit about: the null check is not needed here
+        // because `contains` already answers it.
         //
-        // The gap that leaves is focus moving *into* the widget, which cannot
-        // happen on a single Tab stop: with one focusable descendant the only
-        // way in is from outside. `isFocusable` is what keeps that true — it
-        // moves the tab stop onto the wrapper exactly when the child is not
-        // focusable, so the widget is always one stop.
-        if (event.relatedTarget && wrapper.current?.contains(event.relatedTarget as Node)) {
-          return;
+        // The case this cannot distinguish is focus moving *into* the widget,
+        // which cannot happen on a single tab stop: with one focusable
+        // descendant the only way in is from outside. `isFocusable` is what keeps
+        // that true — it moves the tab stop onto the wrapper exactly when the
+        // child is not focusable, so the widget is always one stop.
+        if (!wrapper.current?.contains(event.relatedTarget as Node | null)) {
+          hide();
         }
-        hide();
       }}
     >
       {trigger}
