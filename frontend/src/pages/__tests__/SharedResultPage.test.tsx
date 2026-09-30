@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SharedResultPage from "../SharedResultPage.tsx";
+import { expectCodeToContain } from "../../test/code.ts";
 
 const fetchMock = vi.fn();
 
@@ -63,7 +64,7 @@ describe("SharedResultPage", () => {
     expect(screen.getByText("2/2")).toBeInTheDocument();
     expect(screen.getByText("test_two_sum")).toBeInTheDocument();
     expect(screen.getByText("boom")).toBeInTheDocument();
-    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expectCodeToContain(/def two_sum/);
     expect(screen.getByText(/12ms/)).toBeInTheDocument();
     expect(
       screen.getByRole("link", {

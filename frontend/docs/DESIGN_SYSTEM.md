@@ -209,6 +209,21 @@ Dark in both themes, for readability.
 | `--color-code-warn` | `WARN` / `WARNING` lines |
 | `--color-code-ok` | `PASS` / `ok` / `✓` lines |
 | `--color-code-gutter` | Line-number gutter rule |
+| `--color-code-comment` | Syntax: comments |
+| `--color-code-string` | Syntax: strings, chars, docstrings |
+| `--color-code-number` | Syntax: numeric literals |
+| `--color-code-keyword` | Syntax: reserved words |
+| `--color-code-type` | Syntax: type names |
+| `--color-code-fn` | Syntax: function and method calls |
+
+The syntax tokens drive the highlighter in `CodeBlock`. Like the severity
+tokens they are theme-independent (the surface is dark in both palettes) and
+every one clears 4.5:1 against both `--color-code-bg` values. The set is
+deliberately muted rather than saturated: code is dense, and a vivid palette
+turns a screen of source into stripes that cost more to read than the syntax
+distinction is worth. `--color-code-fn` is `--color-code-warn` by hue, which is
+fine because the two never appear in the same view — logs are classified by
+severity, code by token, and a block is one or the other.
 
 The severity tokens are **not** the page status tokens (`--color-danger`
 and friends). On this dark surface light-mode `--color-danger` (#dc2626) manages

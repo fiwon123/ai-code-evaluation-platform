@@ -236,6 +236,12 @@
   --color-code-warn: #fbbf24;
   --color-code-ok: #4ade80;
   --color-code-gutter: #1e293b;
+  --color-code-comment: #7d90a8;
+  --color-code-string: #98c379;
+  --color-code-number: #d19a66;
+  --color-code-keyword: #c792ea;
+  --color-code-type: #56b6c2;
+  --color-code-fn: #e5c07b;
 
   /* Typography */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

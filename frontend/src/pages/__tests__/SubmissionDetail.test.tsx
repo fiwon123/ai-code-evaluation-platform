@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubmissionDetail from "../SubmissionDetail.tsx";
 import { clearToken, setToken } from "../../services/api.ts";
 import { POLL_MAX_INTERVAL_MS } from "../../constants/polling.ts";
+import { expectCodeToContain } from "../../test/code.ts";
 
 const fetchMock = vi.fn();
 
@@ -309,7 +310,7 @@ describe("SubmissionDetail", () => {
     // First fetch resolves to processing → auto re-fetch resolves to completed.
     expect(await screen.findByText("100%")).toBeInTheDocument();
     expect(screen.getByText("2/2")).toBeInTheDocument();
-    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expectCodeToContain(/def two_sum/);
     // The recorded execution duration is promoted to a first-class stat.
     expect(screen.getByText("Duration")).toBeInTheDocument();
     expect(screen.getByText("12ms")).toBeInTheDocument();
@@ -861,7 +862,7 @@ describe("SubmissionDetail", () => {
     // Output that used to require a re-fetch is on screen.
     expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByText("2/2")).toBeInTheDocument();
-    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expectCodeToContain(/def two_sum/);
 
     // The socket supplied the record, so no further request was made. Asserted
     // after another five intervals, which is stronger than the 30ms it replaces:
@@ -900,7 +901,7 @@ describe("SubmissionDetail", () => {
     socket.message({ type: "update", status: "completed", phase: null });
 
     expect(await screen.findByText("100%")).toBeInTheDocument();
-    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expectCodeToContain(/def two_sum/);
     expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeRecord);
   });
 });

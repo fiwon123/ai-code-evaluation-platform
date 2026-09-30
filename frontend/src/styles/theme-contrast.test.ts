@@ -124,6 +124,25 @@ const CODE_SEVERITY_TOKENS = [
   "color-code-ok",
 ];
 
+/**
+ * Syntax tokens for the code highlighter (issue #356).
+ *
+ * These carry more of the page's text than the severity tokens do: severity
+ * color is a shortcut for a line a user is scanning *past*, whereas a keyword
+ * or string is the content being read. So the bar is 4.5:1 in both themes, the
+ * same as the severity set, and the list is spelled out here rather than
+ * globbed — a token added to `globals.css` with a low-contrast value should
+ * fail this test, not slip past it.
+ */
+const CODE_SYNTAX_TOKENS = [
+  "color-code-comment",
+  "color-code-string",
+  "color-code-number",
+  "color-code-keyword",
+  "color-code-type",
+  "color-code-fn",
+] as const;
+
 describe("code surface severity contrast", () => {
   it("does not fall back to the page status tokens on the code surface", () => {
     const module = CODE_BLOCK_CSS;
@@ -157,6 +176,50 @@ describe("code surface severity contrast", () => {
         `--${token} (${value}) on --color-code-bg (${tokens["color-code-bg"]}) is only ${ratio.toFixed(2)}:1`,
       ).toBeGreaterThanOrEqual(MIN_CONTRAST);
     }
+  });
+});
+
+describe("code surface syntax contrast", () => {
+  it.each([
+    ["light", LIGHT],
+    ["dark", DARK],
+  ] as const)("every syntax token clears %s-theme contrast on the code background", (_theme, tokens) => {
+    for (const token of CODE_SYNTAX_TOKENS) {
+      const value = BASE[token];
+      expect(value, `${token} must be defined once, outside the palette blocks`).toBeDefined();
+      const ratio = contrastRatio(value!, tokens["color-code-bg"]!);
+      expect(
+        ratio,
+        `--${token} (${value}) on --color-code-bg (${tokens["color-code-bg"]}) is only ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+  });
+
+  it("styles every token kind the highlighter can emit", () => {
+    // The highlighter and the stylesheet are two files; a new token kind with
+    // no rule renders in the default code colour and the feature looks half
+    // done. This closes that gap from the CSS side, matching the check
+    // `highlight.test.ts` makes from the other direction.
+    const styled = new Set(
+      [...CODE_BLOCK_CSS.matchAll(/^\.code \.([a-z]+) \{/gm)].map((m) => m[1]!),
+    );
+    for (const kind of ["comment", "string", "number", "keyword", "type", "function"]) {
+      expect(styled, `.code .${kind} must exist in CodeBlock.module.css`).toContain(kind);
+    }
+  });
+
+  it("does not dim syntax tokens with opacity, which erodes the measured contrast", () => {
+    // The obvious way to make comments read as "quieter" is an opacity on the
+    // rule. It was tried, and it pushed the effective comment contrast to
+    // 4.31:1 against the light-theme surface — below the bar the palette check
+    // above enforces, and invisible to that check, which only reads token
+    // values. So the quietness is carried by the colour itself and no token is
+    // dimmed, and this asserts that stays true.
+    const dimmed = [...CODE_BLOCK_CSS.matchAll(/^\.code \.[a-z]+ \{[^}]*opacity:/gm)];
+    expect(
+      dimmed.map((m) => m[0].split("{")[0]!.trim()),
+      "syntax tokens must be dimmed by colour, not by opacity",
+    ).toEqual([]);
   });
 });
 
