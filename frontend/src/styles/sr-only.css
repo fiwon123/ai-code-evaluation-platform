@@ -1,0 +1,31 @@
+/*
+ * Text that is in the accessibility tree and out of the layout.
+ *
+ * Promoted out of `ComparisonMark.module.css`, which carried the only copy, for
+ * the challenge filter bar's `<legend>`. It is duplicated deliberately no more:
+ * an accessibility primitive with two hand-maintained copies is a primitive that
+ * will eventually be fixed in one of them only, and the failure is silent —
+ * either the text vanishes from the a11y tree, or it stays in the layout and
+ * breaks the box it was supposed to leave.
+ *
+ * `clip` rather than a `<`-style `clip-path`, and `overflow: hidden`, because the
+ * clipping audit in the visual sweep treats a box that is *small* differently from
+ * one that is *clipped*, and a clipped box is the honest claim: the text really
+ * is being hidden, not merely squashed (issue #335).
+ *
+ * Requires a positioned ancestor to be safe: `position: absolute` escapes to the
+ * viewport when the containing block is `static`, which is how the copy in
+ * `ComparisonMark` once put hidden text 481px to the right of a 360px screen and
+ * gave the whole page a horizontal scrollbar.
+ */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

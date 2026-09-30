@@ -71,6 +71,76 @@
   min-width: 140px;
 }
 
+/* `BadgeSelect`'s own `.group` already resets the `<fieldset>`'s UA margin,
+   padding and border, and sets `min-width: 0`. Repeating that here would be
+   three declarations that cannot change anything, so this only states what is
+   actually different: the group's axis.
+
+   That axis is the whole point and it is not optional. `.group` is
+   `flex-direction: column`, which is right for a form's grid of options and
+   wrong here — the pills would stack into three rows, which is the vertical
+   bulk this bar exists to remove. Both classes land on the same `<fieldset>` at
+   the same specificity, so the page's rule wins on source order for the
+   properties it declares; `flex-direction` is declared only in `.group`, and
+   silently inherited as `column` until this said otherwise. */
+.difficultyFilter {
+  flex-direction: row;
+  align-items: center;
+  /* The sr-only legend below is `position: absolute`, and an absolutely
+     positioned box with a `static` containing block resolves against the
+     viewport — which put hidden text 481px to the right of a 360px screen and
+     gave the page a horizontal scrollbar the last time this primitive was used
+     in a component that forgot this. */
+  position: relative;
+}
+
+/* The legend is the radio group's accessible name, so it cannot be
+   `display: none` — that would take the name with it and leave the group
+   announcing as nothing.
+
+   It is not laid out either. A `<legend>` is `display: block` by default, which
+   inside this flex row wrapped the whole bar onto a second line: measured at
+   108px tall against 44px for the controls beside it. The pills already read as
+   "All / Easy / Medium / Hard", so a visible caption is not what identifies the
+   group to anyone looking at it.
+
+   A class rather than a `.difficultyFilter > legend` rule, because `composes` is
+   only valid on a single local class name and a compound selector is a hard
+   build error. Applied via `BadgeSelect`'s `legendClassName`. */
+.difficultyLegend {
+  composes: srOnly from "../styles/sr-only.css";
+}
+
+/* The selected language's colour, on the control that carries it.
+ *
+ * A `<select>` will not colour its own options — measured, not assumed: the
+ * option's computed `color` is ignored by the closed control, and the popup is
+   rendered by the OS — so the identity cue the issue asks for has to live here.
+ * An inline-start stripe rather than a border tint: a tinted border would look
+   like an error state, and this control is never invalid. */
+.languageFilter {
+  position: relative;
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+}
+
+/* With no language chosen there is no colour, and the page sets `--lang-accent`
+   to `transparent`, which this reads. The stripe is still absolutely positioned
+   over the control's left padding, where a transparent 3px strip is invisible —
+   which is why that is not a `:not([style])` rule keyed on React omitting the
+   attribute. Guessing from an absent attribute would make the accent depend on
+   the renderer's attribute handling as well as on the stylesheet, so the value
+   is always set and the visibility decision stays here. */
+.languageFilter::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--space-1);
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: var(--radius-full);
+  background: var(--lang-accent, transparent);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
