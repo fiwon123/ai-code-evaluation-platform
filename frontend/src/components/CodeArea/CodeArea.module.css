@@ -1,0 +1,163 @@
+/*
+ * CodeArea — an editable code surface: a real `<textarea>` with syntax
+ * highlighting painted behind it.
+ *
+ * The technique is an overlay. A `<textarea>` cannot contain markup, so the
+ * highlighted source lives in a `<pre>` positioned behind the control, and the
+ * textarea itself is drawn with `color: transparent` and a visible caret. The
+ * two layers must therefore agree on *every* metric that affects where a glyph
+ * lands, or the painted text drifts away from the character the user is editing.
+ * Those shared metrics are collected in the `.layer` rule below and both layers
+ * `composes` it, because a value copied into two rules is a value that will
+ * eventually be corrected in only one of them:
+ *
+ *   - font family, size, weight and line-height
+ *   - padding, so the first line starts at the same x/y
+ *   - `white-space: pre-wrap` + `overflow-wrap`, so the *wrapping points* match.
+ *     This is the one that actually breaks it: with `pre` in one layer and
+ *     `pre-wrap` in the other, a long line wraps in the paint and not in the
+ *     control, and every line below the wrap is offset by the difference.
+ *   - `tab-size`, so a literal tab does not advance by different amounts.
+ *
+ * Height is deliberately not shared. The textarea owns the height (it is the
+ * control, and `rows` is what the user resizes with `resize: vertical`), and the
+ * `<pre>` is pinned to it with `inset: 0` + `height: 100%`. Giving each layer
+ * its own `rows`-derived height would be a second source of truth to keep in
+ * step with the first.
+ */
+
+.layer {
+  margin: 0;
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  tab-size: 2;
+  border: 0;
+}
+
+.wrapper {
+  position: relative;
+  border-radius: var(--radius-md);
+  /* A focus ring on the *control* is the accessible one (see BadgeSelect's
+     note on why the ring does not depend on `:has()`), so the wrapper only
+     supplies the dark code surface and clips the corners. */
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-code-border);
+  overflow: hidden;
+}
+
+/*
+ * `composes: layer` is the *local* form — no `from`. It is deliberate, and the
+ * distinction is load-bearing rather than stylistic:
+ *
+ *   - Cross-file composition, as `styles/focus.css` documents it, is
+ *     `composes: focusRing from "../styles/focus.css"`. Naming a `from` that
+ *     points at **the same file** makes the class depend on itself, and Vite 8's
+ *     CSS-modules pipeline resolves that self-reference without terminating: it
+ *     recurses until the heap is exhausted. It does not throw, does not warn,
+ *     and does not produce a usable class — the whole stylesheet fails to
+ *     transform, so the OOM surfaces as a dead Vite *test run* (every assertion
+ *     in every file in the batch), which is about as far from "one class in one
+ *     stylesheet" as a diagnosis gets.
+ *   - The local form is what the repo already does for exactly this shape:
+ *     `Input.module.css` has `.select` and `.textarea` both `composes: input`.
+ *
+ * `locked by CodeArea.test.tsx` — it asserts no module in `src/` composes from
+ * itself, so this cannot be reintroduced as a "cleanup".
+ */
+.paint {
+  composes: layer;
+
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  overflow: hidden;
+  color: var(--color-code-text);
+  pointer-events: none;
+  /* The user selects through the transparent textarea, never this layer, so the
+     paint must not intercept the click. It also must not be selectable, or
+     dragging across the field would highlight code the textarea does not own
+     and the browser's own selection would vanish. */
+  user-select: none;
+}
+
+.control {
+  composes: layer;
+
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: var(--control-height);
+  background: transparent;
+  color: transparent;
+  caret-color: var(--color-code-text);
+  resize: vertical;
+  /* Selection has to be repainted by hand, because `color: transparent` means
+     the browser's default selected text would be transparent-on-highlight and
+     the selected code would appear to vanish. Painting the paint-layer's own
+     text colour over the highlight keeps the selected glyphs readable. */
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.control::placeholder {
+  /* Placeholders are prose, not code, and must not be transparent — an
+     invisible placeholder reads as an empty field with no guidance. */
+  color: var(--color-code-muted);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.control::selection {
+  background: var(--color-code-header);
+  color: var(--color-code-text);
+}
+
+/* The painted source. Token classes are the same vocabulary `CodeBlock` uses,
+   so a line looks identical whether it is being read or being written. */
+.comment {
+  color: var(--color-code-comment);
+}
+
+.string {
+  color: var(--color-code-string);
+}
+
+.number {
+  color: var(--color-code-number);
+}
+
+.keyword {
+  color: var(--color-code-keyword);
+  font-weight: 600;
+}
+
+.type {
+  color: var(--color-code-type);
+}
+
+.function {
+  color: var(--color-code-fn);
+}
+
+/*
+ * No value, no paint. An empty field shows only the caret and the placeholder,
+ * so the highlight layer is not merely redundant — a trailing newline in it
+ * would be the only thing setting the box's minimum height. It is also the
+ * state the "copy the field" tests assert on, and an empty `<pre>` rendering
+ * nothing is what keeps a cleared field genuinely empty. */
+.empty {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control {
+    transition: none;
+  }
+}

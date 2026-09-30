@@ -30,6 +30,20 @@ interface BadgeSelectProps<T extends string> {
   onChange: (next: T) => void;
   /** Extra class on the `<fieldset>`, for page-level layout. */
   className?: string;
+  /**
+   * `card` (default) draws each option as a bordered card with a visible
+   * radio — the right weight for a 20-item language grid where each option is
+   * big enough to be a target. `plain` drops the card, the raised surface and
+   * the radio's own glyph, leaving the option's `children` as a bare tag
+   * (issue #346: "difficulty tags only").
+   *
+   * `plain` is presentation only. The radios stay in the DOM and stay
+   * focusable, because they are what gives the group its `name`/`value`,
+   * arrow-key selection and "selected" announcement. Hiding the radio is the
+   * only difference, and the group falls back to the same focus ring it uses in
+   * `card` mode.
+   */
+  appearance?: "card" | "plain";
   /** Error text, announced against the group via `aria-describedby`. */
   error?: string;
   /** Id for the error node. Generated when omitted. */
@@ -71,10 +85,18 @@ export default function BadgeSelect<T extends string>({
   options,
   onChange,
   className = "",
+  appearance = "card",
   error,
   errorId,
 }: BadgeSelectProps<T>) {
   const groups = [styles.group, className].filter(Boolean).join(" ");
+  const plain = appearance === "plain";
+  // In `plain` mode the options are tags, not cards, so a fixed 11rem track
+  // would space three short words across half the form. The row is content-
+  // sized and wraps instead.
+  const optionClasses = plain
+    ? `${styles.option} ${styles.optionPlain}`
+    : styles.option;
 
   return (
     <fieldset
@@ -82,13 +104,13 @@ export default function BadgeSelect<T extends string>({
       aria-describedby={error && errorId ? errorId : undefined}
     >
       <legend className={styles.legend}>{legend}</legend>
-      <div className={styles.options}>
+      <div className={`${styles.options} ${plain ? styles.optionsPlain : ""}`}>
         {options.map((option) => {
           const selected = option.value === value;
           return (
             <label
               key={option.value}
-              className={`${styles.option} ${selected ? styles.optionSelected : ""}`}
+              className={`${optionClasses} ${selected ? styles.optionSelected : ""}`}
               style={
                 option.accent
                   ? ({ "--option-accent": option.accent } as React.CSSProperties)
@@ -102,7 +124,7 @@ export default function BadgeSelect<T extends string>({
                 value={option.value}
                 checked={selected}
                 onChange={() => onChange(option.value)}
-                className={styles.radio}
+                className={plain ? styles.radioHidden : styles.radio}
                 aria-label={option.srLabel}
               />
               <span className={styles.body}>{option.children}</span>

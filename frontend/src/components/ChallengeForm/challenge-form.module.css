@@ -76,25 +76,68 @@
   font-variant-numeric: tabular-nums;
 }
 
-.editor {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  line-height: 1.5;
-}
-
 .examples {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-/* Difficulty: a segmented control over a native radio group.
+/* An example entry (issue #346).
  *
- * The radios stay visible rather than being hidden behind the chip. That is
- * the pattern `ChallengeDetail` already uses for provider selection, and it
- * means focus lands on a real control and the shared `:focus-visible` ring
- * applies unchanged — no `:has()` selector and no second copy of the ring
- * geometry to keep in step with `styles/focus.css`. */
+ * These were `variant="ghost"` buttons, which rendered as unremarkable grey
+ * text in a row — the section said "Start from an example" and offered three
+ * anonymous items, so the affordance competed with the two headings around it
+ * instead of inviting a click. The language's brand colour is what makes them
+ * read as a set of starting points, so it appears twice: as the symbol chip,
+ * and as the left edge of the button.
+ *
+ * The brand colours in `utils/language.ts` are deliberately darkened for light
+ * surfaces, so on a light card they are text-safe; on the *dark* code-header
+ * colour they are not, which is the same problem `CodeBlock`'s header badge
+ * already solves by dropping the tint (issue #356). Rather than repeat that
+ * override, the chip keeps the brand colour and the button's text stays
+ * `--color-text`, so the tint is decoration on a light card and never carries
+ * text. */
+.example {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-input-border);
+  border-left: 3px solid var(--example-accent);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.example:hover {
+  background: var(--color-surface-hover);
+}
+
+.example:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.exampleTag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 2px var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-surface);
+  background: var(--example-accent);
+  border-radius: var(--radius-sm);
+}
+
 .guide {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -137,19 +180,17 @@
   margin: 0;
 }
 
-.guidePre {
-  margin: 0;
-  padding: var(--space-3);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  line-height: 1.5;
-  overflow-x: auto;
-  color: var(--color-text);
-}
+/* The guide's code samples used to be plain `.guidePre` blocks — light surface,
+   `--color-text`, no highlighting, so the one place the form shows you *what
+   good looks like* was the least convincing code on the page (issue #346). They
+   are `CodeBlock`s now, which brings the dark code surface, real token colours
+   and a copy button, and the read-only/sample/existing-code distinction the
+   rest of the app already draws. Nothing is left to style here. */
 
+/* The form's error banner. Uses the `-strong` danger step for its text (issue
+ * #346): `--color-danger` on `--color-danger-light` is 3.95:1, and a banner is
+ * exactly the place a failing message must be readable rather than merely
+ * present. The border keeps the base token, which is fine for a 1px edge. */
 .errorBanner {
   display: flex;
   align-items: center;
@@ -157,7 +198,7 @@
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-danger-light);
   background: var(--color-danger-light);
-  color: var(--color-danger);
+  color: var(--color-danger-strong);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
 }

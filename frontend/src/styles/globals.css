@@ -10,10 +10,36 @@
   --color-secondary: #475569;
   --color-success: #16a34a;
   --color-success-light: #dcfce7;
+  /* Text-on-tint variants (issue #346).
+   *
+   * `--color-success` and `--color-danger` are the *identity* colours: they
+   * work as borders, dots and accents, and as text on a white surface. They
+   * are not text-safe on their own pale tints, which is where the difficulty
+   * pills (and the status pills on Profile / SubmissionDetail) put them:
+   *
+   *     #16a34a on #dcfce7  3.00:1   ** fails AA
+   *     #dc2626 on #fee2e2  3.95:1   ** fails AA
+   *     #b45309 on #fef3c7  4.51:1   passes, but only just
+   *
+   * So the three gain a `-strong` step, exactly as `--color-warning-strong`
+   * already had one, holding the hue and dropping the lightness until the pair
+   * clears 4.5:1 on the tint it is meant to sit on:
+   *
+   *     #15803d on #dcfce7  4.57:1   and 5.02:1 on --color-surface
+   *     #b91c1c on #fee2e2  5.30:1   and 6.47:1 on --color-surface
+   *     #92400e on #fef3c7  6.37:1   and 7.09:1 on --color-surface
+   *
+   * The base tokens are deliberately left alone. They are still the right
+   * value everywhere else they are used, and retuning them would recolour
+   * buttons, timeline marks and pass/fail accents as a side effect of fixing a
+   * pill. `theme-contrast.test.ts` holds the pill pairs to these numbers, so a
+   * future retune of either step cannot quietly reintroduce the failure. */
+  --color-success-strong: #15803d;
   --color-warning: #f59e0b;
-  --color-warning-strong: #b45309;
+  --color-warning-strong: #92400e;
   --color-warning-light: #fef3c7;
   --color-danger: #dc2626;
+  --color-danger-strong: #b91c1c;
   --color-danger-hover: #b91c1c;
   --color-danger-light: #fee2e2;
 
@@ -123,10 +149,25 @@
   --color-secondary: #94a3b8;
   --color-success: #22c55e;
   --color-success-light: #14532d;
+  /* The dark half of the #346 pill tokens. Here the tint is the dark one, so
+     "strong" moves *up* the ramp instead of down — the text has to get lighter
+     to clear the tint, not darker. Measured against each token's own tint:
+   *     #4ade80 on #14532d  5.23:1   (base #22c55e is 4.00:1 — fails AA)
+   *     #fca5a5 on #7f1d1d  5.28:1   (base #f87171 is 3.62:1 — fails AA)
+   *     #fbbf24 on #78350f  5.43:1   unchanged, and deliberately so: the
+   *                                   warning pill already pointed at the strong
+   *                                   step, so it already cleared AA. It is
+   *                                 listed for symmetry — all three pills are now
+   *                                 one set. (Its *base*, #f59e0b, is 4.22:1 and
+   *                                 does fail; nothing renders it as text on the
+   *                                 tint, which is the same base/strong split
+   *                                 the other two now have.) */
+  --color-success-strong: #4ade80;
   --color-warning: #f59e0b;
   --color-warning-strong: #fbbf24;
   --color-warning-light: #78350f;
   --color-danger: #f87171;
+  --color-danger-strong: #fca5a5;
   --color-danger-hover: #fca5a5;
   --color-danger-light: #7f1d1d;
 
