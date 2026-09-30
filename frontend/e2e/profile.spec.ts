@@ -174,6 +174,25 @@ test.describe("Profile evaluation cards", () => {
     await first.hover();
     await expect(bubble).toBeVisible();
 
+    // And the bubble is actually placed below its trigger, not stacked on it.
+    // jsdom does no layout, so `position: relative` on the Tooltip's wrapper is
+    // invisible to the unit tests; only a rendered box can tell.
+    const geometry = await first.evaluate((el) => {
+      const trigger = el.querySelector<HTMLElement>('[class*="statsDescription"]')!;
+      const tip = el.querySelector<HTMLElement>('[role="tooltip"]')!;
+      const t = trigger.getBoundingClientRect();
+      const b = tip.getBoundingClientRect();
+      return { gap: b.top - t.bottom, overlap: b.top < t.bottom && b.bottom > t.top };
+    });
+    expect(geometry.overlap).toBe(false);
+    // The gap is the point, not just "below": it proves the bubble anchors to
+    // its *trigger*. Drop `position: relative` from the Tooltip's wrapper and the
+    // bubble still lands below the trigger — 102px lower, measured against the
+    // card instead, overlapping the stats it was meant to sit under. jsdom does
+    // no layout, so only a rendered box catches that.
+    expect(geometry.gap).toBeGreaterThanOrEqual(0);
+    expect(geometry.gap).toBeLessThan(16);
+
     await page.keyboard.press("Escape");
     await expect(bubble).toBeHidden();
   });
