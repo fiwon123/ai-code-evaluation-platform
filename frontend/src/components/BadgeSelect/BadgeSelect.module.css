@@ -113,6 +113,22 @@
  * keyboard user with no visible focus in a browser without `:has()` support.
  */
 .optionPlain {
+  /* The containing block for `.radioHidden`'s overlay, and load-bearing: an
+   * absolutely positioned element with `inset: 0` resolves against its nearest
+   * *positioned* ancestor, and this label was not one. With nothing positioned
+   * above it, all three radios resolved against the initial containing block —
+   * measured in Chromium at 1280×720 each, i.e. the entire viewport — and stacked
+   * on top of each other with the last one (`hard`) on top. Clicking the "Easy"
+   * tag therefore checked "Hard", and Playwright reported it as
+   * `…<input value="hard">… intercepts pointer events`: every click anywhere on
+   * the page landed on the same radio.
+   *
+   * jsdom cannot see this — there is no layout, so no overlap and no hit testing,
+   * and the unit tests that click a tag pass happily. The browser is the arbiter:
+   * locked in `challenge-create.spec.ts`, which measures each radio's box against
+   * its own tag rather than the viewport. */
+  position: relative;
+
   min-height: auto;
   padding: 0;
   border: 1px solid transparent;
