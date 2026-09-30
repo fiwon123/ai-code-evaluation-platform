@@ -175,6 +175,9 @@ export function ChallengeFormFields({
 
   const runner = runnerForLanguage(value.language);
   const promptSize = countText(value.prompt);
+  // Read once rather than per example: the tag's accent and its symbol are the
+  // same two lookups, and every example in the row is for the selected language.
+  const language = languageMeta(value.language);
 
   return (
     <div className={styles.form}>
@@ -279,13 +282,11 @@ export function ChallengeFormFields({
                   key={example.title}
                   type="button"
                   className={styles.example}
-                  style={
-                    { "--example-accent": languageMeta(value.language).color } as CSSProperties
-                  }
+                  style={{ "--example-accent": language.color } as CSSProperties}
                   onClick={() => onApplyExample(index)}
                 >
                   <span className={styles.exampleTag} aria-hidden="true">
-                    {languageMeta(value.language).symbol}
+                    {language.symbol}
                   </span>
                   <span>{example.title}</span>
                 </button>
