@@ -23,13 +23,24 @@
   font-family: var(--font-sans);
   color: var(--color-text);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  /* The one place a control's boundary is drawn, so it is the one place that
+     takes the control token. --color-border is a *container* edge and clears
+     only 1.50:1 on this background, which for an input means the only thing
+     marking it as a box is nearly invisible (#345). */
+  border: 1px solid var(--color-input-border);
   border-radius: var(--radius-md);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   width: 100%;
 }
 
 .input::placeholder {
+  /* 7.58:1 in light, 4.92:1 in dark — no token of its own, deliberately. It is
+     already the right value, and minting `--color-input-placeholder` would
+     either duplicate `--color-text-muted` verbatim or quietly lighten a
+     placeholder nobody complained about. The requirement is that a *retune* of
+     `--color-text-muted` cannot make placeholders unreadable, and that is held
+     against this declaration directly by `input-contrast.test.ts` — a stronger
+     place than a token, because it follows the value wherever it comes from. */
   color: var(--color-text-muted);
 }
 

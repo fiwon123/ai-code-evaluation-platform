@@ -136,3 +136,78 @@ export async function expectReadable(
   ).toBeGreaterThanOrEqual(aaThreshold(measured));
   return measured;
 }
+
+/** WCAG 1.4.11 — the boundary of an interactive control, against what is behind it. */
+export const MIN_CONTROL_BOUNDARY = 3;
+
+export interface Boundary {
+  /** The control's own border colour, as rendered. */
+  border: string;
+  /** The nearest painted surface *behind* the control. */
+  background: string;
+}
+
+/**
+ * Measure a form control's boundary (issue #345).
+ *
+ * The one thing that makes this different from `paint`: the walk starts at
+ * `el.parentElement`, not at the element. 1.4.11 asks for contrast between a
+ * control's boundary and the *adjacent* colour — the surface it sits on — so
+ * measuring against the control's own fill would compare a border to the
+ * inside of the box it outlines and invent a ratio that is not on screen.
+ *
+ * Only `borderTopColor` is read: all four sides come from the same shorthand
+ * (`border: 1px solid <token>` in `Input.module.css`), so a control that mixed
+ * them would be a different defect, caught in review rather than here.
+ */
+export async function controlBoundary(
+  page: Page,
+  target: Locator,
+): Promise<Boundary> {
+  const handle = await target.elementHandle();
+  if (!handle) throw new Error("element not found");
+  return page.evaluate((el) => {
+    let node: Element | null = el.parentElement;
+    while (node) {
+      const style = getComputedStyle(node);
+      if (style.backgroundImage && style.backgroundImage !== "none") {
+        throw new Error(
+          `refusing to guess a gradient background behind <${el.tagName.toLowerCase()}>`,
+        );
+      }
+      if (
+        style.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+        style.backgroundColor !== "transparent"
+      ) {
+        return {
+          border: getComputedStyle(el).borderTopColor,
+          background: style.backgroundColor,
+        };
+      }
+      node = node.parentElement;
+    }
+    throw new Error("no opaque background behind the control");
+  }, handle);
+}
+
+/**
+ * Assert a control's boundary is visible, naming both colours, the ratio and
+ * the threshold — the same failure-message discipline as `describeRatio`, since
+ * a boundary failure is otherwise a bare number with nothing to attach to.
+ */
+export async function expectControlBoundary(
+  page: Page,
+  target: Locator,
+  label: string,
+  min: number = MIN_CONTROL_BOUNDARY,
+): Promise<Boundary> {
+  const measured = await controlBoundary(page, target);
+  const ratio = contrastRatio(measured.border, measured.background);
+  expect(
+    ratio,
+    `${label} boundary is ${ratio.toFixed(2)}:1 and needs ${min}:1 — border ` +
+      `${measured.border} on ${measured.background}. A field there is the same ` +
+      "colour as the surface it sits on, so nothing marks it as a box.",
+  ).toBeGreaterThanOrEqual(min);
+  return measured;
+}

@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectReadable } from "./helpers/color";
+import {
+  controlBoundary,
+  expectControlBoundary,
+  expectReadable,
+} from "./helpers/color";
 
 /**
  * Text-contrast guard (WCAG 2.1 SC 1.4.3).
@@ -43,6 +47,80 @@ async function openThemed(
   // measure the light theme and pass — a guard that cannot fail is decoration.
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
 }
+
+/**
+ * Form-control boundaries (WCAG 2.1 SC 1.4.11) — issue #345.
+ *
+ * The suite above guards text (1.4.3). A form control's *boundary* is a
+ * different requirement, and it was the actual defect in #345: the container
+ * border token cleared 1.50:1 against the card a field sits on, so the only
+ * thing marking an input as a box was nearly invisible. The text was never the
+ * problem — value text measured 17.85:1.
+ *
+ * These are here because `src/styles/input-contrast.test.ts` asserts the same
+ * contract by *reading the stylesheet*. That catches a bad token value, but it
+ * cannot see a cascade or CSS-modules problem that stops the declaration
+ * reaching the element at all. This measures what the engine painted.
+ */
+test.describe("Control boundaries", () => {
+  test("light-mode input and textarea are visibly bounded", async ({ page }) => {
+    await openThemed(page, "light", "/contact");
+    // Two components rather than two assertions on one: the input and the
+    // textarea both resolve the same `.input` border, so this is really a check
+    // that both *use* it. `<select>` is not probed because every page carrying
+    // one is auth-gated, and `.select` composes the same `.input` rule.
+    await expectControlBoundary(
+      page,
+      page.getByLabel("Name"),
+      "contact name input",
+    );
+    await expectControlBoundary(
+      page,
+      page.getByLabel("Message"),
+      "contact message textarea",
+    );
+  });
+
+  test("light-mode field on the login form is visibly bounded", async ({ page }) => {
+    // A different page and a different form, so the token is proven to be
+    // shared rather than to have been fixed on one stylesheet.
+    await openThemed(page, "light", "/login");
+    await expectControlBoundary(
+      page,
+      page.getByLabel(/password/i),
+      "login password input",
+    );
+  });
+
+  test("dark fields keep the boundary they had before #345", async ({ page }) => {
+    await openThemed(page, "dark", "/contact");
+    const measured = await controlBoundary(page, page.getByLabel("Name"));
+
+    // Resolved through the engine so this compares rgb to rgb, rather than
+    // parsing a hex token and reimplementing colour maths in the test.
+    const containerBorder = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.style.borderColor = "var(--color-border)";
+      document.body.appendChild(probe);
+      const value = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return value;
+    });
+
+    // Not a 3:1 assertion. #345 was explicitly scoped to light mode, and the
+    // dark boundary is 1.54:1 — a known, recorded gap rather than a passing
+    // one. What is asserted here is that a light-mode fix did not quietly
+    // change the dark palette, which is the thing a future retune is most
+    // likely to do by accident.
+    expect(
+      measured.border,
+      `the dark field boundary renders as ${measured.border}, but the dark ` +
+        `container border renders as ${containerBorder}. #345 was scoped to ` +
+        "light mode; if the dark palette was meant to change, do it " +
+        "deliberately and update the note in globals.css with it.",
+    ).toBe(containerBorder);
+  });
+});
 
 test.describe("Text contrast", () => {
   for (const theme of THEMES) {

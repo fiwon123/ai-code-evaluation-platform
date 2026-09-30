@@ -33,6 +33,34 @@
   --color-divider: #d8e1ec;
   --color-border: #c9d4e0;
   --color-border-hover: #94a3b8;
+  /* Form-control boundary (issue #345). Deliberately NOT --color-border.
+   *
+   * --color-border is a *container* edge — a card on a card, a divider, a
+   * table rule — and 1.50:1 against #ffffff is the right weight for that,
+   * because a container is defined by the surface it sits on rather than by
+   * its own outline. A form control has no such cue: an input on a white card
+   * is white on white, so its border is the only thing that says "this is a
+   * box you can type into". At 1.50:1 that edge is close to invisible, which
+   * is the readability problem this token fixes — WCAG 1.4.11 asks 3:1 for a
+   * control boundary and #c9d4e0 was not close.
+   *
+   * Chosen to clear 3:1 against *every* surface a field can land on, not just
+   * the white card, because a token that only passes where it was measured is
+   * a token one layout change away from failing:
+   *     #ffffff  3.56:1   (--color-surface: card, panel, dialog)
+   *     #eef2f7  3.16:1   (--color-bg: a field on the page itself)
+   *     #f4f7fb  3.31:1   (--color-surface-secondary: nested surfaces)
+   * The lightest of those binds, so #ffffff is the number to quote; the other
+   * two are listed because they are the ones that regress silently. A
+   * near-miss worth recording: #7d90a6 measures 3.28:1 on white and looks
+   * better, but falls to 2.91:1 on --color-bg and would fail there.
+   *
+   * Two steps down the existing slate ramp, so it stays in the palette's
+   * family. It is darker than --color-border-hover (#94a3b8), which is the
+   * correct order: a control you are meant to interact with reads stronger
+   * than a panel that is merely hoverable. `input-contrast.test.ts` holds all
+   * three numbers, and holds the modules to actually using the token. */
+  --color-input-border: #768a9f;
   --color-text: #0f172a;
   --color-text-secondary: #3b4a5f;
   --color-text-muted: #475569;
@@ -123,6 +151,28 @@
   --color-divider: #24334f;
   --color-border: #2c3d5c;
   --color-border-hover: #46618c;
+  /* Form-control boundary — dark (issue #345).
+   *
+   * Set to the current --color-border, so the dark palette renders EXACTLY as
+   * it did before #345. That is a deliberate scope decision, not an oversight,
+   * and it is recorded here so the next reader does not "fix" it by accident:
+   * #345 scoped the work to light mode ("dark mode remains unchanged") and the
+   * dark value is the one part of that change with a real number attached.
+   *
+   * The number: this border is 1.54:1 against --color-surface (#131d33) and
+   * 1.74:1 against --color-bg, so it does not meet the same WCAG 1.4.11 3:1
+   * that the light token now clears. The dark field is still legible — value
+   * text is 14.02:1 and the placeholder 4.92:1 — and a 1px edge on a dark
+   * surface is a long-established convention, but it is below the bar the light
+   * palette now meets, and that asymmetry is a real open question rather than a
+   * settled one. Lifting it is a one-line change here plus a visual pass over
+   * every form in both themes; it was left out only because #345 asked for it.
+   *
+   * `input-contrast.test.ts` pins this equality deliberately, so the dark
+   * palette cannot drift away from --color-border unnoticed. If the dark border
+   * is ever retuned, that assertion is the thing to update — and the comment
+   * above with it. */
+  --color-input-border: #2c3d5c;
   --color-text: #e6ebf3;
   --color-text-secondary: #a9b8cf;
   --color-text-muted: #7c8ca6;

@@ -161,12 +161,38 @@ below.
 | `--color-divider` | Dividers and separators |
 | `--color-border` | Borders |
 | `--color-border-hover` | Border hover states |
+| `--color-input-border` | Form-control boundary — inputs, selects, textareas, radio option boxes |
 | `--color-text` | Body text, headings |
 | `--color-text-secondary` | Secondary text, labels |
 | `--color-text-muted` | Placeholders, meta text |
 | `--color-focus-ring` | Focus ring color |
 | `--color-on-accent` | Text on colored surfaces (button labels, active pagination, badges) |
 | `--color-on-solid` | Text on solid brand surfaces (primary/danger buttons, active pagination, avatars, primary gradients) |
+
+**`--color-border` is a container edge; `--color-input-border` is a control
+edge.** They are not two weights of the same thing, which is why they are
+separate tokens rather than a mistake to be tidied away. A container (a card on
+a card, a divider, a table rule) is defined by the surface it sits on, so a
+pale border is correct and `--color-border` clears 1.50:1 on white on purpose.
+A form control has no such cue: an input on a white card is white on white, so
+its border is the *only* thing that says "this is a box you can type into", and
+WCAG 1.4.11 asks 3:1 for that boundary. Reusing the container border left every
+field in the app at 1.50:1.
+
+The light value clears 3:1 against **every** surface a field can be placed on —
+`--color-surface` 3.56:1, `--color-bg` 3.16:1, `--color-surface-secondary`
+3.31:1 — because `.input` is reused on every form and no component knows which
+surface it ended up on. `--color-bg` is the one that fails first, and it fails
+invisibly: `#7d90a6` looks like the better pick next to white (3.28:1) and drops
+to 2.91:1 there. `input-contrast.test.ts` holds all three numbers, and holds the
+modules to actually painting with the token — a compliant token that
+`Input.module.css` does not reference would pass a token-level check while the
+field stayed unreadable.
+
+The dark value is deliberately equal to the dark `--color-border`, so dark mode
+renders exactly as it did before #345. That leaves it at 1.54:1 — below the bar
+the light palette now meets, and an open question rather than a settled one. The
+measurement and the reasoning are recorded beside the token in `globals.css`.
 
 ### Code surfaces
 
