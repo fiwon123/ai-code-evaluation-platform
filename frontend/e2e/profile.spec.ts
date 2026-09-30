@@ -303,15 +303,15 @@ test.describe("Profile evaluation cards", () => {
  * Three defects were found here that no unit test could see, each of which
  * asserted the card was aligned while it was not:
  *
- *  1. Each column sized itself to its own tallest card (224px against 233px), so
+ *  1. Each column sized itself to its own tallest card — 224px against 233px — so
  *     *every* row sat 9px off, not merely the last.
- *  2. The share controls overhung the card's own box by 9px at 412px wide —
- *     `Shared`, `Copy link` and `Revoke` beside a date in a non-wrapping flex row
- *     inside a card narrower than their combined width.
- *  3. The "My challenges" column header was 44px and the other 24px, because one
+ *  2. The "My challenges" column header was 44px and the other 24px, because one
  *     holds a `New` button and the other only a heading. That alone pushed the
  *     right column's first card 20px above the left one's, with the cards
  *     themselves irrelevant to it.
+ *
+ * The first was invisible to the unit tests and the second to every test but this
+ * one, which is the argument for measuring rather than asserting on the DOM.
  */
 async function openLists(page: Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -398,10 +398,13 @@ test.describe("Profile list alignment", () => {
   });
 
   test("no card's controls overhang its own box", async ({ page }) => {
-    // Found here at 9px on a Pixel 7 and invisible everywhere else: the share
-    // controls sat in a non-wrapping flex row beside a date, and the card is
-    // narrower than their combined width. A card whose contents extend past its
-    // bottom is not aligned with anything, however uniform its neighbours are.
+    // A standing invariant rather than a caught bug: a card whose contents extend
+    // past its bottom is not aligned with anything, however uniform its
+    // neighbours are. This was checked against the pre-fix layout too and passed
+    // there as well — an earlier draft of this file credited it with catching a
+    // 9px overhang that measurement showed never happened, so the claim was
+    // withdrawn along with the CSS change made to address it. Kept because a
+    // future layout change could reintroduce it.
     await openLists(page);
     const overhang = await page.locator('[class*="listCard"]').evaluateAll((els) =>
       els.flatMap((el) => {

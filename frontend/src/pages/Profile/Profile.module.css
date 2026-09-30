@@ -300,22 +300,15 @@
   cursor: help;
 }
 
-/* The meta line — "Last evaluated 2d ago", or the live "waiting" count — and the
-   share controls share this row. They are in the same flex row with `gap` and no
-   wrapping, so at a narrow viewport the buttons used to overflow the card's box
-   entirely: `Shared`, `Copy link` and `Revoke` are ~200px of controls next to a
-   date, and the card is narrower than that. Measured at 9px of overhang on a
-   Pixel 7 before this moved.
-
-   So the controls wrap to their own line instead, and the meta line keeps its own
-   row with the height that row needs. `margin-top: auto` parks whichever row is
-   last at the bottom of the card, which is what lines the columns up. */
+/* The meta line — "Last evaluated 2d ago" or the live "waiting" count — and the
+   share controls, pushed to opposite ends of the card. `margin-top: auto` parks
+   this row at the bottom of whatever height the grid row gave the card, which is
+   what lines the columns up. */
 .listFoot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  flex-wrap: wrap;
   margin-top: auto;
 }
 
@@ -323,7 +316,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  flex-wrap: wrap;
 }
 
 /* "Not evaluated yet" — the honest answer for a challenge with no runs. The
