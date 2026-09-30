@@ -25,6 +25,28 @@
   margin-left: auto;
 }
 
+/* The shared `LanguageBadge` tints itself with the language's brand colour, and
+   those values in `utils/language.ts` are deliberately *darkened* because they
+   are painted on light cards. On the dark code header that reads too dim to
+   pass AA: Python's #3776AB measures 4.33:1 against --color-code-header in
+   light mode, and the mid-palette languages (PHP, Perl, Lua, C#) are worse.
+
+   So on a code surface the badge drops the brand tint and uses the code
+   surface's own high-contrast pair instead. The language is still named in
+   full ("Python") immediately beside the symbol, so no information is lost —
+   the colour was decoration, and decoration is what fails contrast. The brand
+   colours keep their existing use on the light surfaces they were tuned for. */
+.headerBadge,
+.headerBadge > [aria-hidden] {
+  background: var(--color-code-border);
+  color: var(--color-code-text);
+  box-shadow: none;
+}
+
+.headerBadge {
+  font-weight: 600;
+}
+
 .copyButton {
   background: transparent;
   border: none;
