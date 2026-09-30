@@ -19,6 +19,12 @@
  *     control, and every line below the wrap is offset by the difference.
  *   - `tab-size`, so a literal tab does not advance by different amounts.
  *
+ * `locked by src/styles/css-modules.test.ts` — it asserts that no module under
+ * `src/` composes from itself. That lock reads stylesheets through
+ * `import.meta.glob(..., { query: "?raw" })` rather than importing them, which
+ * is the whole point: a test that *imported* this stylesheet could not report
+ * the cycle, it would die of it along with every other test in the batch.
+ *
  * Height is deliberately not shared. The textarea owns the height (it is the
  * control, and `rows` is what the user resizes with `resize: vertical`), and the
  * `<pre>` is pinned to it with `inset: 0` + `height: 100%`. Giving each layer
@@ -66,8 +72,12 @@
  *   - The local form is what the repo already does for exactly this shape:
  *     `Input.module.css` has `.select` and `.textarea` both `composes: input`.
  *
- * `locked by CodeArea.test.tsx` — it asserts no module in `src/` composes from
- * itself, so this cannot be reintroduced as a "cleanup".
+ * `locked by src/styles/css-modules.test.ts` — it asserts that no module under
+ * `src/` composes from itself, so this cannot be reintroduced as a "cleanup".
+ * That lock reads stylesheets through `import.meta.glob(..., { query: "?raw" })`
+ * rather than importing them, which is the point: a test that *imported* this
+ * stylesheet could not report the cycle, it would die of it along with every
+ * other test in the batch.
  */
 .paint {
   composes: layer;
