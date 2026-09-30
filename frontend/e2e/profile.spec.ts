@@ -404,6 +404,41 @@ test.describe("Profile list alignment", () => {
     expect(await edges(page, "My challenges")).toEqual(await edges(page, "Recent submissions"));
   });
 
+  test("the fixture's two columns really are different heights", async ({ page }) => {
+    // A guard on the guard. Every alignment assertion above is satisfied by two
+    // columns of *identical* content, so a fixture that accidentally equalised
+    // them would leave the whole file passing while testing nothing. Measured
+    // with the floor lifted: if the unfloored columns are the same height, the
+    // alignment tests have no defect left to find and the fixture needs fixing
+    // rather than the assertions.
+    await openLists(page);
+    const natural = await page.evaluate(() => {
+      document
+        .querySelectorAll<HTMLElement>('[class*="listCard"]')
+        .forEach((card) => {
+          card.style.minHeight = "0";
+        });
+      const tallest = (heading: string) => {
+        const section = Array.from(document.querySelectorAll("section")).find(
+          (s) => s.querySelector("h2")?.textContent === heading,
+        )!;
+        return Math.max(
+          ...Array.from(
+            section.querySelectorAll<HTMLElement>('[class*="listCard"]'),
+          ).map((card) => card.getBoundingClientRect().height),
+        );
+      };
+      return {
+        ch: Math.round(tallest("My challenges")),
+        sub: Math.round(tallest("Recent submissions")),
+      };
+    });
+    expect(
+      Math.abs(natural.ch - natural.sub),
+      `columns are the same height unfloored (${natural.ch}px each) — the alignment assertions are vacuous`,
+    ).toBeGreaterThan(0);
+  });
+
   test("no card's controls overhang its own box", async ({ page }) => {
     // A standing invariant rather than a caught bug: a card whose contents extend
     // past its bottom is not aligned with anything, however uniform its
