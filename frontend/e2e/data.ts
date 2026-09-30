@@ -105,6 +105,66 @@ export const CHALLENGES: Array<{
 ];
 
 /**
+ * Per-challenge stats for the profile card grid (#347).
+ *
+ * Deliberately not uniform. A fixture where every field holds the same value
+ * cannot tell a correct rendering from a hard-coded one. Between them these two
+ * cover: two languages, so the card accent is visibly per-card rather than one
+ * global colour; a `null` average and a `null` duration, so the "not measured"
+ * branch is on screen rather than merely present in the code; a long description,
+ * so the clamp and its tooltip have something real to truncate; and a failed run.
+ */
+export const CHALLENGE_STATS = [
+  {
+    challenge_id: "11111111-1111-4111-8111-111111111111",
+    challenge_title: "Two Sum",
+    description:
+      "Given an array of integers and a target, return the indices of the two numbers that add up to the target. Each input has exactly one solution, and the same element may not be used twice.",
+    language: "python",
+    total_runs: 4,
+    completed_runs: 3,
+    failed_runs: 1,
+    avg_score: 75,
+    best_score: 100,
+    last_run_at: "2026-09-28T14:00:00Z",
+    last_duration_ms: 1200,
+  },
+  {
+    challenge_id: "22222222-2222-4222-8222-222222222222",
+    challenge_title: "Concurrent Web Scraper With Retries",
+    description: "Short one.",
+    language: "go",
+    total_runs: 1,
+    completed_runs: 0,
+    failed_runs: 1,
+    avg_score: null,
+    best_score: null,
+    last_run_at: "2026-09-29T09:00:00Z",
+    // A run that never produced a result has no duration, so the card has to
+    // render something other than a number here.
+    last_duration_ms: null,
+  },
+];
+
+/**
+ * The recent submissions the profile lists alongside the card grid.
+ */
+export const SUBMISSIONS = [
+  {
+    id: "aaaaaaaa-1111-4111-8111-111111111111",
+    challenge_id: "11111111-1111-4111-8111-111111111111",
+    challenge_title: "Two Sum",
+    language: "python",
+    provider: "demo",
+    model: "demo",
+    code: "def two_sum():\n    pass",
+    status: "completed",
+    score: 100,
+    created_at: "2026-09-28T14:00:00Z",
+  },
+];
+
+/**
  * Intercepts every `/api/**` request and fulfills it with canned data.
  *
  * Handles the endpoints the surfaced pages actually call:
@@ -115,6 +175,8 @@ export const CHALLENGES: Array<{
  * - POST /api/challenges   → 201, echoing the submitted body (signed in only)
  * - GET  /api/challenges/:id → the submitted challenge (signed in only)
  * - GET  /api/admin/users  → paginated list (only with `{ admin: true }`)
+ * - GET  /api/submissions  → the profile's recent-submissions list
+ * - GET  /api/submissions/stats → per-challenge aggregates behind the cards
  *
  * `auth` is deliberately separate from `admin`: the challenge forms sit behind
  * `ProtectedRoute`, not `AdminRoute`, so exercising them as a plain signed-in
@@ -252,6 +314,33 @@ export async function mockApi(
         status: 401,
         contentType: "application/json",
         body: JSON.stringify({ detail: "Not authenticated" }),
+      });
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/api/submissions/stats" && signedIn) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: CHALLENGE_STATS }),
+      });
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/api/submissions" && signedIn) {
+      const pageNumber = Number(url.searchParams.get("page") ?? "1");
+      const pageSize = Number(url.searchParams.get("page_size") ?? "10");
+      const start = (pageNumber - 1) * pageSize;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: SUBMISSIONS.slice(start, start + pageSize),
+          total: SUBMISSIONS.length,
+          page: pageNumber,
+          page_size: pageSize,
+          pages: 1,
+        }),
       });
       return;
     }

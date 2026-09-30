@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
@@ -9,12 +15,14 @@ import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import StatCard from "../../components/StatCard/StatCard.tsx";
+import Tooltip from "../../components/Tooltip/Tooltip.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
 import { useShareLink } from "../../hooks/useShareLink.ts";
 import { authApi, challengesApi, submissionsApi } from "../../services/api.ts";
 import { extractError, extractFieldErrors } from "../../utils/errors.ts";
+import { languageMeta } from "../../utils/language.ts";
 import type {
   Challenge,
   ChallengeStatsItem,
@@ -38,6 +46,201 @@ const PAGE_SIZE = 10;
 // an abandoned pending row) without a manual page reload.
 const SUBMISSIONS_POLL_INTERVAL_MS = 5_000;
 
+
+/**
+ * One "evaluations by challenge" card (issue #347).
+ *
+ * The old card was a title, a language badge, an average chip, a run line and a
+ * date, all in default styling, and only the title was clickable. The redesign
+ * asks for the language to be the card's identity, the three stats to read
+ * side by side, the whole card to navigate, and a tooltip wherever text is
+ * truncated.
+ *
+ * Three things are deliberate:
+ *
+ * - **The language is the accent, not a badge on top of a card.** The accent
+ *   comes from `languageMeta(language).color` — the same single source the
+ *   language badge, the filter bar and the code header use — so a reader learns
+ *   "blue means Python" once and reads it in every place it appears.
+ * - **The whole card is the link, via a stretched `::after` on the title link.**
+ *   Making the card itself an `<a>` would give a screen reader an accessible
+ *   name made of the title, the description and all four stats, which is a
+ *   sentence nobody wants read aloud. The title stays the link, and its
+ *   `::after` covers the card, so the click target is the whole thing and the
+ *   accessible name is still just the challenge's name.
+ * - **The description is truncated by CSS, not by JavaScript.** Cutting the
+ *   string in the component would throw away the tail for everyone, including
+ *   screen readers and anyone widening the window. The full text stays in the
+ *   DOM behind a one-line clamp, and the tooltip carries it for anyone who
+ *   wants it without hovering.
+ */
+function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
+  const language = languageMeta(item.language);
+  const variant = item.avg_score !== null ? scoreVariant(item.avg_score) : null;
+  const style = { "--card-accent": language.color } as CSSProperties;
+
+  // `null` *and* `undefined`. The API sends `null` for "no value", but a field
+  // that is simply absent — an older cached response, a partial payload — says
+  // the same thing, and `undefined !== null` is true, so a plain `!== null` check
+  // formats `undefined` and printed "NaNs" on the card.
+  const blank = (value: number | null | undefined) =>
+    value === null || value === undefined;
+  const duration = blank(item.last_duration_ms)
+    ? "—"
+    : formatDurationMs(item.last_duration_ms);
+  const percent = (value: number | null) => (blank(value) ? "—" : `${value}%`);
+
+  // The description is the only truncated text on the card, so it is the only
+  // thing that needs a bubble — and the card, not the description, is what
+  // triggers it. The stretched `::after` over the title is a transparent box
+  // covering this whole surface, so the pointer never reaches anything inside
+  // the card: a tooltip hung on the description would open for a keyboard user
+  // and never for a mouse. Hovering or focusing anywhere on the card opens it
+  // instead, and Escape dismisses it until the pointer leaves (WCAG 1.4.13:
+  // dismissible, hoverable, persistent).
+  const [descVisible, setDescVisible] = useState(false);
+  const [descDismissed, setDescDismissed] = useState(false);
+  // Re-entering the card must NOT clear `descDismissed`. It did, and it made
+  // Escape look broken in a real browser: closing the bubble changes which
+  // element is under the pointer, the browser fires another mouseover at the
+  // card, and the card reopened the bubble it had just dismissed. WCAG 1.4.13
+  // wants the opposite — dismissed until the pointer leaves.
+  const showDescription = () => setDescVisible(true);
+  const leaveDescription = () => {
+    setDescVisible(false);
+    setDescDismissed(false);
+  };
+  const focusDescription = () => {
+    setDescVisible(true);
+    setDescDismissed(false);
+  };
+
+  return (
+    <Card padding="compact" className={styles.statsItem} style={style}>
+      {/* The hover and focus handlers live on an inner div rather than on
+          `Card` itself: widening a shared primitive's props to carry this one
+          card's behaviour is worse than one wrapper element. It spans the card's
+          content, which is also the right area to react to — the padding is not
+          text anyone is trying to read. */}
+      <div
+        className={styles.statsBody}
+        onMouseEnter={showDescription}
+        onMouseLeave={leaveDescription}
+        onFocus={(event) => {
+          // `:focus-visible` and not simply "was focused": a mouse press focuses
+          // the title too, and popping a tooltip open under someone's cursor as
+          // they click cancels the click — mousedown and mouseup then land on
+          // different elements and the browser never fires a click at all, so the
+          // card would silently stop working for the mouse.
+          if ((event.target as HTMLElement).matches(":focus-visible")) {
+            focusDescription();
+          }
+        }}
+        onBlur={(event) => {
+          // Only when focus has left the card, so tabbing between the title and
+          // anything inside does not flicker the bubble closed.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            leaveDescription();
+          }
+        }}
+      >
+      <div className={styles.statsHead}>
+        <LanguageBadge language={item.language} className={styles.statsBadge} />
+        <Link
+          to={`/challenges/${item.challenge_id}`}
+          className={styles.statsTitle}
+        >
+          {item.challenge_title}
+        </Link>
+      </div>
+
+      {item.description && (
+        // Clipped to two lines by CSS, so the full text is still in the DOM and
+        // still announced; the tooltip is for reading it, not for hearing it.
+        <Tooltip
+          label={item.description}
+          placement="bottom"
+          // Explanatory text, not actions: the bubble must not swallow the click
+          // meant for the card underneath it.
+          passThrough
+          open={descVisible && !descDismissed}
+          onOpenChange={(next) => {
+            if (next) {
+              showDescription();
+            } else {
+              // Escape, or the pointer leaving the description: keep it closed
+              // until the pointer leaves the card and comes back.
+              setDescDismissed(true);
+            }
+          }}
+        >
+          <p className={styles.statsDescription}>{item.description}</p>
+        </Tooltip>
+      )}
+
+      <dl className={styles.statsRow}>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Score</dt>
+          <dd
+            className={`${styles.statValue} ${variant ? styles[`chip${variant}`] : ""}`}
+            // The em dash is "no value here", which is not 0% — a claim about
+            // quality rather than an absence of one. Say which, for the same
+            // reason the duration below does.
+            {...(blank(item.avg_score)
+              ? { "aria-label": "no completed runs yet" }
+              : {})}
+          >
+            {percent(item.avg_score)}
+          </dd>
+        </div>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Best</dt>
+          {/* The old card printed "best 90%" in its meta line. A redesign that
+              drops a field because it no longer fits the new layout is still a
+              data loss, so Best is a stat of its own. */}
+          <dd className={styles.statValue}>{percent(item.best_score)}</dd>
+        </div>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Runs</dt>
+          {/* Completed of total, not the total alone: the old card said
+              "3 runs" beside "1 failed" and left the reader to subtract, and an
+              average over three completed runs means something different from an
+              average over four attempted ones. */}
+          <dd className={styles.statValue}>
+            {item.completed_runs}/{item.total_runs}
+          </dd>
+        </div>
+        <div className={styles.stat}>
+          <dt className={styles.statLabel}>Last run</dt>
+          <dd
+            className={styles.statValue}
+            // "—" is the em dash for "not measured", which has to be said out
+            // loud: on its own it reads as a missing value rather than a run that
+            // never produced a result.
+            {...(blank(item.last_duration_ms)
+              ? { "aria-label": "last run: not measured" }
+              : {})}
+          >
+            {duration}
+          </dd>
+        </div>
+      </dl>
+
+      <p className={styles.metaDate}>
+        Last executed {formatRelativeTime(item.last_run_at)}
+        {item.failed_runs > 0 && (
+          <>
+            {" · "}
+            <span className={styles.failedRuns}>
+              {item.failed_runs} failed
+            </span>
+          </>
+        )}
+      </p>
+      </div>
+    </Card>
+  );
+}
 
 function Profile() {
   const { user } = useAuth();
@@ -414,49 +617,17 @@ function Profile() {
             <Link to="/challenges">Browse challenges</Link>
           </Card>
         ) : (
-          <div className={styles.statsGrid}>
-            {challengeStats.map((item) => {
-              const variant =
-                item.avg_score !== null ? scoreVariant(item.avg_score) : null;
-              return (
-                <Card
-                  key={item.challenge_id}
-                  padding="compact"
-                  className={styles.statsItem}
-                >
-                  <Link
-                    to={`/challenges/${item.challenge_id}`}
-                    className={styles.statsTitle}
-                  >
-                    {item.challenge_title}
-                  </Link>
-                  <div className={styles.statsMeta}>
-                    <LanguageBadge language={item.language} />
-                    {item.avg_score !== null && (
-                      <span
-                        className={`${styles.scoreChip} ${variant ? styles[`chip${variant}`] : ""}`}
-                      >
-                        {item.avg_score}% avg
-                      </span>
-                    )}
-                  </div>
-                  <p className={styles.statsLine}>
-                    {item.best_score !== null && (
-                      <>
-                        best <strong>{item.best_score}%</strong> ·{" "}
-                      </>
-                    )}
-                    {item.total_runs} run{item.total_runs === 1 ? "" : "s"}
-                    {item.failed_runs > 0 && ` · ${item.failed_runs} failed`}
-                    {item.completed_runs === 0 && " · no completed runs"}
-                  </p>
-                  <p className={styles.metaDate}>
-                    Last run {formatRelativeTime(item.last_run_at)}
-                  </p>
-                </Card>
-              );
-            })}
-          </div>
+          <ul className={styles.statsGrid}>
+            {challengeStats.map((item) => (
+              // No class on the `<li>`: it is the grid *item*, and the `Card`
+              // inside it is the grid *cell's content*. Styling both put the
+              // accent bar and the language wash on each, so both rendered
+              // twice — which is exactly what the first version of this did.
+              <li key={item.challenge_id}>
+                <EvaluationCard item={item} />
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

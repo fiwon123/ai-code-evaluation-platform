@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -393,18 +393,39 @@ describe("Profile", () => {
         "href",
         "/challenges/c1",
       );
-      expect(screen.getByText("80% avg")).toBeInTheDocument();
-      expect(
-        screen.getByText((_, el) =>
-          el?.tagName === "P" &&
-          (el?.textContent?.includes("best 90% · 3 runs · 1 failed") ?? false),
-        ),
-      ).toBeInTheDocument();
-      // A challenge with no completed runs still appears, with a gentle note.
-      expect(screen.getByText("Reverse String")).toBeInTheDocument();
-      expect(screen.getByText(/1 run · no completed runs/)).toBeInTheDocument();
+      // The card is a `<dl>` now (#347), so the stats are named values rather
+      // than a run of digits. Best is a stat of its own and Runs counts
+      // completed of total: the old card printed "best 90% · 3 runs · 1 failed"
+      // as a line of text, and nothing there may go missing in the redesign.
+      const card = screen.getByRole("link", { name: "Two Sum" }).closest("div[class*='card']")! as HTMLElement;
+      const list = card.querySelector<HTMLElement>("dl")!;
+      expect(within(list).getAllByRole("term").map((t) => t.textContent)).toEqual([
+        "Score",
+        "Best",
+        "Runs",
+        "Last run",
+      ]);
+      expect(within(list).getAllByRole("definition").map((d) => d.textContent)).toEqual([
+        "80%",
+        "90%",
+        "2/3",
+        "—",
+      ]);
+      // The failed run is still counted and still visible.
+      expect(within(card).getByText("1 failed")).toBeInTheDocument();
+
+      // A challenge with no completed runs still appears, and says why its
+      // score is an em dash instead of leaving a bare "—" to be guessed at.
+      const empty = screen.getByRole("link", { name: "Reverse String" }).closest("div[class*='card']")! as HTMLElement;
+      expect(within(empty).getAllByRole("definition")[0]).toHaveTextContent("—");
+      expect(within(empty).getByLabelText("no completed runs yet")).toBeTruthy();
+
       // Headline average is computed across all challenges, not just the page.
-      expect(screen.getByText("80%")).toBeInTheDocument();
+      // Scoped to the summary card: the evaluation card's own 80% is the same
+      // string, so a page-wide `getByText` here would be ambiguous by design.
+      expect(
+        within(screen.getByText("Average score").closest("div[class*='card']")! as HTMLElement).getByText("80%"),
+      ).toBeInTheDocument();
     });
 
     it("shows an empty state when no challenge has been evaluated", async () => {

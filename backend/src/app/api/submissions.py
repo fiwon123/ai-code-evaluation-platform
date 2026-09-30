@@ -236,6 +236,39 @@ async def get_provider_comparison(
     return ProviderComparisonRead(challenge_id=challenge_id, entries=entries)
 
 
+async def _latest_run_durations(db: AsyncSession, user_id: UUID) -> dict[UUID, float]:
+    """Wall-clock of each challenge's most recent run, keyed by challenge.
+
+    Issue #347 wanted a "last run" duration on the dashboard card, and
+    ``duration_ms`` lives inside ``EvaluationResult.metrics`` — a JSON column.
+    The obvious aggregate, ``max(metrics->>'duration_ms')``, is wrong twice
+    over: it takes the *slowest* run rather than the latest, and ``->>`` is
+    PostgreSQL-only, while this suite runs on SQLite.
+
+    So this is a second, portable query: results ordered newest-first, keeping
+    the first row seen per challenge. ``order_by`` gives the recency and
+    SQLite/PostgreSQL agree on how to sort and filter a row list, so "first
+    wins" is spelled in Python where it is unambiguous.
+    """
+    rows = (
+        await db.execute(
+            select(Submission.challenge_id, EvaluationResult.metrics)
+            .join(EvaluationResult, EvaluationResult.submission_id == Submission.id)
+            .where(Submission.user_id == user_id)
+            .order_by(Submission.created_at.desc())
+        )
+    ).all()
+
+    latest: dict[UUID, float] = {}
+    for challenge_id, metrics in rows:
+        if challenge_id in latest:
+            continue
+        raw = (metrics or {}).get("duration_ms")
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            latest[challenge_id] = round(float(raw), 1)
+    return latest
+
+
 @router.get("/stats", response_model=SubmissionStatsRead)
 async def get_submission_stats(
     db: AsyncSession = Depends(get_session),
@@ -252,6 +285,7 @@ async def get_submission_stats(
             select(
                 Challenge.id,
                 Challenge.title,
+                Challenge.description,
                 Challenge.language,
                 func.count(Submission.id).label("total_runs"),
                 func.sum(case((Submission.status == "completed", 1), else_=0)).label(
@@ -278,9 +312,11 @@ async def get_submission_stats(
                 EvaluationResult.submission_id == Submission.id,
             )
             .where(Submission.user_id == current_user.id)
-            .group_by(Challenge.id, Challenge.title, Challenge.language)
+            .group_by(Challenge.id, Challenge.title, Challenge.description, Challenge.language)
         )
     ).all()
+
+    latest_durations = await _latest_run_durations(db, current_user.id)
 
     items: list[ChallengeStatsItem] = []
     for row in rows:
@@ -290,6 +326,7 @@ async def get_submission_stats(
             ChallengeStatsItem(
                 challenge_id=row.id,
                 challenge_title=row.title,
+                description=row.description or "",
                 language=row.language,
                 total_runs=row.total_runs,
                 completed_runs=row.completed_runs or 0,
@@ -297,6 +334,7 @@ async def get_submission_stats(
                 avg_score=avg_score,
                 best_score=best_score,
                 last_run_at=row.last_run_at,
+                last_duration_ms=latest_durations.get(row.id),
             )
         )
 
