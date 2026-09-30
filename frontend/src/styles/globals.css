@@ -7,6 +7,14 @@
   --color-primary: #1d4ed8;
   --color-primary-hover: #1e40af;
   --color-primary-light: #dbeafe;
+  /* The fourth `-strong` step, and the one the other three were missing
+   * (#348). `--color-primary` is the right blue for a *fill* and the wrong one
+   * for small text on the blue tint: in the dark theme it measured 3.13:1 as
+   * text, which is exactly the "processing" status pill on Profile — the one
+   * status the `--strong` fix had never covered, because the test listed only
+   * success/warning/danger. Same rule as the rest of the family: hold the hue,
+   * move the lightness until the pair clears 4.5:1 on the tint it sits on. */
+  --color-primary-strong: #1e40af;
   --color-secondary: #475569;
   --color-success: #16a34a;
   --color-success-light: #dcfce7;
@@ -146,6 +154,12 @@
   --color-primary: #3b82f6;
   --color-primary-hover: #60a5fa;
   --color-primary-light: #1e3a5f;
+  /* The dark half of #348's primary pill token. Same inversion the rest of the
+   * family does below: the tint is the dark one here, so "strong" moves *up*
+   * the ramp. `#3b82f6` on `#1e3a5f` is 3.13:1 — under the 3.0 large-text floor
+   * of nothing, and well under AA's 4.5:1 for the 12px pill text. `#93c5fd`
+   * measures 6.38:1. */
+  --color-primary-strong: #93c5fd;
   --color-secondary: #94a3b8;
   --color-success: #22c55e;
   --color-success-light: #14532d;

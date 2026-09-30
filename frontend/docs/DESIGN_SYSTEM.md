@@ -134,6 +134,7 @@ below.
 | `--color-primary` | Primary actions, links, focus accents |
 | `--color-primary-hover` | Primary button hover |
 | `--color-primary-light` | Primary-tinted surfaces |
+| `--color-primary-strong` | Primary text on a tinted background — the `processing` status pill |
 | `--color-secondary` | Reserved — secondary text uses `--color-text-secondary`; no current use |
 | `--color-success` | Positive status, pass indicators |
 | `--color-success-strong` | Success text on a tinted background |

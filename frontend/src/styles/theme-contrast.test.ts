@@ -247,6 +247,12 @@ describe("code surface syntax contrast", () => {
  * lighter.
  */
 const STATUS_PILLS = [
+  // `primary` was missing here until #348, and that omission is why the dark
+  // theme's "processing" pill shipped at 3.13:1: it is the only status that
+  // paints the primary variant, and the only family with no `-strong` step. The
+  // list is now every family that `statusVariant` can return, so a status cannot
+  // be added without its contrast being held.
+  { base: "color-primary", strong: "color-primary-strong", tint: "color-primary-light" },
   { base: "color-success", strong: "color-success-strong", tint: "color-success-light" },
   { base: "color-warning", strong: "color-warning-strong", tint: "color-warning-light" },
   { base: "color-danger", strong: "color-danger-strong", tint: "color-danger-light" },
@@ -299,7 +305,7 @@ describe("status pill contrast", () => {
     expect(badge, "Badge.module.css must be reachable through the glob").toBeTruthy();
     // `.success`/`.warning`/`.danger` are the pill classes. Match the whole rule
     // body so a comment mentioning the base token cannot satisfy this.
-    for (const variant of ["success", "warning", "danger"]) {
+    for (const variant of ["primary", "success", "warning", "danger"]) {
       const body = badge.match(new RegExp(`\\.${variant} \\{([^}]*)\\}`))?.[1];
       expect(body, `Badge.module.css must define a .${variant} rule`).toBeTruthy();
       expect(
