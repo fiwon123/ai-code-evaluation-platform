@@ -29,6 +29,9 @@ import {
   ChallengeFormFields,
   type ChallengeFormValue,
 } from "./ChallengeFormFields.tsx";
+import badgeSelectStyles from "../BadgeSelect/BadgeSelect.module.css";
+import { expectCodeToContain } from "../../test/code";
+import { languageMeta, runnerForLanguage } from "../../utils/language";
 
 const PAGES = import.meta.glob("../../pages/*.tsx", {
   query: "?raw",
@@ -92,6 +95,22 @@ function StatefulFields({ initial }: { initial: ChallengeFormValue }) {
         setValue((current) => ({ ...current, [key]: next }) as ChallengeFormValue)
       }
       guide={GUIDE}
+    />
+  );
+}
+
+/** As above, but with the example loader wired up, for the language re-tag test. */
+function StatefulFieldsWithExamples({ initial }: { initial: ChallengeFormValue }) {
+  const [value, setValue] = useState(initial);
+  return (
+    <ChallengeFormFields
+      value={value}
+      onChange={(key, next) =>
+        setValue((current) => ({ ...current, [key]: next }) as ChallengeFormValue)
+      }
+      guide={GUIDE}
+      examples={EXAMPLES}
+      onApplyExample={() => {}}
     />
   );
 }
@@ -195,6 +214,147 @@ describe("the shared challenge-form layout", () => {
     const { onChange } = renderFields();
     fireEvent.click(screen.getByRole("radio", { name: "Hard" }));
     expect(onChange).toHaveBeenCalledWith("difficulty", "hard");
+  });
+});
+
+describe("the form's code surfaces (issue #346)", () => {
+  // Three reported problems in one area: the code fields were small, light and
+  // unhighlighted; the difficulty row read as widgets rather than tags; and the
+  // example loader offered anonymous grey text. Each is asserted here as a
+  // behaviour, not as a diff.
+
+  it("gives the prompt and test fields a dark, syntax-highlighted surface", () => {
+    const { container } = renderFields({ prompt: "def add(a, b):\n    return a + b" });
+
+    // The control is still the control: a labelled `<textarea>` holding the value.
+    const prompt = screen.getByLabelText("Prompt for the LLM") as HTMLTextAreaElement;
+    expect(prompt.tagName).toBe("TEXTAREA");
+    expect(prompt.value).toBe("def add(a, b):\n    return a + b");
+
+    // …and behind it there is a painted, aria-hidden, tokenized copy. One `<pre>`
+    // per field, so two fields means two.
+    const paints = [...container.querySelectorAll('pre[aria-hidden="true"]')];
+    expect(paints).toHaveLength(2);
+    expect(paints[0]!.querySelectorAll("[data-token]").length).toBeGreaterThan(0);
+  });
+
+  it("makes both code fields taller than the fields they replaced", () => {
+    renderFields();
+
+    // The reported problem was size, so it is pinned as a number rather than
+    // left to "it looks bigger". The old values were 5 and 6 rows; a plain
+    // TextAreaInput default would put both back to 2 without failing anything
+    // else here.
+    const prompt = screen.getByLabelText("Prompt for the LLM") as HTMLTextAreaElement;
+    expect(Number(prompt.rows)).toBeGreaterThanOrEqual(9);
+    // The test-suite field is the longer of the two.
+    const tests = screen.getByLabelText("Test code (pytest)") as HTMLTextAreaElement;
+    expect(Number(tests.rows)).toBeGreaterThanOrEqual(14);
+  });
+
+  it("re-tokenizes both fields when the language changes", () => {
+    // Highlighting chosen per language is the whole point — a Go suite painted
+    // with Python keywords is worse than no highlighting.
+    const { container } = render(<StatefulFields initial={{ ...BASE, testCode: "func Add(a int) int {" }} />);
+    const paintFor = () =>
+      [...container.querySelectorAll('pre[aria-hidden="true"]')][1]!.textContent ?? "";
+    expect(paintFor()).toContain("func Add(a int) int {");
+
+    fireEvent.change(screen.getByLabelText("Language"), { target: { value: "go" } });
+    expect(paintFor()).toContain("func Add(a int) int {");
+    // Re-tokenized for Go: `func` is a Go keyword, and in Python it is a name.
+    expect(
+      [...container.querySelectorAll('pre[aria-hidden="true"]')][1]!
+        .querySelectorAll('[data-token="keyword"]').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("shows difficulty as tags rather than cards", () => {
+    const { container } = renderFields();
+
+    // `plain` is presentation only, so the radios are still the control — but the
+    // options must no longer wear the card chrome that made three words read as
+    // three widgets.
+    const labels = [...container.querySelectorAll("label")].filter((l) =>
+      l.querySelector('input[name="difficulty"]'),
+    );
+    expect(labels).toHaveLength(3);
+    for (const label of labels) {
+      expect(label.className, "difficulty options must use BadgeSelect's plain variant").toContain(
+        badgeSelectStyles.optionPlain,
+      );
+    }
+  });
+
+  it("tags each example with the selected language's brand colour", () => {
+    const { container } = renderFields(
+      { language: "python" },
+      { examples: EXAMPLES, onApplyExample: vi.fn() },
+    );
+
+    const buttons = [...container.querySelectorAll("button")].filter((b) =>
+      b.textContent?.includes("Sum") || b.textContent?.includes("Parentheses"),
+    );
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons) {
+      // Asserted against the token's own value, not merely "the two buttons
+      // differ" — which would pass if both were mapped to the wrong colour.
+      expect(button.getAttribute("style")).toContain(languageMeta("python").color);
+    }
+  });
+
+  it("keeps the example's language chip decorative", () => {
+    const { container } = renderFields(
+      {},
+      { examples: EXAMPLES, onApplyExample: vi.fn() },
+    );
+    const chip = container.querySelector('[aria-hidden="true"][class*="exampleTag"]');
+    expect(chip, "the symbol chip must render").not.toBeNull();
+    // The button is already named by the example title, so announcing the
+    // symbol too would make it read "Py Two Sum".
+    expect(chip!.textContent).toBe(languageMeta("python").symbol);
+  });
+
+  it("re-tags the examples when the language changes", () => {
+    const { container } = render(
+      <StatefulFieldsWithExamples initial={{ ...BASE }} />,
+    );
+    const accent = () =>
+      container.querySelector('button[class*="example"]')?.getAttribute("style") ?? "";
+
+    expect(accent()).toContain(languageMeta("python").color);
+    fireEvent.change(screen.getByLabelText("Language"), { target: { value: "go" } });
+    expect(accent()).toContain(languageMeta("go").color);
+  });
+
+  it("still loads an example when its tag is clicked", () => {
+    // The tags replaced ghost buttons; they must remain buttons, not spans with a
+    // click handler, or they lose keyboard activation entirely.
+    const onApplyExample = vi.fn();
+    renderFields({}, { examples: EXAMPLES, onApplyExample });
+
+    const button = screen.getByRole("button", { name: /Valid Parentheses/ });
+    expect(button.tagName).toBe("BUTTON");
+    expect(button.getAttribute("type")).toBe("button");
+    fireEvent.click(button);
+    expect(onApplyExample).toHaveBeenCalledWith(1);
+  });
+
+  it("shows the guide's samples as code surfaces, named by the runner", () => {
+    const { container } = renderFields();
+
+    // The guide used to be two plain light-surface `<pre>`s — the one place the
+    // form shows what good looks like was the least convincing code on the page.
+    // It is `CodeBlock`s now, so the samples carry the runner's real filenames.
+    expectCodeToContain("Write a Python function");
+
+    const guide = container.querySelector("details")!;
+    expect(guide.querySelectorAll("pre").length).toBeGreaterThanOrEqual(2);
+    // Scoped to the guide and to plural, because `CodeBlock` names the file in
+    // more than one place (the header label and the control that copies it).
+    expect(
+      within(guide).getAllByText(runnerForLanguage("python")!.testFilename).length,
+    ).toBeGreaterThan(0);
   });
 });
 
