@@ -36,7 +36,11 @@ test.describe("Shared form primitives", () => {
       await page.evaluate((t) => localStorage.setItem("theme", t), theme);
       await page.reload();
 
-      const select = page.getByLabel("Filter by difficulty");
+      // The language filter, not the difficulty one: difficulty is a radio
+      // group of badges now, so it is no longer a `SelectInput` to measure.
+      // The sort control beside it is the other candidate — same primitive,
+      // same page, same assertion.
+      const select = page.getByLabel("Filter by language");
       await expect(select).toBeVisible();
 
       const rendered = await select.evaluate((el) => {

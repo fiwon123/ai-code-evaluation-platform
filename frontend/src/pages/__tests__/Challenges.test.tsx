@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Challenges from "../Challenges.tsx";
@@ -156,27 +156,32 @@ describe("Challenges", () => {
     renderPage();
     await screen.findByText("Two Sum");
 
+    // The option text carries the language's symbol, because that is the only
+    // identity a native `<select>` can show: an `<option>`'s own `color` is
+    // ignored by the closed control and the popup is OS-rendered. Spelled out
+    // rather than built from `languageMeta` so this pins the catalog instead of
+    // asserting the page agrees with the helper it calls.
     const languageOptions = [
-      "Python",
-      "JavaScript",
-      "TypeScript",
-      "Java",
-      "Go",
-      "C",
-      "C++",
-      "Rust",
-      "PHP",
-      "Ruby",
-      "Perl",
-      "Kotlin",
-      "Lua",
-      "C#",
-      "Swift",
-      "Dart",
-      "Scala",
-      "R",
-      "Haskell",
-      "Objective-C",
+      "Py Python",
+      "JS JavaScript",
+      "TS TypeScript",
+      "Jv Java",
+      "Go Go",
+      "C C",
+      "C++ C++",
+      "Rs Rust",
+      "PHP PHP",
+      "Rb Ruby",
+      "Pl Perl",
+      "Kt Kotlin",
+      "Lua Lua",
+      "C# C#",
+      "Sw Swift",
+      "Da Dart",
+      "Sc Scala",
+      "R R",
+      "Hs Haskell",
+      "ObjC Objective-C",
     ];
     const options = screen
       .getAllByRole("option")
@@ -206,9 +211,10 @@ describe("Challenges", () => {
     renderPage();
     await screen.findByText("Two Sum");
 
-    fireEvent.change(screen.getByLabelText(/Filter by difficulty/i), {
-      target: { value: "easy" },
-    });
+    // A radio group, not a `<select>`: the difficulty options are coloured
+    // badges, and a closed `<select>` paints its own text over the option's
+    // colour, so a dropdown could not carry the colour the issue asks for.
+    fireEvent.click(screen.getByRole("radio", { name: "Easy" }));
 
     await waitFor(() => {
       const call = mockList.mock.calls.at(-1);
@@ -220,20 +226,22 @@ describe("Challenges", () => {
     });
   });
 
-  it("always lists every supported difficulty in the filter dropdown", async () => {
+  it("offers every supported difficulty in the filter group, plus the no-filter case", async () => {
     renderPage();
     await screen.findByText("Two Sum");
 
-    const options = screen
-      .getAllByRole("option")
-      .map((option) => option.textContent)
-      .filter(
-        (label) =>
-          label !== "All languages" && label !== "All difficulties",
-      );
-    expect(options).toContain("Easy");
-    expect(options).toContain("Medium");
-    expect(options).toContain("Hard");
+    // Reached by role *and* name on purpose. The `<legend>` is the group's only
+    // accessible name and it is visually hidden (`sr-only.css`) so the bar stays
+    // one line, which means this assertion is what fails if that hiding ever
+    // becomes `display: none` and takes the name with it.
+    const group = screen.getByRole("group", { name: /Filter by difficulty/i });
+    const values = within(group)
+      .getAllByRole("radio")
+      .map((radio) => radio.getAttribute("value"));
+
+    // The values sent to the API, so "All" is asserted as the `all` the
+    // backend already accepts rather than as a display string.
+    expect(values).toEqual(["all", "easy", "medium", "hard"]);
   });
 
   it("sorts by title via the API", async () => {
@@ -257,8 +265,16 @@ describe("Challenges", () => {
     renderPage();
     await screen.findByText("Two Sum");
 
-    expect(screen.getByText("Easy")).toBeInTheDocument();
-    expect(screen.getByText("Medium")).toBeInTheDocument();
+    // Scoped to the card, because "Easy" is no longer unique to the card: the
+    // filter group renders the same three words as pills. A bare
+    // `getByText("Easy")` here was matching the *filter* and asserting nothing
+    // about the card — before this branch it matched the `<option>` in the old
+    // dropdown and was equally vacuous. The card badge also used to render the
+    // raw lowercase value, which this is what pins.
+    const cards = document.querySelectorAll('[class*="cardBadges"]');
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toHaveTextContent("Easy");
+    expect(cards[1]).toHaveTextContent("Medium");
   });
 
   it("shows an empty state when there are no challenges", async () => {

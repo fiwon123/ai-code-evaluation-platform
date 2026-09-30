@@ -97,14 +97,9 @@
  * a premature abstraction, and adding one to `globals.css` is a separate
  * decision.
  */
+/* Was defined here; promoted to `styles/sr-only.css` for the challenge filter
+   bar's `<legend>`, so there is one copy of the primitive. `composes` keeps the
+   name `styles.srOnly` resolving, so the component is unchanged. */
 .srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  composes: srOnly from "../../styles/sr-only.css";
 }

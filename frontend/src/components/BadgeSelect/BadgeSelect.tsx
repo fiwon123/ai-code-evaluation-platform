@@ -31,6 +31,17 @@ interface BadgeSelectProps<T extends string> {
   /** Extra class on the `<fieldset>`, for page-level layout. */
   className?: string;
   /**
+   * Extra class on the `<legend>`, for a page that needs the group named but
+   * not shown.
+   *
+   * A prop rather than a page targeting `fieldset > legend` in its own module,
+   * because that is not expressible: `composes` is only valid on a single local
+   * class name, so a compound selector is a build error, and a descendant
+   * selector on another module's hashed `.legend` is unreachable by name. The
+   * escape hatch is a class handed to the element that owns it.
+   */
+  legendClassName?: string;
+  /**
    * `card` (default) draws each option as a bordered card with a visible
    * radio — the right weight for a 20-item language grid where each option is
    * big enough to be a target. `plain` drops the card, the raised surface and
@@ -85,11 +96,13 @@ export default function BadgeSelect<T extends string>({
   options,
   onChange,
   className = "",
+  legendClassName = "",
   appearance = "card",
   error,
   errorId,
 }: BadgeSelectProps<T>) {
   const groups = [styles.group, className].filter(Boolean).join(" ");
+  const legendClasses = [styles.legend, legendClassName].filter(Boolean).join(" ");
   const plain = appearance === "plain";
   // In `plain` mode the options are tags, not cards, so a fixed 11rem track
   // would space three short words across half the form. The row is content-
@@ -103,7 +116,7 @@ export default function BadgeSelect<T extends string>({
       className={groups}
       aria-describedby={error && errorId ? errorId : undefined}
     >
-      <legend className={styles.legend}>{legend}</legend>
+      <legend className={legendClasses}>{legend}</legend>
       <div className={`${styles.options} ${plain ? styles.optionsPlain : ""}`}>
         {options.map((option) => {
           const selected = option.value === value;
