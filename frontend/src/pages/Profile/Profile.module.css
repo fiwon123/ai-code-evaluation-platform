@@ -104,6 +104,18 @@
 }
 
 /* Stats */
+
+/* The page's own row of four `StatCard`s. A card's inner stat row is
+   `.listStatRow`, which was this name until #374.
+
+   Read the rest of this rule as something the page had never actually
+   rendered. Both rules had the same specificity and this one came *first*, so
+   the card's `.statsRow` below won the cascade for both elements: the four
+   tiles were laid out by that `display: flex`, and `display: grid`,
+   `repeat(4, 1fr)` and this `margin-bottom` were dead declarations that matched
+   nothing. The tiles sized to their content and wrapped instead of sitting in
+   four equal columns. Naming them apart makes this rule live, which is a
+   visible change on purpose rather than by accident. */
 .statsRow {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -522,7 +534,12 @@
   overflow-wrap: anywhere;
 }
 
-.statsRow {
+/* The stat row *inside a card* — the `<dl>` under a list card's title, not the
+   page's own row of four `StatCard`s, which is `.statsRow` above. The two shared
+   one name until #374, and the name was doing double duty: one `display: grid`
+   for the tile row, one `display: flex` for the card. Editing the gap on either
+   one moved the other, and the `@media` rule below reached both. */
+.listStatRow {
   display: flex;
   align-items: baseline;
   gap: var(--space-4);
@@ -625,7 +642,7 @@
   /* The stat row was three columns wide on a wide card; one column of card on a
      tablet leaves them cramped, so they share the width instead. `flex-wrap`
      already covers anything narrower still. */
-  .statsRow {
+  .listStatRow {
     justify-content: space-between;
     gap: var(--space-2);
   }

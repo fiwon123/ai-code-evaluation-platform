@@ -216,7 +216,7 @@ function EvaluationCard({ item }: { item: ChallengeStatsItem }) {
         </Tooltip>
       )}
 
-      <dl className={styles.statsRow}>
+      <dl className={styles.listStatRow}>
         <div className={styles.stat}>
           <dt className={styles.statLabel}>Score</dt>
           <dd
