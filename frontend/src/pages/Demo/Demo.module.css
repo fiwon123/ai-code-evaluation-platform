@@ -4,9 +4,101 @@
   margin: 0 auto;
 }
 
+/* Anchors the ambient layer. The decoration is `position: absolute` with a
+   negative z-index, so the header has to establish a stacking context —
+   without `isolation: isolate` the blobs would escape behind the page
+   background and vanish, and `overflow: hidden` stops their blur bleeding
+   into the walkthrough below. */
 .header {
   text-align: center;
   margin-bottom: var(--space-12);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: var(--space-10) var(--space-4);
+  border-radius: var(--radius-xl);
+}
+
+/* Same shape as Home's `.heroBackdrop`: its own stacking context behind every
+   child, so no decorative rule can win a specificity fight with the copy. */
+.ambientBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* The drift, declared HERE rather than referenced from globals.css.
+   This is a Vite CSS-modules trap, and the symptom is silent: a build
+   rewrites a keyframe *reference* inside a module to a scoped name
+   (`animation: auroraDrift` -> `animation: _auroraDrift_18avk_1`) but does
+   not rewrite the `@keyframes` rule when that rule lives in an unscoped
+   stylesheet. The element then names a keyframes rule that does not exist,
+   the animation never starts, and `document.getAnimations()` reports nothing
+   — the page looks fine and simply does not move. Declaring the keyframes in
+   the same file scopes the name and its definition together, so they match.
+   (`Home.module.css` and `AuthLayout.module.css` reference the global
+   `auroraDrift` the same way and are therefore not animating either — filed
+   separately, not fixed here.) */
+@keyframes auroraDrift {
+  0%,
+  100% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, 4%, 0) scale(1.15);
+  }
+  66% {
+    transform: translate3d(-2%, 7%, 0) scale(0.92);
+  }
+}
+
+/* Sizes/offsets here. Tints are `color-mix` over tokens both palettes define,
+   which is what `ambient-motion.test.ts` requires — a literal hex fails it. */
+.blobPrimary,
+.blobAccent {
+  position: absolute;
+  border-radius: var(--radius-full);
+  filter: blur(80px);
+  will-change: transform;
+  animation: auroraDrift var(--duration-ambient) ease-in-out infinite;
+}
+
+.blobPrimary {
+  width: 380px;
+  height: 380px;
+  top: -180px;
+  left: -120px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-primary) 34%, transparent),
+    transparent 70%
+  );
+}
+
+.blobAccent {
+  width: 300px;
+  height: 300px;
+  bottom: -160px;
+  right: -100px;
+  animation-duration: 32s;
+  animation-delay: -8s;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-secondary) 28%, transparent),
+    transparent 70%
+  );
+}
+
+/* Required, not optional: `ambient-motion.test.ts` fails the build on any
+   looping animation in any module that has no reduced-motion opt-out, and
+   Home's does exactly this. */
+@media (prefers-reduced-motion: reduce) {
+  .blobPrimary,
+  .blobAccent {
+    animation: none;
+  }
 }
 
 /* Layout only — size and the gradient come from the shared PageTitle.
@@ -37,6 +129,35 @@
   margin: 0 auto var(--space-16);
 }
 
+/* The step the rail is currently on. Emphasis only — every step's text is
+   always in the DOM and always readable, so this is decoration on top of
+   content rather than a state the page depends on. */
+.stepActive .stepIcon {
+  background: var(--color-primary);
+  box-shadow: 0 0 0 4px var(--color-primary-light);
+}
+
+.stepActive .stepTitle {
+  color: var(--color-primary);
+}
+
+/* The connector between steps. Drawn on the icon's own column so it does not
+   depend on the row above having any particular height. */
+.step:not(:last-child) .stepIcon::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 2px;
+  height: var(--space-6);
+  translate: -50% 0;
+  background: var(--color-border);
+}
+
+/* The icon is the step's own column, and the connector is drawn on it — so
+   the two-column grid has to be declared here. Dropping this rule does not
+   remove a style, it removes the layout: the steps collapse to stacked
+   blocks and the connector hangs off a full-width row. */
 .step {
   display: grid;
   grid-template-columns: 56px 1fr;
@@ -45,6 +166,7 @@
 }
 
 .stepIcon {
+  position: relative;
   width: 56px;
   height: 56px;
   border-radius: var(--radius-lg);
@@ -53,6 +175,7 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-size-2xl);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .stepTitle {
@@ -133,11 +256,61 @@
   display: flex;
   gap: var(--space-3);
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .challengeSelect {
   flex: 1;
   min-width: 220px;
+}
+
+/* The selected language's colour, on the control that carries it.
+ *
+ * A native `<select>` will not colour its own options, and the popup is
+ * rendered by the OS, so the identity a closed control *can* show is an
+ * inline-start stripe on itself. The symbol rides in the option text instead.
+ *
+ * An inline-start stripe rather than a border tint: a tinted border reads as
+ * an error state, and neither control here is ever invalid. */
+.languageFilter,
+.challengeFilter {
+  position: relative;
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+}
+
+.languageFilter::before,
+.challengeFilter::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--space-1);
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: var(--radius-full);
+  background: var(--lang-accent, transparent);
+}
+
+/* The badge a closed `<select>` cannot render inside itself: the selected
+ * challenge's language, coloured, sitting beside the control rather than
+ * pretending to be part of it. */
+.challengeIdentity {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* One row of controls, wrapping on narrow screens. The two selects and the
+   button share a line so the panel stays as short as it was before the
+   language filter arrived. */
+.filterRow {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.filterRow .languageFilter {
+  min-width: 180px;
 }
 
 /* Preview: what will actually execute for the selected challenge */
@@ -169,8 +342,21 @@
   margin: 0 0 var(--space-3);
 }
 
+/* Prompt and test suite sit side by side once there is room for both, which is
+   the "code layout" the issue asks for: two real code panels read as a program
+   and its tests, where stacked full-width panels read as a wall. `auto-fit` with
+   a `minmax` floor is what makes it degrade — below the floor there is one
+   column and nothing overflows, so no media query is needed. */
+.previewCodeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
 .previewSection {
   margin-bottom: var(--space-3);
+  min-width: 0;
 }
 
 .previewLabel {
@@ -180,10 +366,16 @@
   margin: 0 0 var(--space-2);
 }
 
+/* A frame around the code area, so the dark code surface reads as a panel
+   rather than bleeding into the card behind it. `CodeBlock` owns the surface
+   and the tokens; this is only the edge between the two. */
 .previewCode {
   max-height: 300px;
   overflow: auto;
   border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-subtle);
+  padding: var(--space-1);
 }
 
 .previewEmpty {

@@ -85,6 +85,17 @@ const E2E_EXEMPT: Record<string, { count: number; because: RegExp }> = {
     count: 1,
     because: /one legitimate wall-clock wait/,
   },
+  // #350's reduced-motion assertion. The thing under test is a *timer that
+  // must not fire*: the walkthrough rail advances every STEP_CYCLE_MS and is
+  // supposed to hold still for a reader who asked for reduced motion. There is
+  // no state to wait on — the claim is the absence of a change over a span
+  // longer than the interval, so wall-clock is the only way to express it. The
+  // span is asserted to be longer than two holds, so a shortened STEP_CYCLE_MS
+  // cannot make it pass by proving less.
+  "../../e2e/demo-picker.spec.ts": {
+    count: 1,
+    because: /two holds of STEP_CYCLE_MS/,
+  },
 };
 
 /** e2e files whose wall-clock waits are not accounted for. */

@@ -91,7 +91,7 @@ export const SWEEP_ROUTES: readonly SweepRoute[] = [
     url: "/",
     heading: "Generate, execute, and evaluate AI-written code — automatically",
     auth: "guest",
-    note: "Carries every motion surface in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the typewriter.",
+    note: "Carries the most motion surfaces in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the typewriter. Not all of them any more — /demo gained its own Reveal stagger, ambient blobs and a cycling rail in #350, and /pricing has an animated disclosure. SWEEP_MOTION_SURFACES is the checkable version of that list.",
   },
   {
     path: "/features",
@@ -551,6 +551,10 @@ export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = 
     why: "Reveal staggers, the `.scrollReveal` view() reveals, the ambient layer and `useCountUp` — all element-level, all seekable, all filmed.",
   },
   {
+    route: "/demo",
+    why: "The `Reveal` stagger on the walkthrough steps and the header's ambient blobs, plus the `STEP_CYCLE_MS` rail that advances the highlighted step.",
+  },
+  {
     route: "/pricing",
     why: "The FAQ disclosure. Its glyph is element-level and seekable; its answer animates through `::details-content`, which no `Animation` object represents.",
   },
@@ -624,5 +628,26 @@ export const SWEEP_MOTION: readonly SweepMotion[] = [
     samples: [0, 0.25, 0.5, 0.75],
     viewports: ["desktop-chromium"],
     caption: "Ambient filmstrip: the blueprint grid, the drifting code fragments and the hero colour blobs at four fixed phases. These never finish, so every static shot pauses them at phase 0 rather than catching them wherever the machine happened to be.",
+  },
+  {
+    id: "demo-reveal-transition",
+    route: "/demo",
+    kind: "transition",
+    // The same `Reveal` component Home films, here on the four walkthrough
+    // steps with a 90ms stagger, plus the header's entrance.
+    samples: [0, 0.5, 1],
+    viewports: ["desktop-chromium"],
+    caption: "Transition filmstrip over the walkthrough's four staggered Reveals, seeked with the Web Animations API. Seeking includes each element's transition-delay, so a delayed step is caught mid-flight instead of being reported as still-hidden.",
+  },
+  {
+    id: "demo-ambient",
+    route: "/demo",
+    kind: "ambient",
+    // Two `auroraDrift` blobs on the shared keyframe. Both are `infinite`, so
+    // the static at-rest captures pause them at phase 0 rather than catching
+    // them wherever the machine happened to be.
+    samples: [0, 0.25, 0.5, 0.75],
+    viewports: ["desktop-chromium"],
+    caption: "Ambient filmstrip: the two drifting colour blobs behind the demo header, at four fixed phases. Home's blueprint grid and code fragments are not repeated here — they are the same shared primitives, filmed once on `/`.",
   },
 ];
