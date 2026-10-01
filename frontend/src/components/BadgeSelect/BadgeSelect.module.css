@@ -129,7 +129,35 @@
    * its own tag rather than the viewport. */
   position: relative;
 
-  min-height: auto;
+  /* `min-height: auto` used to be here, undoing the `--control-height` that
+   * `.option` already sets (#364). That left the plain pill 25.2px tall — the
+   * badge's own height, because `padding` is 0 and `.radioHidden` is an
+   * `inset: 0` overlay, so the control's hit box *is* the label box. The visual
+   * sweep reported that as `touch-target-small` on all 12 instances: 55×25px on
+   * the challenge form, 46×25px on the filter bar.
+   *
+   * Inheriting the card variant's height fixes the hit box without touching what
+   * the user sees, and it is the number the rest of the UI is already built
+   * around:
+   *
+   * - 44px is `--control-height`, so the tag is the same height as the search
+   *   input, the language select and the difficulty filter's neighbours in
+   *   `Challenges`' toolbar. That toolbar is `align-items: center` with
+   *   `_searchWrap`, `_languageFilter` and `SELECT` all at 44px and only the pill
+   *   at 25.2px, so restoring 44px leaves the bar's height unchanged — the
+   *   acceptance criterion, and satisfied by making the outlier match its
+   *   neighbours rather than by compensating with the row `gap`. Gap is the
+   *   *horizontal* space between pills and is untouched by a height change, so
+   *   the shrink-and-reduce-the-gap trick is not needed here.
+   * - 44px is also WCAG 2.5.5 AAA, and 25.2px was already over the 24px AA
+   *   floor, so the sweep filed it minor. It is a real target-size observation,
+   *   not a defect, and it was the only `touch-target-small` in the suite.
+   *
+   * The badge keeps its own 23.2px: `padding: 0` below is what stops this from
+   * rendering as a fat tag, so the pill's *rendered* size is unchanged and only
+   * its activation area grows. A pseudo-element overlay would have achieved the
+   * same box while leaving a real gap between neighbouring targets; the height
+   * is the honest version, and it costs no markup. */
   padding: 0;
   border: 1px solid transparent;
   background: none;

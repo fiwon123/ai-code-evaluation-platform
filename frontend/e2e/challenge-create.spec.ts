@@ -118,6 +118,69 @@ test.describe("Challenge create form", () => {
     }
   });
 
+  test("the plain difficulty pill is a 44px target without growing the tag (#364)", async ({
+    page,
+  }) => {
+    await openCreateForm(page);
+
+    // WCAG 2.5.5 AAA, and the visual sweep's only `touch-target-small`:
+    // `.radioHidden` is an `inset: 0` overlay, so the control's activation box
+    // *is* the label box, and a label with `padding: 0` is exactly as tall as
+    // the badge inside it. At 25.2px the sweep filed 12 instances (55×25px here,
+    // 46×25px on the filter bar).
+    //
+    // Measured as the union of the radio and its label, because that is the box a
+    // click can actually land on and it is what the audit rule uses — the radio
+    // alone resolves to the label's *padding* box, 2px shorter than the border
+    // box, so asserting on the input directly would fail on a correct fix.
+    //
+    // Paired with "the tag did not grow", because the two failure modes are
+    // opposites and only asserting the first would accept padding that made
+    // every difficulty a fat 44px pill instead of a 23px tag with room to tap.
+    const pills = await page
+      .getByRole("group", { name: "Difficulty" })
+      .locator("label")
+      .evaluateAll((labels) =>
+        labels.map((label) => {
+          const radio = label.querySelector<HTMLInputElement>("input")!;
+          const badge = label.querySelector("span span")!;
+          const union = (a: DOMRect, b: DOMRect) => ({
+            width: Math.max(a.right, b.right) - Math.min(a.left, b.left),
+            height: Math.max(a.bottom, b.bottom) - Math.min(a.top, b.top),
+          });
+          const l = label.getBoundingClientRect();
+          return {
+            value: radio.value,
+            hit: union(radio.getBoundingClientRect(), l),
+            badge: {
+              width: badge.getBoundingClientRect().width,
+              height: badge.getBoundingClientRect().height,
+            },
+          };
+        }),
+      );
+
+    expect(pills).toHaveLength(3);
+    for (const p of pills) {
+      expect(p.hit.width, `${p.value}'s target is under 44px wide`).toBeGreaterThanOrEqual(44);
+      expect(p.hit.height, `${p.value}'s target is under 44px tall`).toBeGreaterThanOrEqual(44);
+      // The rendered tag is still the tag, not the 44px box.
+      expect(
+        p.badge.height,
+        `${p.value}'s tag grew to its target box — the hit area should be invisible`,
+      ).toBeLessThan(p.hit.height);
+    }
+
+    // The three tags stay side by side rather than the row wrapping to a stack,
+    // which a taller pill could have caused. Widths are unchanged by this fix, so
+    // this is the cheap way to notice if a future change alters that.
+    const tops = await page
+      .getByRole("group", { name: "Difficulty" })
+      .locator("label")
+      .evaluateAll((labels) => labels.map((l) => Math.round(l.getBoundingClientRect().top)));
+    expect(new Set(tops).size, "the difficulty pills wrapped onto separate rows").toBe(1);
+  });
+
   test("counts the prompt as it is typed and names the runner for the language", async ({
     page,
   }) => {
