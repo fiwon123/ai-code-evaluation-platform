@@ -41,7 +41,11 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-2);
   border-radius: var(--radius-lg);
-  background: var(--color-bg-subtle);
+  /* `--color-surface-card`, not `--color-bg-subtle`: this was the same colour
+     family as the page behind it (1.05:1 measured), so the strip read as flat
+     grey. See "Card surfaces" in docs/DESIGN_SYSTEM.md. */
+  background: var(--color-surface-card);
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
 }
 
 .pipelineNum {
@@ -92,7 +96,23 @@
   align-items: center;
   padding: var(--space-5);
   border-radius: var(--radius-lg);
-  background: var(--color-bg-subtle);
+  background: var(--color-surface-card);
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* A card that lifts slightly on the pointer, the way the rest of the app's cards
+   do. The shadow tokens are already themed per palette, which a hand-mixed
+   `color-mix()` over `--color-text` would not be: in the dark palette
+   `--color-text` is near-white, so a shadow mixed from it reads as a glow
+   around the card rather than as depth under it. Border and shadow only — the
+   fill never changes, so every contrast measurement taken at rest still holds
+   under the pointer. */
+.featureRow:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-elevated);
+  transform: translateY(-2px);
 }
 
 .featureRowEven {
@@ -251,28 +271,34 @@
   white-space: pre;
 }
 
+/* The syntax colours are the `--color-code-*` tokens rather than literals. They
+   had drifted: `.codeKw` was #c084fc against a #c792ea token, `.codeFn` #22d3ee
+   against #e5c07b, so the mockups were showing a different highlighter from the
+   rest of the app and neither value was tracked by the palette. The code block
+   is #0f172a in BOTH palettes, so these measure well either way — the reason
+   the report rows above needed the strong step and these do not. */
 .codeKw {
-  color: #c084fc;
+  color: var(--color-code-keyword);
 }
 
 .codeFn {
-  color: #22d3ee;
+  color: var(--color-code-fn);
 }
 
 .codePrompt {
-  color: #4ade80;
+  color: var(--color-code-ok);
 }
 
 .testPass {
-  color: #4ade80;
+  color: var(--color-code-ok);
 }
 
 .testFail {
-  color: #f87171;
+  color: var(--color-code-error);
 }
 
 .codeResult {
-  color: #fbbf24;
+  color: var(--color-code-warn);
 }
 
 /* Sandbox terminal */
@@ -344,13 +370,20 @@
   border-radius: var(--radius-md);
 }
 
+/* The `-strong` step, not the base token: this is the *identity* green and red
+   painted as 12px text on their own tint, and in both themes that pairing is
+   under AA — measured 3.00:1 (light) and 4.00:1 (dark) for the pass row,
+   3.95:1 and 3.62:1 for the fail row. The strong step keeps the hue, drops the
+   lightness, and reaches 4.57:1 / 5.30:1 in light and 5.23:1 / 5.28:1 in dark.
+   `theme-contrast.test.ts` holds the tokens and asserts this file paints the
+   strong step; `e2e/contrast.spec.ts` measures the painted result. */
 .reportItemOk {
-  color: var(--color-success);
+  color: var(--color-success-strong);
   background: var(--color-success-light);
 }
 
 .reportItemBad {
-  color: var(--color-danger);
+  color: var(--color-danger-strong);
   background: var(--color-danger-light);
 }
 
@@ -416,7 +449,8 @@
   text-align: center;
   padding: var(--space-6) var(--space-5);
   border-radius: var(--radius-lg);
-  background: var(--color-bg-subtle);
+  background: var(--color-surface-card);
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
 }
 
 .ctaTitle {
@@ -455,6 +489,61 @@
 
 /* ---------- Keyframes ---------- */
 
+/* Declared in this module, not borrowed from `enter.css`.
+   `ambient-motion.test.ts` states the rule as "can this file resolve this name":
+   a module cannot reference a keyframe from an unscoped sheet, because the build
+   scopes the reference and leaves the definition alone. `fadeInUp` in
+   `enter.css` is reachable only through `composes`, which would also import its
+   timing — and the per-element stagger below needs the duration and the delay
+   set independently, so the keyframe is local and the timing is per element. */
+@keyframes featureReveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The hidden state lives ONLY inside the keyframe, never in the rule below it.
+   That is what makes the reduced-motion opt-out below safe: `animation: none`
+   means no `from` frame is ever applied, so the card renders at its natural
+   state. An `opacity: 0` in `.featureRow` itself would leave a reader who asked
+   for reduced motion looking at a page with four invisible cards and no way to
+   tell it had loaded — which is the failure `enter.css` documents for gating a
+   one-shot entrance on motion at all. */
+.featureRow,
+.pipelineStep,
+.cta {
+  /* `backwards`, not `both`. Both fills forward as well, which means the `to`
+     frame's `transform: translateY(0)` keeps applying after the animation ends
+     — and an animated value outranks a normal declaration in the cascade, so
+     `.featureRow:hover { transform: translateY(-2px) }` would be silently
+     overridden forever and the lift would never happen. `backwards` still hides
+     each element during its stagger delay, which is the half that is wanted. */
+  animation: featureReveal 0.55s ease-out backwards;
+}
+
+/* Staggered, 80ms apart. Short enough that the last card is in well before a
+   reader has finished reading the first, long enough to read as a sequence
+   rather than a single block appearing. */
+.pipelineStep:nth-child(1) { animation-delay: 0ms; }
+.pipelineStep:nth-child(2) { animation-delay: 80ms; }
+.pipelineStep:nth-child(3) { animation-delay: 160ms; }
+.pipelineStep:nth-child(4) { animation-delay: 240ms; }
+.pipelineStep:nth-child(5) { animation-delay: 320ms; }
+
+.featureRow:nth-child(1) { animation-delay: 120ms; }
+.featureRow:nth-child(2) { animation-delay: 200ms; }
+.featureRow:nth-child(3) { animation-delay: 280ms; }
+.featureRow:nth-child(4) { animation-delay: 360ms; }
+
+.cta {
+  animation-delay: 440ms;
+}
+
 @keyframes bob {
   0%,
   100% {
@@ -471,6 +560,18 @@
      has asked for less motion gets none of it. The icons stay, fully
      visible, at their resting position. */
   .pipelineIcon {
+    animation: none;
+  }
+
+  /* The entrance reveal is dropped the same way, and safely, because the
+     hidden state is inside the keyframe rather than in the rules themselves —
+     see the note above @keyframes featureReveal. `animation: none` is not
+     "no motion" here, it is "arrived immediately": the cards, the strip and
+     the CTA are all exactly where they finish. The delays go with the
+     animation, so nothing is left waiting out 440ms of invisible. */
+  .featureRow,
+  .pipelineStep,
+  .cta {
     animation: none;
   }
 }

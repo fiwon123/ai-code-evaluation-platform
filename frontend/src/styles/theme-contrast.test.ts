@@ -340,6 +340,73 @@ describe("status pill contrast", () => {
       ).toContain(`var(--color-${variant}-strong)`);
     }
   });
+
+  it("paints the strong step in the Features report rows", () => {
+    // #351 found the same defect in a second place, and the `-strong` tokens
+    // already existed when it shipped: the Features page drew a pass row and a
+    // fail row as 12px body text on their own tints, in *both* themes, at
+    // 3.00:1 / 4.00:1 and 3.95:1 / 3.62:1. Every assertion in this file passed
+    // while it was broken, because the file only ever asked whether the *tokens*
+    // were compliant — which they were. The component was the part nobody read.
+    //
+    // So this asks the component question directly, and matches the whole rule
+    // body so the comment above the rule cannot satisfy it.
+    const features = MODULE_CSS["../pages/Features/Features.module.css"];
+    expect(features, "Features.module.css must be reachable through the glob").toBeTruthy();
+    for (const [cls, family] of [
+      ["reportItemOk", "success"],
+      ["reportItemBad", "danger"],
+    ] as const) {
+      const body = features.match(new RegExp(`\\.${cls} \\{([^}]*)\\}`))?.[1];
+      expect(body, `Features.module.css must define a .${cls} rule`).toBeTruthy();
+      expect(
+        body,
+        `.${cls} must paint --color-${family}-strong; the base --color-${family} on its own tint is under AA in both themes`,
+      ).toContain(`var(--color-${family}-strong)`);
+    }
+  });
+});
+
+/**
+ * `--color-surface-card` (#351) exists because every other light surface was
+ * *lighter* than the page, so a feature card built from one separated from
+ * `--color-bg` by 1.05:1 and its inner panel by 1.00:1 — the same colour. The
+ * new token darkens instead.
+ *
+ * Darkening a surface is not free: it spends the contrast the body copy has, so
+ * the step has to be bounded from both sides. Invisible from the page is the
+ * bug being fixed; unreadable body text would be a worse one, and it is the
+ * kind of regression that arrives later as "the cards look a bit heavy" rather
+ * than as a failing audit. Both bounds are asserted here so neither can be
+ * crossed by adjusting the hex.
+ */
+describe("card surface", () => {
+  const BOUNDED = [
+    ["light", LIGHT],
+    ["dark", DARK],
+  ] as const;
+
+  it.each(BOUNDED)("is defined in the %s palette", (_theme, tokens) => {
+    expect(tokens["color-surface-card"], `--color-surface-card is missing in ${_theme}`).toBeDefined();
+  });
+
+  it.each(BOUNDED)("is visibly distinct from the %s page", (_theme, tokens) => {
+    const step = contrastRatio(tokens["color-surface-card"]!, tokens["color-bg"]!);
+    // The same 1.05:1 floor the design system applies to a hover step, and the
+    // figure the old `--color-bg-subtle` pairing sat just *under* at 1.05:1.
+    expect(
+      step,
+      `--color-surface-card (${tokens["color-surface-card"]}) on --color-bg (${tokens["color-bg"]}) is only ${step.toFixed(2)}:1 — that is the flatness #351 was filed for`,
+    ).toBeGreaterThanOrEqual(1.05);
+  });
+
+  it.each(BOUNDED)("leaves %s body copy readable on the card", (_theme, tokens) => {
+    const ratio = contrastRatio(tokens["color-text-muted"]!, tokens["color-surface-card"]!);
+    expect(
+      ratio,
+      `--color-text-muted (${tokens["color-text-muted"]}) on --color-surface-card (${tokens["color-surface-card"]}) is only ${ratio.toFixed(2)}:1`,
+    ).toBeGreaterThanOrEqual(MIN_CONTRAST);
+  });
 });
 
 /** Glob keys are relative to this file (`src/styles/`), e.g. `../pages/...`. */

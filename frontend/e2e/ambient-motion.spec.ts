@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { mockApi } from "./data";
 
@@ -231,5 +231,165 @@ test.describe("ambient motion", () => {
       after["auroraDrift"] ?? 0,
       "auroraDrift is still running under prefers-reduced-motion: reduce",
     ).toBe(0);
+  });
+});
+
+/**
+ * The Features entrance (#351).
+ *
+ * A one-shot, staggered reveal on ten elements, and the only entrance in the app
+ * that is gated on `prefers-reduced-motion` — so it needs both halves of the
+ * argument the suite makes about the hero, and one extra.
+ *
+ * It is *not* in the `EXPECTED` table above because that samples once after the
+ * page settles, and this one cannot be sampled then. It is declared
+ * `animation-fill-mode: backwards`, deliberately (see the note in
+ * `Features.module.css`), which means a finished animation is no longer reported
+ * by `getAnimations()`. The `fill: both` entry above can be sampled late only
+ * because a forward fill keeps it enumerable. So this samples *during* the
+ * window instead, which is the stronger assertion anyway: it proves motion
+ * happened, not that a fill exists.
+ */
+test.describe("features entrance", () => {
+  /** 5 pipeline steps + 4 feature rows + 1 CTA. */
+  const ELEMENTS = 10;
+
+  const REVEAL_SOURCE = new RegExp("^_?featureReveal_[a-z0-9]+_\\d+$").source;
+
+  /**
+   * Whether the entrance is running, as a page predicate.
+   *
+   * The regex is rebuilt inside the page from its source string, because a
+   * `RegExp` cannot cross the boundary — passing the object itself and calling
+   * `.test()` on it in the page throws, and `waitForFunction` then reports only
+   * a timeout, which reads exactly like "the animation never ran". That is the
+   * failure this whole suite exists to detect, so it must not be one of its own
+   * ways of failing.
+   */
+  const revealIsRunning = (src: string) =>
+    document
+      .getAnimations()
+      .some((a) =>
+        new RegExp(src).test(
+          (a as unknown as { animationName?: string }).animationName ?? "",
+        ),
+      );
+
+  async function waitForReveal(page: Page) {
+    await page.waitForFunction(revealIsRunning, REVEAL_SOURCE, {
+      timeout: 10_000,
+    });
+  }
+
+  test("runs the staggered reveal while the page settles", async ({ page }) => {
+    await mockApi(page, undefined, { auth: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    // Before the navigation, and after the media emulation: a `reducedMotion`
+    // setting applied to a loaded page need not restart the stylesheet's
+    // animation bookkeeping, so the reveal would be opted out on a page that
+    // had already read it.
+    await page.goto("/features");
+    // Polled on animation frames, so it cannot step over the window: the reveal
+    // runs 0.55s and the last element is still waiting out a 440ms delay, which
+    // is ~60 frames of opportunity.
+    await waitForReveal(page);
+
+    const running = await runningAnimations(page);
+    expect(
+      running["featureReveal"] ?? 0,
+      `featureReveal runs ${running["featureReveal"] ?? 0} time(s) on /features, ` +
+        `wanted ${ELEMENTS}+ — found: ${Object.keys(running).join(", ") || "none"}`,
+    ).toBeGreaterThanOrEqual(ELEMENTS);
+  });
+
+  test("hands the transform back once it finishes", async ({ page }) => {
+    // The reason the fill is `backwards` and not `both`. A forward fill keeps
+    // applying the last frame's `transform: translateY(0)` forever, and an
+    // animated value outranks a normal declaration in the cascade — so
+    // `.featureRow:hover { transform: translateY(-2px) }` would be silently
+    // overridden and the lift would never happen. Nothing about the page would
+    // look broken, so this is asserted rather than left to review.
+    await mockApi(page, undefined, { auth: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/features");
+    await expect(page.locator("h1").first()).toBeVisible();
+    // The premise, then the wait: the reveal has to have run for "it stopped
+    // running" to mean anything, and waiting on its *absence* is the state that
+    // proves the fill has been given up. Sleeping out the duration instead
+    // would be a claim about the machine's speed, and `no-wall-clock-sleeps`
+    // is right about that (#340).
+    await waitForReveal(page);
+    await page.waitForFunction(
+      (src) =>
+        !document
+          .getAnimations()
+          .some((a) =>
+            new RegExp(src).test(
+              (a as unknown as { animationName?: string }).animationName ?? "",
+            ),
+          ),
+      REVEAL_SOURCE,
+      { timeout: 10_000 },
+    );
+
+    const transform = await page
+      .locator('[class*="featureRow_"]')
+      .first()
+      .evaluate((el) => getComputedStyle(el).transform);
+    expect(
+      transform,
+      `the feature row's transform is still ${transform} after the animation ` +
+        "finished, so the fill is holding it and the hover lift cannot apply",
+    ).toBe("none");
+  });
+
+  test("shows every card when reduced motion is requested", async ({ page }) => {
+    await mockApi(page, undefined, { auth: false });
+
+    // The premise first. "No animation is running" is trivially true of a page
+    // whose entrance never ran, which is how the hero's reduced-motion check
+    // passed against the dead-blobs code this suite was written for.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/features");
+    await waitForReveal(page);
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    // A fresh document: flipping the media setting alone need not restart the
+    // stylesheet's animation bookkeeping on an already-loaded page.
+    await page.goto("/features");
+    await expect(page.locator("h1").first()).toBeVisible();
+
+    const running = await runningAnimations(page);
+    expect(
+      running["featureReveal"] ?? 0,
+      "featureReveal is still running under prefers-reduced-motion: reduce",
+    ).toBe(0);
+
+    // The half that actually matters, and the reason the hidden state lives
+    // inside the keyframe rather than in the rules: the cards must be there.
+    // Gating an entrance on reduced motion is only safe if "no animation" means
+    // "already arrived" — otherwise the reader gets four invisible cards.
+    //
+    // Read once, at a single instant, rather than through `toHaveCSS`. That
+    // assertion retries, so it would sit and wait out an animation that was
+    // never meant to run and then report `opacity: 1` — passing on exactly the
+    // bug this is here to catch. A point-in-time read cannot be satisfied by a
+    // card that arrives late, which is the claim being made.
+    const rows = await page.$$eval('[class*="featureRow_"]', (els) =>
+      els.map((el) => {
+        const style = getComputedStyle(el);
+        return {
+          opacity: style.opacity,
+          height: Math.round(el.getBoundingClientRect().height),
+        };
+      }),
+    );
+    expect(rows, "the four feature cards are not in the DOM").toHaveLength(4);
+    for (const [i, row] of rows.entries()) {
+      expect(row.opacity, `card ${i} is at opacity ${row.opacity} with motion off`).toBe(
+        "1",
+      );
+      expect(row.height, `card ${i} has no height (${row.height}px)`).toBeGreaterThan(0);
+    }
   });
 });

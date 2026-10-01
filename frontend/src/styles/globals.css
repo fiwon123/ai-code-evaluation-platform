@@ -64,6 +64,16 @@
      surface) while staying calm, and distinct from --color-surface-secondary
      so "hovered" and "secondary" never read as the same surface. */
   --color-surface-hover: #e3eaf7;
+  /* The panel a marketing feature card sits on, and the one surface in this
+     palette that is DARKER than the page behind it (#351). The alternative
+     candidates are all lighter — --color-surface is #ffffff — which is why a
+     card built from them separated from --color-bg by 1.05:1 and read as flat
+     grey rather than as a panel. The step is bounded from below by text, not
+     by taste: --color-text-muted (#475569) is 5.57:1 here, so there is still
+     1.07 of headroom over AA for 16px body copy, and --color-text (#0f172a)
+     is 13.13:1. Darker than this and the muted paragraph is the first thing
+     to go; lighter and the card stops reading as a card. */
+  --color-surface-card: #d4deeb;
   --color-divider: #d8e1ec;
   --color-border: #c9d4e0;
   --color-border-hover: #94a3b8;
@@ -203,6 +213,14 @@
      contrast to 5.43:1 while hovered. Also 1.22:1 away from
      --color-surface-raised, so "hovered row" never looks like a raised card. */
   --color-surface-hover: #0d1322;
+  /* Deliberately the value --color-bg-subtle already had, so the dark palette
+     renders exactly as it did before #351. The fix for a card that disappears
+     into the page is a *light-mode* one: there the page is #eef2f7 and every
+     available surface was lighter, so no existing token could separate. Here
+     the page is already the darkest thing in the layout and #141d33 reads as a
+     panel against it. Darkening further would spend the 0.41 of headroom
+     --color-text-muted (#7c8ca6) has over AA on this surface. */
+  --color-surface-card: #141d33;
   --color-divider: #24334f;
   --color-border: #2c3d5c;
   --color-border-hover: #46618c;
