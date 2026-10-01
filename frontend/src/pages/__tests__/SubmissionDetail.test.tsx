@@ -877,9 +877,9 @@ describe("SubmissionDetail", () => {
     // terminal status with no output.
     setToken("jwt-token");
     vi.stubGlobal("WebSocket", FakeWebSocket);
-    // Polls (which stop once the socket is open) keep returning "processing";
-    // the flag flips only when the terminal update lands, so the request the
-    // fallback makes is the one that returns the record.
+    // Polls return "processing" while the socket is still connecting; the flag
+    // flips only once the terminal update lands, so the request the fallback
+    // makes is the one that returns the record.
     let deliverFinished = false;
     fetchMock.mockImplementation(() => {
       const body = deliverFinished ? finishedSubmission : processingSubmission;
@@ -892,15 +892,54 @@ describe("SubmissionDetail", () => {
       expect(FakeWebSocket.instances.length).toBeGreaterThan(0);
       return FakeWebSocket.latest();
     });
-    socket.open();
+    // Inside `act`: `open` flips the hook to "open", which re-runs the poll
+    // effect (it is a dependency) and retires the poll timer. Left bare, that
+    // update was the other half of the `act` warning — and it left the poll loop
+    // armed, which is what quietly substituted polling for the socket path
+    // below.
+    await act(async () => {
+      socket.open();
+    });
     expect(await screen.findByText(/Running tests/i)).toBeInTheDocument();
+
+    // A snapshot first, and this is load-bearing. A status/phase-only update is
+    // a no-op against a null `liveSubmission` — `useSubmissionSocket` returns
+    // `prev` unchanged when there is nothing to patch — so with no prior
+    // snapshot the terminal update below never reaches the component and the
+    // fallback re-fetch never runs.
+    //
+    // Which is what used to happen here: the socket path was inert, the "100%"
+    // came from the still-armed poll loop, and the test passed while exercising
+    // neither its own name nor its comment. Verified by deleting the fallback
+    // re-fetch from `SubmissionDetail` — the old test still passed.
+    await act(async () => {
+      socket.message({ type: "snapshot", submission: processingSubmission });
+    });
+
     const beforeRecord = fetchMock.mock.calls.length;
 
-    // Terminal status, but no record attached.
+    // Terminal status, but no record attached. Dispatched inside `act` and
+    // asserted synchronously, like the socket test above.
+    //
+    // This used to be a bare `socket.message(...)` followed by `findByText`,
+    // which made the test a race rather than an assertion: the update landed
+    // outside `act`, so React deferred the re-render to its own scheduler
+    // instead of flushing it here, and the page had to reach "100%" through
+    // several scheduler hops inside `findBy*`'s 1s deadline. That deadline is
+    // wall-clock, so under full-suite load it could expire with the fallback
+    // still in flight — the flake, and why the run logged "An update to
+    // SubmissionDetail inside a test was not wrapped in act".
+    //
+    // `act` drains microtasks on the way out, so the effect fires, the fallback
+    // request resolves and the record lands before this line returns. Nothing
+    // waits on a timer, so the pass is not a function of the clock (#330).
     deliverFinished = true;
-    socket.message({ type: "update", status: "completed", phase: null });
+    await act(async () => {
+      socket.message({ type: "update", status: "completed", phase: null });
+    });
 
-    expect(await screen.findByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("2/2")).toBeInTheDocument();
     expectCodeToContain(/def two_sum/);
     expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeRecord);
   });
