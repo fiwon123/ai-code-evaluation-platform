@@ -439,7 +439,8 @@ function SubmissionListCard({
 
   // What ran the code, when the submission does not say. `provider`/`model` are
   // nullable and a row written before the model column existed has no model, so
-  // this degrades to the provider rather than to a dash.
+  // this degrades to the provider. Only a row with neither says so out loud,
+  // rather than leaving the second line blank.
   const runner = [submission.provider, submission.model]
     .filter((part): part is string => Boolean(part))
     .join(" · ");
@@ -453,6 +454,11 @@ function SubmissionListCard({
       <Link
         to={`/submissions/${submission.id}`}
         className={styles.listLink}
+        // The link wraps the badges, the score and the runner, so its name from
+        // content is that concatenation — "completed Python 100% Two Sum demo ·
+        // demo" — which names no challenge in a list of links. Say what the row
+        // *is* instead; the numbers stay in the card for browse mode.
+        aria-label={`${submission.challenge_title} — ${submission.status}`}
       >
         <span className={styles.listHead}>
           <span className={styles.listBadges}>
@@ -475,10 +481,23 @@ function SubmissionListCard({
             {percent(submission.score)}
           </span>
         </span>
+        {/* Row 2 is the challenge's name (#361). It used to be `provider ·
+            model`, falling back to the challenge id, so a card could not be
+            named by the thing it was a run *of* — and an in-flight row showed
+            "waiting 4s" for every challenge in the list. Two children, not one
+            string, because `.listBody` clamps at two lines: the heading takes
+            one and the runner takes the second the block had already reserved,
+            so the card keeps its height. Each child is a `block` in the CSS for
+            the same reason — Chromium reports the parent's `-webkit-box` as
+            `flow-root`, which is not "the children are blocks", and as inline
+            spans they ran together on one line. */}
         <span className={styles.listBody}>
-          {inProgress
-            ? `waiting ${formatElapsed(submission.created_at, now)}`
-            : (runner || submission.challenge_id)}
+          <span className={styles.listHeading}>{submission.challenge_title}</span>
+          <span className={styles.listRunner}>
+            {inProgress
+              ? `waiting ${formatElapsed(submission.created_at, now)}`
+              : runner || "no runner recorded"}
+          </span>
         </span>
       </Link>
 

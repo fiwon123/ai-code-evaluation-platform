@@ -134,6 +134,10 @@ export interface Submission {
   id: string;
   user_id: string;
   challenge_id: string;
+  /** Parent challenge's title, resolved server-side so a submission card can
+   *  name its challenge without a lookup. Always present: the backend reads it
+   *  off a non-null, cascading relationship. */
+  challenge_title: string;
   status: SubmissionStatus;
   /** Pipeline phase while processing: "generating" | "testing" | "repairing";
    *  null when pending or terminal. Absent on older cached responses. */
@@ -300,7 +304,6 @@ export interface PlatformStats {
  *  challenge title (backend resolves both for the admin listing). */
 export interface AdminSubmission extends Submission {
   username: string;
-  challenge_title: string;
 }
 
 export interface StatusCount {

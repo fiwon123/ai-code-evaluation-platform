@@ -333,16 +333,16 @@ async function openLists(page: Page, theme: "light" | "dark" = "light") {
 }
 
 /**
- * A submission row, found by its status badge.
+ * A submission row, found by the challenge it names.
  *
- * Not by its link text: `SubmissionRead` carries no `challenge_title`, so a
- * submission card names no challenge and its link is addressed only by id.
- * Keyed on the badge because "completed" appears once per row and nowhere else
- * in the column.
+ * #361: `SubmissionRead` now carries `challenge_title` and the card renders it,
+ * so a row can be addressed the way a reader finds it — by the challenge. The
+ * status badge is deliberately no longer the key: "completed" is not a name,
+ * and it is the one field that says nothing about *which* run this is.
  */
-function submissionRow(page: Page, status: "completed" | "processing" | "failed") {
+function submissionRow(page: Page, title: string) {
   return column(page, "Recent submissions").filter({
-    has: page.getByText(status, { exact: true }),
+    has: page.getByText(title, { exact: true }),
   });
 }
 
@@ -490,7 +490,7 @@ test.describe("Profile list alignment", () => {
 
   test("a completed row carries its test count, duration and breakdown", async ({ page }) => {
     await openLists(page);
-    const row = submissionRow(page, "completed");
+    const row = submissionRow(page, "Two Sum");
     // `exact`: the bubble's own text contains the word "Tests" ("118 of 120 tests
     // passed"), and a substring match would make this assert against whichever of
     // the two happened to come first in the DOM.
@@ -532,25 +532,69 @@ test.describe("Profile list alignment", () => {
     // overlay still lets the topmost element win, so "does the click work" is not
     // a sufficient probe on its own.
     await openLists(page);
-    const row = submissionRow(page, "completed");
+    const row = submissionRow(page, "Two Sum");
     await row.getByText("118/120").hover();
     await expect(page.getByRole("tooltip")).toBeVisible();
     await row.locator('[class*="listLink"]').click({ position: { x: 40, y: 8 } });
     await expect(page).toHaveURL(/\/submissions\//);
   });
 
+  test("a submission row is named by its challenge, not its status", async ({ page }) => {
+    await openLists(page);
+    // The issue: a card whose only text was a status pill and a runner string,
+    // so nothing on it said which challenge the run belonged to. Every row now
+    // names it — including the in-flight one, which has no score, no test count
+    // and no duration to identify it by.
+    for (const title of ["Two Sum", "LRU Cache", "Edit Distance"]) {
+      await expect(
+        submissionRow(page, title).getByText(title, { exact: true })
+      ).toBeVisible();
+    }
+    // The link is what a keyboard or screen reader lands on, so its accessible
+    // name has to carry the challenge too — not just the score and a duration.
+    await expect(
+      column(page, "Recent submissions").getByRole("link", { name: /^Two Sum/ })
+    ).toBeVisible();
+    // The title and the runner are two *lines*, not one run-together string.
+    // They are sibling spans inside a `display: -webkit-box` with
+    // `line-clamp: 2`, and as inline children they flowed together and read
+    // "Two Sumdemo" with the block's second line left blank.
+    //
+    // Compared by *edges*, not by `y`. This assertion was `runner.y >
+    // heading.y` and it passed against that bug: on one line the 14px runner sits
+    // ~2px lower than the 16px heading (they share a baseline), so the tops
+    // differ and the test was satisfied by the very layout it was written to
+    // catch. A line is bounded by its bottom, so that is what is compared here.
+    const card = submissionRow(page, "Two Sum");
+    const [heading, runner] = await Promise.all([
+      card.locator('[class*="listHeading"]').boundingBox(),
+      card.locator('[class*="listRunner"]').boundingBox(),
+    ]);
+    expect(heading, "challenge title is rendered").not.toBeNull();
+    expect(runner, "runner line is rendered").not.toBeNull();
+    expect(runner!.y, "runner starts below the title's last line, not beside it").toBeGreaterThanOrEqual(
+      heading!.y + heading!.height,
+    );
+    // And they share a left edge, so the pair reads as one block of text rather
+    // than as a sentence the reader has to un-concatenate.
+    expect(
+      Math.abs(runner!.x - heading!.x),
+      "title and runner start at the same x",
+    ).toBeLessThan(1);
+  });
+
   test("a submission row names its language, provider and model", async ({ page }) => {
     await openLists(page);
-    const row = submissionRow(page, "completed");
+    const row = submissionRow(page, "Two Sum");
     await expect(row.getByText("Python")).toBeVisible();
     await expect(row.getByText("demo · demo")).toBeVisible();
     // A row with no model shows the provider alone, not a trailing separator.
-    const failed = submissionRow(page, "failed");
+    const failed = submissionRow(page, "LRU Cache");
     await expect(failed.getByText("anthropic · claude-sonnet-4")).toBeVisible();
     // An in-flight row reports progress instead: the model may not even have
     // been chosen yet, and a stale provider next to a live timer reads as a
     // claim about work that has not happened.
-    await expect(submissionRow(page, "processing").getByText(/^waiting /)).toBeVisible();
+    await expect(submissionRow(page, "Edit Distance").getByText(/^waiting /)).toBeVisible();
   });
 
   test("a challenge card joins its own rollup, and admits when it has none", async ({ page }) => {
@@ -604,10 +648,14 @@ test.describe("Profile list alignment", () => {
     // anyway — the defect was the *pairing*, and only painting both proves it.
     for (const theme of ["light", "dark"] as const) {
       await openLists(page, theme);
-      for (const status of ["completed", "failed", "processing"] as const) {
+      for (const [title, status] of [
+        ["Two Sum", "completed"],
+        ["LRU Cache", "failed"],
+        ["Edit Distance", "processing"],
+      ] as const) {
         await expectReadable(
           page,
-          submissionRow(page, status).locator('[class*="badge"]').first(),
+          submissionRow(page, title).locator('[class*="badge"]').first(),
           `${theme} ${status} badge`,
         );
       }
@@ -619,7 +667,7 @@ test.describe("Profile list alignment", () => {
     // All three must read "no value" rather than `0` — a zero score is a claim
     // about quality, and a zero duration reads as instant.
     await openLists(page);
-    const processing = submissionRow(page, "processing");
+    const processing = submissionRow(page, "Edit Distance");
     // Each dash is labelled, so a screen reader hears why the value is missing
     // rather than announcing an em dash three times in a row.
     await expect(processing.getByLabel("no score yet")).toHaveText("—");

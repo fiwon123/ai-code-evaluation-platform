@@ -69,8 +69,14 @@ async def _get_own_submission(
     ``with_attempts`` eager-loads the repair history for the detail view.
     It is opt-in because the share and PATCH routes do not read it, and an
     AsyncSession cannot lazy-load a relationship on access.
+
+    ``challenge`` is loaded unconditionally: ``SubmissionRead.challenge_title``
+    reads it, so every route returning this object needs it.
     """
-    options = [selectinload(Submission.evaluation_result)]
+    options = [
+        selectinload(Submission.evaluation_result),
+        selectinload(Submission.challenge),
+    ]
     if with_attempts:
         options.append(selectinload(Submission.attempts))
     result = await db.execute(
@@ -155,7 +161,13 @@ async def list_submissions(
 
     base = (
         select(Submission)
-        .options(selectinload(Submission.evaluation_result))
+        .options(
+            selectinload(Submission.evaluation_result),
+            # The dashboard labels each card with the challenge title, so the
+            # relationship rides along with the result rather than costing a
+            # query per row. selectinload keeps the paged select join-free.
+            selectinload(Submission.challenge),
+        )
         .where(*filters)
         .order_by(Submission.created_at.desc())
     )
