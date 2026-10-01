@@ -60,3 +60,19 @@ class Submission(UUIDMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="EvaluationAttempt.attempt_number",
     )
+
+    @property
+    def challenge_title(self) -> str:
+        """The parent challenge's title, so reads can name a submission.
+
+        The FK is NOT NULL and cascades, so a surviving submission always has
+        a challenge and this never returns None — a list of submissions can be
+        labelled without a second round trip per row.
+
+        Reading it touches :attr:`challenge`, so every query that serialises a
+        ``SubmissionRead`` must ``selectinload`` that relationship. An
+        AsyncSession cannot lazy-load on access and would raise MissingGreenlet
+        rather than quietly return a placeholder, which is the intent: a
+        missing eager load is a bug, not a degraded title.
+        """
+        return self.challenge.title

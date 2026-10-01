@@ -93,6 +93,8 @@ async def _load_submission_snapshot(submission_id: UUID, user_id: UUID) -> dict 
             .options(
                 selectinload(Submission.evaluation_result),
                 selectinload(Submission.attempts),
+                # Detail payloads carry challenge_title (see SubmissionRead).
+                selectinload(Submission.challenge),
             )
             .where(Submission.id == submission_id, Submission.user_id == user_id)
         )

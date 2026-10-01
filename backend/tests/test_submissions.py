@@ -409,6 +409,44 @@ async def test_list_submissions_shows_own_only(db_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_submissions_carries_challenge_title(db_client: AsyncClient) -> None:
+    """Each row names its challenge, so the dashboard needs no second lookup.
+
+    #361: the list schema resolves the title from the eager-loaded challenge
+    relationship. Asserted per-row rather than on a whole payload so a second
+    submission cannot mask a wrong title.
+    """
+    token, _ = await register_user(db_client)
+    two_sum = await create_challenge(db_client, token, title="Two Sum")
+    reverse = await create_challenge(db_client, token, title="Reverse Words")
+    await create_submission(db_client, token, two_sum["id"])
+    await create_submission(db_client, token, reverse["id"])
+
+    response = await db_client.get(SUBMISSIONS_URL, headers=auth(token))
+    assert response.status_code == 200
+    titles = {item["challenge_id"]: item["challenge_title"] for item in response.json()["items"]}
+    assert titles == {two_sum["id"]: "Two Sum", reverse["id"]: "Reverse Words"}
+
+
+@pytest.mark.asyncio
+async def test_list_submissions_title_present_without_result(db_client: AsyncClient) -> None:
+    """A row with no evaluation result still names its challenge.
+
+    The in-flight row is the one a user cannot otherwise recognise: it has no
+    score and no test counts, so the title is the only text that identifies it.
+    """
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token, title="Pending Challenge")
+    await create_submission(db_client, token, challenge["id"])
+
+    response = await db_client.get(SUBMISSIONS_URL, headers=auth(token))
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["challenge_title"] == "Pending Challenge"
+    assert item["evaluation_result"] is None
+
+
+@pytest.mark.asyncio
 async def test_list_submissions_pagination(db_client: AsyncClient) -> None:
     token, _ = await register_user(db_client)
     challenge = await create_challenge(db_client, token)
