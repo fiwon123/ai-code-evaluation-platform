@@ -18,20 +18,20 @@
   overflow: hidden;
 }
 
-/* Colour blobs. Sizes/offsets live here; the drift itself is the shared
-   `auroraDrift` keyframe in globals.css. Tints are mixed from tokens that
-   both palettes define, so light and dark both stay legible. */
+/* Colour blobs. Sizes/offsets/tints live here; the drift is composed from
+   `ambient.css`, which is what makes it resolve at all — see that file for the
+   scoping trap. Tints are mixed from tokens that both palettes define, so light
+   and dark both stay legible. */
 .blobPrimary,
 .blobAccent,
 .blobSuccess {
   position: absolute;
   border-radius: var(--radius-full);
   filter: blur(80px);
-  will-change: transform;
-  animation: auroraDrift var(--duration-ambient) ease-in-out infinite;
 }
 
 .blobPrimary {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 520px;
   height: 520px;
   top: -220px;
@@ -44,6 +44,7 @@
 }
 
 .blobAccent {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 420px;
   height: 420px;
   top: 18%;
@@ -58,6 +59,7 @@
 }
 
 .blobSuccess {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 460px;
   height: 460px;
   bottom: -260px;
@@ -227,8 +229,10 @@
   opacity: 1;
 }
 
-/* A single line travelling down the panel, evoking a running test job. */
+/* A single line travelling down the panel, evoking a running test job. The
+   keyframe is composed rather than named inline — see `ambient.css`. */
 .panelScan {
+  composes: ambientScanline from "../../styles/ambient.css";
   position: absolute;
   left: 0;
   right: 0;
@@ -241,7 +245,6 @@
     transparent
   );
   pointer-events: none;
-  animation: scanline 6s var(--ease-out-expo) infinite;
 }
 
 .animHeader {
@@ -990,6 +993,21 @@
 
 .cta:hover::after {
   opacity: 1;
+}
+
+/* Slides the 300%-wide gradient along the 4px bar.
+   Declared here rather than composed, because `composes` applies to a class and
+   this rule is a pseudo-element. It was previously `animation: gradientShift`
+   against a `@keyframes gradientShift` that existed in no file at all, so the
+   bar has been sitting perfectly still. */
+@keyframes gradientShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .cta::before {

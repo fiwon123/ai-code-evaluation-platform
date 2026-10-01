@@ -29,30 +29,20 @@
   overflow: hidden;
 }
 
-/* The drift, declared HERE rather than referenced from globals.css.
-   This is a Vite CSS-modules trap, and the symptom is silent: a build
-   rewrites a keyframe *reference* inside a module to a scoped name
-   (`animation: auroraDrift` -> `animation: _auroraDrift_18avk_1`) but does
-   not rewrite the `@keyframes` rule when that rule lives in an unscoped
-   stylesheet. The element then names a keyframes rule that does not exist,
-   the animation never starts, and `document.getAnimations()` reports nothing
-   — the page looks fine and simply does not move. Declaring the keyframes in
-   the same file scopes the name and its definition together, so they match.
-   (`Home.module.css` and `AuthLayout.module.css` reference the global
-   `auroraDrift` the same way and are therefore not animating either — filed
-   separately, not fixed here.) */
-@keyframes auroraDrift {
-  0%,
-  100% {
-    transform: translate3d(-4%, -2%, 0) scale(1);
-  }
-  33% {
-    transform: translate3d(6%, 4%, 0) scale(1.15);
-  }
-  66% {
-    transform: translate3d(-2%, 7%, 0) scale(0.92);
-  }
-}
+/* The drift, composed from `ambient.css` rather than declared here.
+   This started as a local `@keyframes auroraDrift` copy, a workaround for a
+   Vite CSS-modules trap: a build rewrites a keyframe *reference* inside a module
+   to a scoped name (`animation: auroraDrift` -> `animation: _auroraDrift_18avk_1`)
+   but does not rewrite the `@keyframes` rule when that rule lives in an unscoped
+   stylesheet, so the element ends up naming a keyframes rule that does not
+   exist. The animation never starts, `document.getAnimations()` reports nothing,
+   and the page looks fine while simply not moving.
+
+   Composing from a shared file fixes that at the root for every module instead of
+   one file at a time — Home, AuthLayout and the challenge forms were all still
+   dead when this copy was the only one that worked. See `ambient.css`, and
+   `ambient-motion.test.ts`, which now fails if a module names a keyframe it
+   cannot resolve. */
 
 /* Sizes/offsets here. Tints are `color-mix` over tokens both palettes define,
    which is what `ambient-motion.test.ts` requires — a literal hex fails it. */
@@ -61,11 +51,10 @@
   position: absolute;
   border-radius: var(--radius-full);
   filter: blur(80px);
-  will-change: transform;
-  animation: auroraDrift var(--duration-ambient) ease-in-out infinite;
 }
 
 .blobPrimary {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 380px;
   height: 380px;
   top: -180px;
@@ -78,6 +67,7 @@
 }
 
 .blobAccent {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 300px;
   height: 300px;
   bottom: -160px;
@@ -91,9 +81,9 @@
   );
 }
 
-/* Required, not optional: `ambient-motion.test.ts` fails the build on any
-   looping animation in any module that has no reduced-motion opt-out, and
-   Home's does exactly this. */
+/* The opt-out for these two now ships with the composed class in `ambient.css`.
+   Kept here as well: it is the same belt-and-braces the hero and the auth
+   layout carry, and it costs one rule. */
 @media (prefers-reduced-motion: reduce) {
   .blobPrimary,
   .blobAccent {

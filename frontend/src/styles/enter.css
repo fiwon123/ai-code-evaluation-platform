@@ -1,0 +1,33 @@
+/*
+ * The one entrance animation for page-level reveals (issue #366).
+ *
+ * Split out from `ambient.css` because it is a different promise: this one
+ * *finishes* after 0.6s and leaves the page still, so it is not decoration and
+ * is deliberately not subject to the looping-motion rule that
+ * `ambient-motion.test.ts` enforces elsewhere. Folding the two together would
+ * have meant either exempting the entrance from that audit or, worse, gating it
+ * on `prefers-reduced-motion` — which would leave a reduced-motion reader with
+ * a page that never fades in and no way to tell whether it had loaded.
+ *
+ * It lives here rather than in `globals.css` for the reason spelled out in
+ * `ambient.css`: a module cannot name a global keyframe (Vite scopes the
+ * reference and leaves the definition alone), so `CreateChallenge` and
+ * `EditChallenge` were both building `animation: _fadeInUp_9a2` against a
+ * `@keyframes fadeInUp` that nothing defined. Both pages have been appearing
+ * instantly, with no fade, for as long as the animation has been written.
+ */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/** The entrance, for a page shell or a header that should rise into place. */
+.fadeInUp {
+  animation: fadeInUp 0.6s ease both;
+}

@@ -4,6 +4,7 @@
  * drifted by hand. What stays here is the shell the page-rhythm lock reads. */
 
 .page {
+  composes: fadeInUp from "../styles/enter.css";
   max-width: var(--max-width);
   margin: 0 auto;
   width: 100%;
@@ -15,12 +16,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  animation: fadeInUp 0.6s ease both;
 }
 
 .header {
+  composes: fadeInUp from "../styles/enter.css";
   max-width: 760px;
-  animation: fadeInUp 0.6s ease both;
 }
 
 .crumbs {

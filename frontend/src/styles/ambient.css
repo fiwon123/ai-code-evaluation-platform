@@ -1,0 +1,100 @@
+/*
+ * Ambient motion that CSS modules have to opt into (issue #366).
+ *
+ * The trap this file exists to close, because it is silent: Vite's CSS-modules
+ * pass rewrites the *class* selectors in a `*.module.css`, and it also rewrites
+ * a class name found in an `animation` value. It does **not** rewrite
+ * `@keyframes` names, and it cannot reach into `globals.css` to pair them up.
+ * So a module that referenced a keyframe defined in the global sheet built to
+ *
+ *     @keyframes auroraDrift          ->  @keyframes auroraDrift      (global)
+ *     .blob   { animation: auroraDrift }  ->  ._blob_1h { animation: _auroraDrift_1h }
+ *
+ * ...which matches nothing. The element is left with an animation-name that no
+ * keyframes rule defines, so it renders *static* and the stylesheet is still a
+ * clean build. Nothing warns, no test failed, and four families of ambient
+ * motion were dead on arrival:
+ *
+ *     auroraDrift    Home hero blobs + the auth-layout backdrop
+ *     scanline       Home's terminal panel
+ *     fadeInUp       Create/Edit Challenge entrance      (see `enter.css`)
+ *     gradientShift  Home's CTA bar — referenced but defined nowhere at all
+ *
+ * A `composes` from a plain (non-module) stylesheet puts the keyframes and the
+ * rule that names them in the *same* compilation, so the two are renamed with
+ * the same suffix and resolve. Verified in Chromium: the animation runs, a
+ * per-selector `animation-duration` still overrides the shared default, and
+ * the reduced-motion opt-out below still wins.
+ *
+ * This is the same "declare it once, `composes` it" shape as `focus.css` and
+ * `sr-only.css` — deliberately not a local `@keyframes` copy in each module,
+ * which is the version that drifts and dies quietly the next time someone
+ * renames one side.
+ *
+ * `ambient-motion.test.ts` fails if a module names a keyframe it cannot
+ * resolve, so a new module cannot reintroduce this.
+ */
+
+/* The colour blobs behind the hero and the sign-in card: a slow, uneven drift
+   with a scale change, so the wash never reads as a still gradient. */
+@keyframes auroraDrift {
+  0%,
+  100% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, 4%, 0) scale(1.15);
+  }
+  66% {
+    transform: translate3d(-2%, 7%, 0) scale(0.92);
+  }
+}
+
+/* One travelling line, evoking a running test job. */
+@keyframes scanline {
+  0% {
+    transform: translate3d(0, -100%, 0);
+    opacity: 0;
+  }
+  12%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 400%, 0);
+    opacity: 0;
+  }
+}
+
+/**
+ * The drift itself, for a decorative colour blob.
+ *
+ * A module composes this and then supplies only its own geometry — size, offset,
+ * tint — optionally re-timing with `animation-duration` / `animation-delay`, as
+ * `AuthLayout` does to keep its three blobs out of lockstep.
+ */
+.ambientDrift {
+  will-change: transform;
+  animation: auroraDrift var(--duration-ambient) ease-in-out infinite;
+}
+
+/** The same loop, for the terminal panel's travelling line. */
+.ambientScanline {
+  animation: scanline 6s var(--ease-out-expo) infinite;
+}
+
+/*
+ * The opt-out ships with the animation rather than being re-declared per module.
+ *
+ * Previously each module carried its own `animation: none` under reduced motion,
+ * which meant the guarantee was only as good as the copy. Here a module that
+ * composes `.ambientDrift` cannot forget it, and cannot have its opt-out
+ * outranked by its own `animation` shorthand — the shared class is the only
+ * thing that names the animation.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .ambientDrift,
+  .ambientScanline {
+    animation: none;
+  }
+}
