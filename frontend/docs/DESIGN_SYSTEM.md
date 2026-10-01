@@ -86,6 +86,19 @@ criteria. `e2e/contrast.spec.ts` measures all of this in both themes.
 
 Both hovers are also kept clear of `--color-surface-secondary` / `--color-surface-raised`, so "hovered" and "secondary" or "raised" never read as the same state. A hover only *slightly* different from its surface is worse than a missing one: it looks broken rather than absent, so the palette invariant in `design-tokens.test.ts` enforces a 1.05:1 minimum step (GitHub's light-theme row hover is 1.07:1).
 
+#### Card surfaces
+
+`--color-surface-card` is the one surface that is **darker than the page** in the light palette, and it exists because every other candidate was lighter. The measured problem (#351): a feature card built on `--color-bg-subtle` sits on `--color-bg` at **1.05:1**, and its inner panel — `--color-bg` again — sits on the page at **1.00:1**, i.e. the same colour, so the page read as flat grey with panels drawn on it rather than as cards. `--color-surface` is `#ffffff` and separates by less, not more.
+
+| Palette | Page | Card | Step | Muted text on card |
+|---------|------|------|------|--------------------|
+| light | `#eef2f7` | `#d4deeb` | 1.21:1 | 5.57:1 |
+| dark | `#0a1020` | `#141d33` | 1.13:1 | 4.91:1 |
+
+The light step is bounded by text, not by taste: `--color-text-muted` (`#475569`) is the body copy inside these cards, so 5.57:1 leaves 1.07 of headroom over AA, and `--color-text` is 13.13:1. Every darker candidate was measured and rejected — `#cfd9e8` (1.27:1 step, 5.32:1 muted) and `#c3cfe3` (1.40:1, 4.82:1) both buy edge definition by spending legibility on the paragraph, which is the wrong thing to spend.
+
+The dark value is unchanged from what `--color-bg-subtle` already provided, so the dark palette renders identically. That is not laziness: the dark page (`#0a1020`) is already the darkest element in the layout, so the failure mode is one-sided.
+
 ### Page titles
 
 Every page `<h1>` renders through the shared `PageTitle` component
@@ -161,6 +174,7 @@ below.
 | `--color-surface-secondary` | Nested surfaces |
 | `--color-surface-raised` | Raised surfaces (menus, popovers) |
 | `--color-surface-hover` | Resting state for a hoverable surface (table rows, list items) |
+| `--color-surface-card` | Marketing feature/panel cards that must read as a card on the page |
 | `--color-divider` | Dividers and separators |
 | `--color-border` | Borders |
 | `--color-border-hover` | Border hover states |

@@ -173,6 +173,49 @@ test.describe("Text contrast", () => {
           `header nav link (${theme})`,
         );
       });
+
+      // #351: the Features page drew its evaluation-score rows as 12px text on
+      // their own status tints, in both themes — 3.00:1 / 4.00:1 for the pass
+      // row and 3.95:1 / 3.62:1 for the fail row, all under AA. Measured here
+      // rather than read from the stylesheet because
+      // `theme-contrast.test.ts` already proved the *tokens* were fine; the
+      // defect was in which step the component pointed at, and only the painted
+      // result distinguishes the two.
+      test("features report rows clear AA on their status tints", async ({
+        page,
+      }) => {
+        await openThemed(page, theme, "/features");
+        // Hashed CSS-module classes, so a bare `.reportItemOk` matches nothing.
+        const m = (name: string) => `[class*="${name}_"]`;
+        // The premise: two passing rows and one failing row exist. Without this
+        // a renamed or restructured mockup would leave the loop below asserting
+        // nothing at all.
+        await expect(page.locator(m("reportItemOk"))).toHaveCount(2);
+        await expect(page.locator(m("reportItemBad"))).toHaveCount(1);
+        for (const cls of ["reportItemOk", "reportItemBad"]) {
+          await expectReadable(
+            page,
+            page.locator(m(cls)).first(),
+            `features ${cls} (${theme})`,
+          );
+        }
+      });
+
+      test("features body copy clears AA on the card", async ({ page }) => {
+        await openThemed(page, theme, "/features");
+        const m = (name: string) => `[class*="${name}_"]`;
+        // The other half of #351: the card was darkened to `--color-surface-card`
+        // so it would read as a card, which spends contrast the muted paragraph
+        // depends on. `--color-surface-card` is bounded in
+        // `theme-contrast.test.ts`; this is the same bound on the painted page,
+        // and it would also catch a cascade rule landing on top of the token.
+        await expect(page.locator(m("featureText")).first()).toBeVisible();
+        await expectReadable(
+          page,
+          page.locator(m("featureText")).first(),
+          `features card body copy (${theme})`,
+        );
+      });
     });
   }
 
