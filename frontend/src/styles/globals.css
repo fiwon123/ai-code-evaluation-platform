@@ -444,17 +444,18 @@ h4 { font-size: var(--font-size-xl); }
   padding: 0 var(--space-6);
 }
 
-/* Animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* Animations
+   ----------
+   `fadeInUp` and the ambient keyframes used to be declared here, and the modules
+   that referenced them were silently dead: a CSS module's `animation` value is
+   rewritten to a scoped name by the build, while a `@keyframes` in this
+   unscoped sheet is not, so the two stopped matching and the elements rendered
+   static. Anything a module has to name now lives in `ambient.css` or
+   `enter.css` and is reached with `composes`, which keeps the reference and its
+   definition in one compilation.
+
+   What remains here is the layer that genuinely is global: the decoration
+   classes below, which are written in this file and so need no hop. ---- */
 
 /* ---- Ambient motion layer (issue #221) -------------------------------
    The landing hero and the marketing pages share one set of ambient
@@ -474,21 +475,6 @@ h4 { font-size: var(--font-size-xl); }
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-ambient: 24s;
   --duration-float: 14s;
-}
-
-/* Slow counter-drift for the soft colour blobs behind the hero. Sized in
-   `em` so a blob scales with its own font-size. */
-@keyframes auroraDrift {
-  0%,
-  100% {
-    transform: translate3d(-4%, -2%, 0) scale(1);
-  }
-  33% {
-    transform: translate3d(6%, 4%, 0) scale(1.15);
-  }
-  66% {
-    transform: translate3d(-2%, 7%, 0) scale(0.92);
-  }
 }
 
 /* Pans the background grid so the page reads as a live canvas rather than a
@@ -530,21 +516,9 @@ h4 { font-size: var(--font-size-xl); }
   }
 }
 
-/* A single line travelling down the terminal, evoking a running test job. */
-@keyframes scanline {
-  0% {
-    transform: translate3d(0, -100%, 0);
-    opacity: 0;
-  }
-  12%,
-  70% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(0, 400%, 0);
-    opacity: 0;
-  }
-}
+/* A single line travelling down the terminal, evoking a running test job. Now
+   in `ambient.css` — Home's `.panelScan` is a CSS module and could never resolve
+   a keyframe declared here. */
 
 /* Sweeps a highlight across a section as it enters the viewport. Only
    engaged inside the `@supports` block below, so browsers without

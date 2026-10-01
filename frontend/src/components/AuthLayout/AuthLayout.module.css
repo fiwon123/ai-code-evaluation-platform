@@ -125,11 +125,16 @@
 }
 
 /* ---- Ambient backdrop -------------------------------------------------
-   The landing hero's `auroraDrift` blobs, re-declared rather than imported:
-   CSS modules scope class names, and the point of this layer is that the
-   sign-in page carries the same decoration as the landing page. Colours are
-   `color-mix` over tokens both palettes define — no new token, so
-   `design-tokens.test.ts` stays green by construction. */
+   The landing hero's colour blobs. Colours are `color-mix` over tokens both
+   palettes define — no new token, so `design-tokens.test.ts` stays green by
+   construction.
+
+   The drift is composed from `ambient.css` rather than declared here, and the
+   comment that used to sit above this block had the reason backwards: it said
+   the keyframe was "re-declared rather than imported", which was never true —
+   nothing was re-declared, so `animation: auroraDrift` was being rewritten to a
+   scoped name that matched no keyframes rule, and the backdrop never moved. The
+   shared file spells out the trap; composing from it is what fixes it. */
 
 .backdrop {
   position: absolute;
@@ -145,11 +150,10 @@
   position: absolute;
   border-radius: var(--radius-full);
   filter: blur(80px);
-  will-change: transform;
-  animation: auroraDrift var(--duration-ambient) ease-in-out infinite;
 }
 
 .blobPrimary {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 480px;
   height: 480px;
   top: -200px;
@@ -162,6 +166,7 @@
 }
 
 .blobAccent {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 400px;
   height: 400px;
   top: 26%;
@@ -176,6 +181,7 @@
 }
 
 .blobViolet {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 420px;
   height: 420px;
   bottom: -240px;
@@ -208,10 +214,11 @@
   }
 }
 
-/* Every ambient animation must stop for a reader who asked for that. Without
-   this the sign-in page drifts forever — the exact defect the hero opt-out
-   was added for. The `transform` reset matters too: the drift is the only
-   thing that moves these, so removing the animation is sufficient. */
+/* Belt and braces: the opt-out ships with the composed class in `ambient.css`,
+   so this is no longer the thing that stops the drift. It stays because the
+   three blobs are also re-timed below (duration/delay), and a future edit that
+   re-declares the animation locally would otherwise reintroduce motion for a
+   reader who asked for none. */
 @media (prefers-reduced-motion: reduce) {
   .blobPrimary,
   .blobAccent,
