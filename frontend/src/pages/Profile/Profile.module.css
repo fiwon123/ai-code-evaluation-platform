@@ -265,17 +265,26 @@
 /* A submission card's row 2 is two *lines* (#361): the challenge the run
    belongs to, then the runner. `.listBody` above already reserved exactly two
    lines, so stacking them here fills the reserved height and the card's height
-   does not change. Chromium reports `display: -webkit-box` as `flow-root`, so
-   these children lay out as ordinary blocks and the clamp is what bounds them.
+   does not change.
+
+   `display: block` is load-bearing, and a bounding box is the only reason to
+   believe it. Chromium reports `.listBody`'s `display: -webkit-box` as
+   `flow-root`, which reads like "the children are blocks already" — it is not.
+   A block formatting context does not blockify its children; the children were
+   inline spans, so they flowed together on one line and the row read "Two
+   Sumdemo" with its second reserved line blank. `flow-root` says nothing about
+   the children's own `display`.
 
    Declared once, unlike the block above: this file currently carries two copies
    of its own stylesheet, so a rule added to both is twice as hard to delete.
    The selector is unique, so position does not matter. */
 .listHeading {
+  display: block;
   font-weight: 600;
 }
 
 .listRunner {
+  display: block;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }

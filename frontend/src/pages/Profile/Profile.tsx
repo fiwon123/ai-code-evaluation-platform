@@ -487,9 +487,10 @@ function SubmissionListCard({
             "waiting 4s" for every challenge in the list. Two children, not one
             string, because `.listBody` clamps at two lines: the heading takes
             one and the runner takes the second the block had already reserved,
-            so the card keeps its height. (Chromium reports
-            `display: -webkit-box` as `flow-root`, so these stack as ordinary
-            blocks; the clamp is what bounds the pair.) */}
+            so the card keeps its height. Each child is a `block` in the CSS for
+            the same reason — Chromium reports the parent's `-webkit-box` as
+            `flow-root`, which is not "the children are blocks", and as inline
+            spans they ran together on one line. */}
         <span className={styles.listBody}>
           <span className={styles.listHeading}>{submission.challenge_title}</span>
           <span className={styles.listRunner}>

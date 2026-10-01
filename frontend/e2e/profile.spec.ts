@@ -558,8 +558,13 @@ test.describe("Profile list alignment", () => {
     // The title and the runner are two *lines*, not one run-together string.
     // They are sibling spans inside a `display: -webkit-box` with
     // `line-clamp: 2`, and as inline children they flowed together and read
-    // "Two Sumdemo" with the block's second line left blank. Compared by
-    // position, not by text, because the text assertions above pass either way.
+    // "Two Sumdemo" with the block's second line left blank.
+    //
+    // Compared by *edges*, not by `y`. This assertion was `runner.y >
+    // heading.y` and it passed against that bug: on one line the 14px runner sits
+    // ~2px lower than the 16px heading (they share a baseline), so the tops
+    // differ and the test was satisfied by the very layout it was written to
+    // catch. A line is bounded by its bottom, so that is what is compared here.
     const card = submissionRow(page, "Two Sum");
     const [heading, runner] = await Promise.all([
       card.locator('[class*="listHeading"]').boundingBox(),
@@ -567,9 +572,15 @@ test.describe("Profile list alignment", () => {
     ]);
     expect(heading, "challenge title is rendered").not.toBeNull();
     expect(runner, "runner line is rendered").not.toBeNull();
-    expect(runner!.y, "runner sits below the title, not beside it").toBeGreaterThan(
-      heading!.y,
+    expect(runner!.y, "runner starts below the title's last line, not beside it").toBeGreaterThanOrEqual(
+      heading!.y + heading!.height,
     );
+    // And they share a left edge, so the pair reads as one block of text rather
+    // than as a sentence the reader has to un-concatenate.
+    expect(
+      Math.abs(runner!.x - heading!.x),
+      "title and runner start at the same x",
+    ).toBeLessThan(1);
   });
 
   test("a submission row names its language, provider and model", async ({ page }) => {
