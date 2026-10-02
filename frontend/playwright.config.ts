@@ -83,7 +83,32 @@ export default defineConfig({
     launchOptions: {
       chromiumSandbox: process.env.CHROMIUM_SANDBOX === "1",
     },
+    // Video is OFF by default and switched on with E2E_VIDEO=1.
+    //
+    // A still frame is the wrong instrument for an animation: it cannot show a
+    // sequence, an overlap, or whether a 10s loop reads as a smooth handoff or a
+    // series of jumps. That is not hypothetical — the whole #353 pipeline defect
+    // was *when* each card lit relative to the others, which a paused frame
+    // cannot show at all, and the visual sweep (paused frames only) came back
+    // clean on it.
+    //
+    // It stays opt-in because every test would record: the suite is ~260 tests
+    // and a webm per test is hundreds of MB per run, which `make test-e2e`
+    // should not silently start producing. Point a run at the recordings with
+    // `PW_TEST_HTML_REPORT_OPEN=never` and read the .webm out of
+    // `test-results/**/video.webm`; see e2e/motion-qa.spec.ts, which exists to
+    // be recorded rather than asserted.
+    //
+    // No `size` override on purpose. Pinning one would scale-to-fit every
+    // project into the same box, letterboxing the Pixel 7 profile — and a
+    // letterboxed recording is how a mobile layout bug gets missed. Left unset,
+    // each project records at its own viewport, which is the thing under review.
+    ...(process.env.E2E_VIDEO === "1" ? { video: { mode: "on" as const } } : {}),
   },
+  // `motion-qa.spec.ts` is not a test: it holds the page still for ~12s so the
+  // recorder can capture a full pipeline cycle. Collected only alongside the
+  // video, so `make test-e2e` never spends that wall-clock on it.
+  testIgnore: process.env.E2E_VIDEO === "1" ? [] : ["**/motion-qa.spec.ts"],
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "android", use: { ...devices["Pixel 7"] } },

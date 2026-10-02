@@ -717,93 +717,138 @@
   color: var(--color-primary);
 }
 
-/* Sequential activation: 10s loop, 2s per step */
-@keyframes pipelineActivate {
-  0%,
-  100% {
-    opacity: 0.8;
-    transform: scale(0.98);
+/* Sequential activation: one 10s loop, five 2s slices (#353).
+ *
+ * The important change is *where* the lit state sits in local time. Each step's
+ * animation is delayed by its own index times 2s, so local 0% is the moment that
+ * step's window opens. The previous keyframes put the highlight at 20-30% of
+ * local time, which put it in the *next* step's slice: the sweep started a step
+ * late and each card was lit for 1s while another 1s of its own slice was spent
+ * already dimming. Nothing was wrong enough to look broken, which is why it went
+ * unnoticed — the figure moved but never said which step was active.
+ *
+ * Now the card is lit at its own 0% and back to rest by 30%, so exactly one step
+ * is prominent at a time and the highlight sits inside the slice the delay names.
+ * Local percentages are of 10s, so 10% is 1s and 20% is exactly the next step. */
+@keyframes pipelineStepActive {
+  0% {
+    opacity: 0.86;
+    transform: scale(0.985);
     border-color: var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
   }
-  10% {
+  /* Rising edge: 0% -> 14% is 1.4s, but the scale peaks early and the colour
+     follows it, so the card looks like it lifts before it lights. */
+  5% {
+    transform: scale(1.015);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1);
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    box-shadow:
+      0 6px 18px color-mix(in srgb, var(--color-primary) 30%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+  /* Hold through the middle of the slice so the step is legible as active
+     rather than as a blip. */
+  20% {
     opacity: 1;
     transform: scale(1);
   }
-  20% {
-    opacity: 1;
-    transform: scale(1.02);
-    border-color: var(--color-primary);
-    background: var(--color-primary-light);
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  /* Falling edge finishes at 30%, comfortably before the next step opens at its
+     own local 0% (global 100% of this slice). No overlap, no two lit at once. */
+  26% {
+    opacity: 0.92;
   }
-  30% {
-    opacity: 0.9;
-  }
-  55% {
-    opacity: 0.8;
-    transform: scale(0.98);
+  32%,
+  100% {
+    opacity: 0.86;
+    transform: scale(0.985);
     border-color: var(--color-border);
     background: var(--color-surface);
+    box-shadow: var(--shadow-card);
   }
 }
 
+/* One delay per step, hand-written because a CSS module cannot loop.
+ *
+ * Hand-written is fine precisely because nothing here is independent: the cycle
+ * length (10s), the slice length (2s), these five delays and the keyframe
+ * percentages above all have to agree, and `ambient-motion.test.ts` checks that
+ * they do. A generated version would have been free to disagree with the
+ * keyframes instead of being forced to agree with them. */
 .step0 {
-  animation: pipelineActivate 10s ease-in-out infinite;
+  animation: pipelineStepActive 10s ease-in-out infinite;
   animation-delay: 0s;
 }
 
 .step1 {
-  animation: pipelineActivate 10s ease-in-out infinite;
+  animation: pipelineStepActive 10s ease-in-out infinite;
   animation-delay: 2s;
 }
 
 .step2 {
-  animation: pipelineActivate 10s ease-in-out infinite;
+  animation: pipelineStepActive 10s ease-in-out infinite;
   animation-delay: 4s;
 }
 
 .step3 {
-  animation: pipelineActivate 10s ease-in-out infinite;
+  animation: pipelineStepActive 10s ease-in-out infinite;
   animation-delay: 6s;
 }
 
 .step4 {
-  animation: pipelineActivate 10s ease-in-out infinite;
+  animation: pipelineStepActive 10s ease-in-out infinite;
   animation-delay: 8s;
 }
 
-/* Connector pulses while the step before it is active */
-@keyframes connectorPulse {
+/* A connector lights when the step *after* it becomes active (#353).
+ *
+ * The delays used to match the step on the connector's left, so each arrow lit
+ * while the step behind it was still running — the flow read backwards, as if
+ * the cards were being left rather than entered. `arrowN` now delays by
+ * (N + 1) slices: the arrow between steps 1 and 2 lights in step 2's window, the
+ * moment you arrive, which is the direction the pipeline actually runs.
+ *
+ * Nothing lights in the first slice, and that is correct: there is no flow to
+ * show until step one has run. */
+@keyframes connectorFlow {
   0%,
   100% {
     background-color: var(--color-divider);
   }
-  20% {
+  10% {
     background-color: var(--color-primary);
   }
-  30% {
+  26% {
     background-color: var(--color-divider);
   }
 }
 
+/* Plus the arrowhead, which used to sit inside the same keyframes and so dimmed
+   and relit with the bar. It is styled here instead, which keeps the bar's
+   timing honest: if the bar is lit, the glyph beside it is lit too. */
 .pipelineConnector.arrow0 {
-  animation: connectorPulse 10s ease-in-out infinite;
-  animation-delay: 0s;
-}
-
-.pipelineConnector.arrow1 {
-  animation: connectorPulse 10s ease-in-out infinite;
+  animation: connectorFlow 10s ease-in-out infinite;
   animation-delay: 2s;
 }
 
-.pipelineConnector.arrow2 {
-  animation: connectorPulse 10s ease-in-out infinite;
+.pipelineConnector.arrow1 {
+  animation: connectorFlow 10s ease-in-out infinite;
   animation-delay: 4s;
 }
 
-.pipelineConnector.arrow3 {
-  animation: connectorPulse 10s ease-in-out infinite;
+.pipelineConnector.arrow2 {
+  animation: connectorFlow 10s ease-in-out infinite;
   animation-delay: 6s;
+}
+
+.pipelineConnector.arrow3 {
+  animation: connectorFlow 10s ease-in-out infinite;
+  animation-delay: 8s;
 }
 
 /* Progress bar */
@@ -817,19 +862,56 @@
 
 .progressBar {
   height: 6px;
-  width: 0%;
+  width: 4%;
   background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
   border-radius: var(--radius-full);
-  animation: progressFill 10s linear infinite;
+  animation: progressStages 10s ease-in-out infinite;
 }
 
-@keyframes progressFill {
-  from {
-    width: 0%;
-  }
-  to {
-    width: 100%;
-  }
+/* Five plateaus on the same 2s slices as the cards (#353).
+ *
+ * This was a single linear ramp from 0% to 100%, which meant the bar and the
+ * cards disagreed for most of the loop: the bar was halfway while step one was
+ * still lit, and full while step three was running. It read as an unrelated
+ * progress indicator rather than a readout of this sequence.
+ *
+ * The duplicated percentages are the whole point, and getting them wrong is
+ * invisible in a screenshot. One stop per level — `0/20/40/60/80/100`, which
+ * is what this keyframe first shipped as — is not five plateaus. It is one
+ * continuous ramp that happens to *decelerate* at each level, because
+ * `ease-in-out` flattens the slope at a keyframe it is passing through. Measured
+ * over one cycle, that ramp never once reached zero slope: every 0.5s window
+ * gained between 23 and 80px, with the slow windows drifting just after each
+ * boundary rather than standing still. So the bar was still creeping while the
+ * step it was supposedly waiting for finished. Duplicate stops hold the value
+ * flat, and the move to the next level is compressed into the 2% either side of
+ * the boundary so the bar steps *with* the card lighting rather than trailing
+ * it for the rest of the slice.
+ *
+ * The tail exists for the loop seam. A looping `width` animation has to jump
+ * from its last value back to its first, and it did that in a single frame:
+ * 1060px to 42px between two consecutive samples, while card five was still
+ * fading out. A one-frame teleport is the exact thing this review was looking
+ * for, and a filmstrip sampled at 0.5s intervals would have missed it. Fading
+ * the bar out across the seam hides the reset and makes the wrap continuous —
+ * `100%` and `0%` now declare the same width and the same opacity, so the loop
+ * point is not a discontinuity at all. The bar is dark for 3% of the cycle
+ * (300ms), which is less noticeable than the snap it replaces. */
+@keyframes progressStages {
+  0% { width: 4%; opacity: 0; }
+  2% { opacity: 1; }
+  18% { width: 4%; opacity: 1; }
+  20% { width: 24%; opacity: 1; }
+  38% { width: 24%; opacity: 1; }
+  40% { width: 44%; opacity: 1; }
+  58% { width: 44%; opacity: 1; }
+  60% { width: 64%; opacity: 1; }
+  78% { width: 64%; opacity: 1; }
+  80% { width: 84%; opacity: 1; }
+  94% { width: 84%; opacity: 1; }
+  96% { width: 100%; opacity: 1; }
+  99% { width: 100%; opacity: 0; }
+  100% { width: 4%; opacity: 0; }
 }
 
 .pipelineCaption {
@@ -1038,6 +1120,54 @@
   margin: 0 auto;
 }
 
+/* Each card is tinted with the accent of the figure it explains (#353), so the
+   four steps are told apart by hue rather than by position alone. The accent
+   comes in as `--card-accent` from `Home.tsx`, which reads it off the same
+   `STEPS` entry the figure does — one source, so a card and its number cannot
+   end up different colours. */
+.stepCard {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--card-accent) 30%, var(--color-border));
+  /* A wash from the top edge only. Tinting the whole surface instead made four
+     large fields of colour, which competed with the figure for attention; the
+     top-down fade reads as a highlight and leaves the body of the card white. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card-accent) 9%, var(--color-surface)) 0%,
+    var(--color-surface) 58%
+  );
+  transition:
+    transform 0.32s var(--ease-out-expo),
+    box-shadow 0.32s var(--ease-out-expo),
+    border-color 0.32s ease,
+    background 0.32s ease;
+}
+
+/* Pointer-only. `:hover` alone also fires on touch, where there is no cursor to
+   move and no second state to leave: the card would latch into its hovered
+   colours on tap and stay there. */
+@media (hover: hover) and (pointer: fine) {
+  .stepCard:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--card-accent) 62%, var(--color-border));
+    box-shadow:
+      var(--shadow-elevated),
+      0 14px 30px -22px
+        color-mix(in srgb, var(--card-accent) 70%, transparent);
+  }
+}
+
+/* Keyboard parity: a card that lifts on hover but cannot be reached by Tab
+   would be decoration a keyboard user never sees. */
+.stepCard:focus-within {
+  border-color: color-mix(in srgb, var(--card-accent) 62%, var(--color-border));
+}
+
+/* The numeral is a tinted disc in the card's own accent rather than a solid
+   primary block. Solid primary made card one — whose figure is also primary —
+   read as a single blue mass, and the badge looked like the "default" card
+   beside three that introduced a new hue. */
 .stepNumber {
   display: inline-flex;
   align-items: center;
@@ -1045,12 +1175,49 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: var(--color-on-solid);
+  background: color-mix(in srgb, var(--card-accent) 14%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--card-accent) 42%, transparent);
+  color: var(--card-accent);
   font-weight: 700;
   font-size: var(--font-size-lg);
   margin-bottom: var(--space-4);
 }
+
+/* Entrance, staggered (#353). The cards hide themselves until the grid reports
+   `data-entered`, which is the same first-intersection gate the figure sweep
+   uses, so a number and the card explaining it arrive together.
+
+   The hiding state lives inside `no-preference` on purpose. A reduced-motion
+   reader must never be one missed selector away from four invisible cards —
+   the same reasoning as `.animPanel` in this file's reduced-motion block. */
+@media (prefers-reduced-motion: no-preference) {
+  .stepCard {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes stepCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stepsGrid[data-entered="true"] .stepCard {
+  animation: stepCardIn 0.5s var(--ease-out-expo) both;
+}
+
+/* 70ms apart: enough to read as a cascade rather than a single pop, short
+   enough that the last card is not visibly late. */
+.stepsGrid[data-entered="true"] .stepCard:nth-child(1) { animation-delay: 0ms; }
+.stepsGrid[data-entered="true"] .stepCard:nth-child(2) { animation-delay: 70ms; }
+.stepsGrid[data-entered="true"] .stepCard:nth-child(3) { animation-delay: 140ms; }
+.stepsGrid[data-entered="true"] .stepCard:nth-child(4) { animation-delay: 210ms; }
 
 .stepTitle {
   font-size: var(--font-size-lg);
@@ -1230,28 +1397,53 @@
     padding: var(--space-12) var(--space-4);
   }
 
+  /* The connectors used to stay in the group's row on a stacked layout, which
+   * put a 2px bar hard against the right border of the card above it: measured
+   * at x=390 in a track ending at x=396, so 7px from the card and 4px from the
+   * container edge, with nothing in the middle of the gap it was supposed to
+   * join. It read as a stray tick at the screen edge — the video review's
+   * first guess was a scrollbar fragment — because that is what a hairline in
+   * the gutter beside a full-bleed card looks like. Turning the group into a
+   * column centres each bar in the gap it actually connects, which is the only
+   * place a connector can read as one. */
   .pipelineTrack {
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 0;
     align-items: stretch;
   }
 
+  /* The base `.pipelineGroup` is `align-items: center`, which is right for the
+     desktop row (it centres the connector against the card) and wrong here: on
+     a column it content-sizes the cards horizontally and the pipeline becomes a
+     ragged staircase of differently-wide cards. Stretch keeps the cards full
+     width; the connector opts out on its own with `align-self: center`. */
   .pipelineGroup {
-    flex-direction: row;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .pipelineConnector {
     width: 2px;
-    height: var(--space-5);
+    height: var(--space-4);
+    /* The space between two stacked cards is now built here rather than by the
+     * track's gap, because the bar has to sit in the middle of it: equal margin
+     * either side, and the track's own gap removed so the gap is not counted
+     * twice. `align-self` rather than `align-items: center` on the group, because
+     * centring the group also sizes the cards to their text and the pipeline
+     * turns into a ragged staircase of differently-wide cards. */
+    align-self: center;
+    margin: var(--space-2) 0;
   }
 
   .pipelineConnector::after {
     content: "↓";
     right: auto;
-    top: auto;
-    bottom: -2px;
+    /* Below the bar, not overlapping the margin below it, so the glyph and the
+     * bar read as one mark. */
+    top: 100%;
+    bottom: auto;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -2px);
   }
 
   .sampleReport {
@@ -1299,6 +1491,16 @@
      the arc *empty* on purpose, so a reduced-motion reader who skipped the
      animation would otherwise get an empty track beside a 67% number — the same
      disagreement the empty arc was introduced to remove, just relocated. */
+  /* The step cards hide themselves inside `prefers-reduced-motion: no-preference`
+     so that a reduced-motion reader is never one missed selector away from four
+     invisible cards. That scoping is what makes this opt-out safe: outside the
+     block, opacity and transform are already the resting values. The animation
+     itself still has to be named here, or a card that somehow reached
+     `data-entered` would replay the cascade the reader asked not to see. */
+  .stepsGrid[data-entered="true"] .stepCard {
+    animation: none;
+  }
+
   .sampleReport[data-scoring="true"] .scoreWrap,
   .animPanel .sampleReport :global(.ringProgress),
   .animPanel .sampleReport[data-scoring="true"] :global(.ringProgress) {
@@ -1306,6 +1508,11 @@
     stroke-dashoffset: 0;
   }
 
+  /* The whole pipeline timeline: five cards, four connectors, one bar. None of
+     these can be caught by the generic rule below, because each one names its
+     own keyframe via a per-index class — a new keyframe name in `pipelineStepActive`
+     or `connectorFlow` has to be opted out here by hand, which is why the
+     classes are listed rather than matched by prefix (#353). */
   .step0,
   .step1,
   .step2,

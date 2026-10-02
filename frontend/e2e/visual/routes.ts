@@ -108,7 +108,7 @@ export const SWEEP_ROUTES: readonly SweepRoute[] = [
     heading: "Generate, execute, and evaluate AI-written code — automatically",
     auth: "guest",
     atRest: '[class*="animPanel"] [class*="animStatus_"][data-stage="ready"]',
-    note: "Carries the most motion surfaces in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the terminal story. Not all of them any more — the typewriter and the looping status chips were replaced by the terminal story in #352 (one chained timeline, a status tag per stage, results revealed as they resolve and a score ring), /demo gained its own Reveal stagger, ambient blobs and a cycling rail in #350, and /pricing has an animated disclosure. SWEEP_MOTION_SURFACES is the checkable version of that list. The panel also stopped being one of the hero's staggered Reveals in #352: it fades in itself now, because the story has to wait for that fade, so the entrance is a property of the panel rather than a fifth entry in the hero stagger — see `atRest` and the `home-reveal-transition` caption.",
+    note: "Carries the most motion surfaces in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the terminal story. Not all of them any more — the typewriter and the looping status chips were replaced by the terminal story in #352 (one chained timeline, a status tag per stage, results revealed as they resolve and a score ring), /demo gained its own Reveal stagger, ambient blobs and a cycling rail in #350, and /pricing has an animated disclosure, and the pipeline gained a sequential timeline plus a staggered step-card entrance in #353 (pipelineStepActive/connectorFlow/progressStages/stepCardIn). SWEEP_MOTION_SURFACES is the checkable version of that list. The panel also stopped being one of the hero's staggered Reveals in #352: it fades in itself now, because the story has to wait for that fade, so the entrance is a property of the panel rather than a fifth entry in the hero stagger — see `atRest` and the `home-reveal-transition` caption.",
   },
   {
     path: "/features",
@@ -565,7 +565,7 @@ export interface SweepMotion {
 export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = [
   {
     route: "/",
-    why: "Reveal staggers, the `.scrollReveal` view() reveals, the ambient layer and `useCountUp` — all element-level, all seekable, all filmed. The terminal story's own beats are NOT seekable and are not filmed as a filmstrip: they are a chained setTimeout driven by state, so there is no timeline to place a frame on. The seekable parts of it are filmed with the rest — the ring's `ringFill` and the status dot's pulse are both element-level CSS animations — and the JS-driven number and row reveals are asserted in e2e/terminal-story.spec.ts, which watches the DOM rather than the clock.",
+    why: "Reveal staggers, the `.scrollReveal` view() reveals, the ambient layer, `useCountUp` and the pipeline timeline — all element-level, all seekable, all filmed. The pipeline (#353) is five cards sharing one `pipelineStepActive` keyframe with a per-step delay, four `connectorFlow` arrows and a stepped `progressBar`; all infinite, so the ambient filmstrip lands on the cycle at four phases and catches a different step lit in each. The step cards' `stepCardIn` entrance is finite and belongs to the transition pass's remit, though it fires on the `stepsGrid` `data-entered` gate rather than on a `Reveal` transition. The terminal story's own beats are NOT seekable and are not filmed as a filmstrip: they are a chained setTimeout driven by state, so there is no timeline to place a frame on. The seekable parts of it are filmed with the rest — the ring's `ringFill` and the status dot's pulse are both element-level CSS animations — and the JS-driven number and row reveals are asserted in e2e/terminal-story.spec.ts, which watches the DOM rather than the clock.",
   },
   {
     route: "/demo",
@@ -644,7 +644,7 @@ export const SWEEP_MOTION: readonly SweepMotion[] = [
     // run inside its disk budget.
     samples: [0, 0.25, 0.5, 0.75],
     viewports: ["desktop-chromium"],
-    caption: "Ambient filmstrip: the blueprint grid, the drifting code fragments and the hero colour blobs at four fixed phases. These never finish, so every static shot pauses them at phase 0 rather than catching them wherever the machine happened to be.",
+    caption: "Ambient filmstrip: the blueprint grid, the drifting code fragments, the hero colour blobs and the five-step pipeline timeline at four fixed phases — the pipeline is a 10s cycle, so those phases land on steps 1, 2, 3 and 4 in turn (#353). These never finish, so every static shot pauses them at phase 0 rather than catching them wherever the machine happened to be.",
   },
   {
     id: "demo-reveal-transition",

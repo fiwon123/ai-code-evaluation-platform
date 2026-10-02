@@ -69,7 +69,21 @@ const EXPECTED: {
     // pseudo-element.
     name: "landing hero",
     url: "/",
-    instances: { auroraDrift: 3, scanline: 1, gradientShift: 1 },
+    instances: {
+      auroraDrift: 3,
+      scanline: 1,
+      gradientShift: 1,
+      // The pipeline timeline (#353). These were missing here entirely, which is
+      // how the old timing survived: `pipelineActivate` lit each card in the
+      // *next* step's slice and nothing noticed, because nothing had ever asked
+      // whether the keyframes ran or how many of them there should be. Counting
+      // them locks both — five cards share one keyframe, so a boolean would pass
+      // with a step dropped from the markup, and the bar is a fourth name that
+      // has to keep resolving after the rename.
+      pipelineStepActive: 5,
+      connectorFlow: 4,
+      progressStages: 1,
+    },
     ready: "h1",
     auth: true,
     desktopOnly: ["scanline"],
@@ -390,6 +404,343 @@ test.describe("features entrance", () => {
         "1",
       );
       expect(row.height, `card ${i} has no height (${row.height}px)`).toBeGreaterThan(0);
+    }
+  });
+});
+
+/**
+ * The pipeline lights one step at a time, in order (#353).
+ *
+ * The defect this locks could be caught by no amount of waiting: each card's
+ * highlight sat at 20-30% of its *own* 2s slice, which is the opening of the
+ * *next* step. So the sweep began a step late, the connector beside each card lit
+ * while the step behind it was still running, and the bar drifted across on a
+ * linear ramp that ignored all of it. Screenshots showed motion and plausible
+ * cards. The sequence itself was wrong.
+ *
+ * The timeline is sampled by *steering* it rather than by sleeping: every
+ * animation on the track is paused and its `currentTime` set by hand, so this is
+ * an assertion about the shape of the sequence instead of about wall-clock luck.
+ * A sampling version of this test passed on a broken timeline often enough to be
+ * worthless.
+ *
+ * "Lit" means *at full emphasis* (opacity 1), not merely "different from rest".
+ * The first version of this test treated any card whose border had moved off the
+ * resting colour as lit, and reported two cards lit for 1.1s of every 2s slice —
+ * because a crossfade interpolates the outgoing card back to rest at the same
+ * moment it interpolates the incoming card up to the accent, so for most of the
+ * handoff *both* borders are in flight and neither is at rest. That is correct
+ * behaviour and the test was wrong about it. Emphasis is the thing that has to be
+ * singular.
+ */
+test.describe("the Home pipeline timeline (#353)", () => {
+  test("reaches one step's full emphasis at a time, in order", async ({ page }) => {
+    await mockApi(page, undefined, { auth: true });
+    await page.goto("/");
+    await expect(page.locator("h1").first()).toBeVisible();
+
+    const track = page.locator('[class*="pipelineTrack"]').first();
+    await expect(track).toBeAttached();
+
+    const sampled = await track.evaluate((el) => {
+      const anims = el.getAnimations({ subtree: true }) as CSSAnimation[];
+      // Only the timeline: the track also carries other motion, and steering
+      // that would change what is being measured.
+      const timeline = anims.filter((a) => /pipelineStepActive/.test(a.animationName));
+      const cards = [...el.querySelectorAll('[class*="pipelineStep"]')] as HTMLElement[];
+
+      /** Step indices at full emphasis (opacity 1), at time `t`. */
+      const peakAt = (t: number): number[] => {
+        for (const a of timeline) {
+          a.pause();
+          a.currentTime = t;
+        }
+        return cards
+          .map((c, i) => (Number(getComputedStyle(c).opacity) > 0.99 ? i : -1))
+          .filter((i) => i !== -1);
+      };
+
+      // 100ms across the full 10s cycle: fine enough that no step's emphasis
+      // window (0.6s wide) can fall between two samples.
+      const STEP = 100;
+      const runs: { step: number; from: number; to: number }[] = [];
+      const anomalies: { at: number; count: number }[] = [];
+      for (let t = 0; t <= 10_000; t += STEP) {
+        const peak = peakAt(t);
+        if (peak.length > 1) {
+          anomalies.push({ at: t, count: peak.length });
+          continue;
+        }
+        if (peak.length === 0) continue;
+        const last = runs[runs.length - 1];
+        if (last && last.step === peak[0]) last.to = t;
+        else runs.push({ step: peak[0], from: t, to: t });
+      }
+
+      return {
+        names: anims.map((a) => a.animationName),
+        cards: cards.length,
+        timelineInstances: timeline.length,
+        runs: runs.map((r) => r.step),
+        // `from` matters as much as `width`: it is what pins a step to its own
+        // slice. A width check alone passes on the old timeline too.
+        starts: runs.map((r) => r.from),
+        widths: runs.map((r) => r.to - r.from + STEP),
+        anomalies,
+      };
+    });
+
+    // Five cards, five instances of the one keyframe they share.
+    expect(sampled.cards).toBe(5);
+    expect(sampled.timelineInstances).toBe(5);
+
+    // Never two steps at full emphasis at once.
+    expect(
+      sampled.anomalies,
+      `two steps were emphasised at once at ${sampled.anomalies
+        .map((a) => `${a.at}ms`)
+        .join(", ")}`,
+    ).toEqual([]);
+
+    // The order is the whole point: each of the five steps takes its turn, once,
+    // left to right. An off-by-one slice still yields five runs, so the count
+    // alone is not the assertion — the sequence is.
+    expect(
+      sampled.runs,
+      "the pipeline did not emphasise steps 1-5 once each, in order",
+    ).toEqual([0, 1, 2, 3, 4]);
+
+    // And each is *legible* rather than a blip: the emphasis window is 0.6s of
+    // each 2s slice, so anything under 300ms sampled reads as a flicker.
+    for (const [i, width] of sampled.widths.entries()) {
+      expect(width, `step ${i + 1} held emphasis for only ${width}ms`).toBeGreaterThanOrEqual(300);
+    }
+
+    // Each step must take its turn *during its own slice*. The cycle is five 2s
+    // slices, so step N (0-based) belongs to [N*2000, (N+1)*2000). This is the
+    // assertion the old timeline fails and the one that describes the fix: its
+    // highlight sat at 20-30% of local time, which put step N's emphasis at
+    // 2000-3000ms into step N+1's slice. Every step was one slice behind, so
+    // the sweep began a step late and ended with a sixth, empty slice.
+    for (const [i, from] of sampled.starts.entries()) {
+      expect(
+        from,
+        `step ${i + 1} reached emphasis at ${from}ms, outside its own ${i * 2000}-${(i + 1) * 2000}ms slice`,
+      ).toBeGreaterThanOrEqual(i * 2000);
+      expect(
+        from,
+        `step ${i + 1} reached emphasis at ${from}ms, inside step ${i + 2}'s slice`,
+      ).toBeLessThan((i + 1) * 2000);
+    }
+  });
+
+  /**
+   * The progress bar rests between steps, and hides its own reset (#353 follow-up).
+   *
+   * The CSS assertions in `ambient-motion.test.ts` lock the *shape* of the
+   * keyframes. This locks what the browser actually renders, because the two
+   * defects the video review found were both properties of the rendered timeline
+   * rather than of the stylesheet text:
+   *
+   * - The bar was never stepped. `ease-in-out` flattens the slope at a keyframe
+   *   it passes *through*, so one stop per level is a ramp that decelerates at
+   *   each level, not a plateau. Measured per frame, the old bar gained between
+   *   23 and 80px in every 0.5s window of the cycle and never once stood still.
+   * - The loop seam was a one-frame teleport: 1060px to 42px between two
+   *   consecutive samples, fully opaque, while step five was still fading out.
+   *
+   * Both are steered rather than slept, like the timeline test above, so this is
+   * an assertion about the animation and not about wall-clock luck.
+   */
+  test("rests between steps and hides its reset at the loop seam", async ({ page }) => {
+    await mockApi(page, undefined, { auth: true });
+    await page.goto("/");
+    await expect(page.locator("h1").first()).toBeVisible();
+
+    const track = page.locator('[class*="pipelineTrack"]').first();
+    await expect(track).toBeAttached();
+
+    const sampled = await track.evaluate((el) => {
+      const bar = el.parentElement?.querySelector(
+        '[class*="progressBar"]',
+      ) as HTMLElement | null;
+      const barAnim = bar?.getAnimations()[0] as CSSAnimation | undefined;
+      if (!bar || !barAnim) throw new Error("progress bar or its animation not found");
+
+      const STEP = 50;
+      /** Width in px and opacity at time `t`, with the timeline steered there. */
+      const at = (t: number) => {
+        barAnim.pause();
+        barAnim.currentTime = t;
+        const cs = getComputedStyle(bar);
+        return { w: Number.parseFloat(cs.width), o: Number(cs.opacity) };
+      };
+
+      // Longest stretch with no width change at all, per 0.5s window. A plateau
+      // shows up as a window whose total movement rounds to zero.
+      const windows: number[] = [];
+      for (let t = 0; t + 500 <= 10_000; t += 500) {
+        windows.push(Math.abs(at(t + 500).w - at(t).w));
+      }
+
+      // Every frame-to-frame width change above 10% of the track, paired with
+      // the opacity at both ends of it. A reset is acceptable only in the dark.
+      const trackWidth = bar.parentElement!.getBoundingClientRect().width;
+      const jumps: { t: number; delta: number; oFrom: number; oTo: number }[] = [];
+      let prev = at(0);
+      for (let t = STEP; t <= 10_000; t += STEP) {
+        const now = at(t);
+        const delta = Math.abs(now.w - prev.w);
+        if (delta > trackWidth * 0.1) {
+          jumps.push({ t, delta, oFrom: prev.o, oTo: now.o });
+        }
+        prev = now;
+      }
+
+      // Widest single-frame change while the bar is actually visible — the
+      // "does it read as a series of jumps" number.
+      let visibleMax = 0;
+      prev = at(0);
+      for (let t = STEP; t <= 10_000; t += STEP) {
+        const now = at(t);
+        if (now.o > 0.02 && prev.o > 0.02) {
+          visibleMax = Math.max(visibleMax, Math.abs(now.w - prev.w));
+        }
+        prev = now;
+      }
+
+      return {
+        trackWidth,
+        // The five plateau windows. Index 2 of each group of three in the table
+        // below is the move; the two around it are the rests.
+        windows,
+        jumps,
+        visibleMax,
+      };
+    });
+
+    // Five rests of at least 1s each. The bar now holds each level for 1.6s and
+    // spends 0.4s moving to the next, so in every 0.5s window that is not a move
+    // the total movement is zero. `windows` is 20 long: 10 rests, because the
+    // 0.5s windows do not align with the 0.4s moves, and each rest is covered by
+    // two windows.
+    expect(sampled.windows.length).toBe(20);
+    const moves = sampled.windows.filter((d) => d > 1).length;
+    expect(
+      moves,
+      `the bar moved in ${moves} of 20 half-second windows, so it is not stepping ` +
+        `(window deltas: ${sampled.windows.map((d) => d.toFixed(0)).join(",")})`,
+    ).toBeGreaterThanOrEqual(4);
+    expect(
+      moves,
+      `the bar moved in ${moves} of 20 half-second windows — it is a continuous ` +
+        `ramp that merely slows at each level`,
+    ).toBeLessThanOrEqual(8);
+
+    // The seam reset is hidden, not merely small. A looping `width` animation
+    // has to jump back to its start, so the jump itself is allowed to exist —
+    // what is not allowed is for it to be visible. Every jump over 10% of the
+    // track must therefore happen at zero opacity on both sides.
+    expect(
+      sampled.jumps.length,
+      "no width jump was found at all, so this run did not reach the loop seam — " +
+        "the assertion below would pass vacuously",
+    ).toBeGreaterThan(0);
+    for (const jump of sampled.jumps) {
+      expect(
+        Math.max(jump.oFrom, jump.oTo),
+        `the bar jumped ${jump.delta.toFixed(0)}px at ${jump.t}ms with opacity ` +
+          `${jump.oFrom.toFixed(2)} -> ${jump.oTo.toFixed(2)}, so the reset is visible`,
+      ).toBeLessThanOrEqual(0.02);
+    }
+    expect(
+      sampled.visibleMax,
+      "the bar's largest visible frame-to-frame change should be a fraction of " +
+        "the track, not a reset",
+    ).toBeLessThan(sampled.trackWidth * 0.1);
+  });
+
+  /**
+   * The stacked layout centres its connectors in the gaps they join (#353 follow-up).
+   *
+   * A CSS assertion can only check that `align-self: center` was written. This
+   * checks the rendered geometry, which is what the video review actually
+   * objected to: the connectors sat at x=390 in a track ending at x=396, hard
+   * against the right border of a full-bleed card, and read as a stray hairline
+   * at the screen edge — a scrollbar fragment, at a glance — rather than as a
+   * connector between two cards.
+   *
+   * Android project only: on desktop the connectors are a horizontal row and
+   * centring them is meaningless.
+   */
+  test("centres the stacked connectors between the cards", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "the stacked pipeline only exists in the narrow layout");
+
+    await mockApi(page, undefined, { auth: true });
+    await page.goto("/");
+
+    const track = page.locator('[class*="pipelineTrack"]').first();
+    await expect(track).toBeAttached();
+    await track.scrollIntoViewIfNeeded();
+
+    const geom = await track.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const steps = [...el.querySelectorAll('[class*="pipelineStep"]')] as HTMLElement[];
+      const conns = [...el.querySelectorAll('[class*="pipelineConnector"]')] as HTMLElement[];
+      const centre = box.x + box.width / 2;
+      return {
+        cardsFullWidth: steps.map((s) => s.getBoundingClientRect().width / box.width),
+        offsets: conns.map((c) => c.getBoundingClientRect().x + c.getBoundingClientRect().width / 2 - centre),
+        // For each connector: is it vertically between the two cards it joins?
+        gap: conns.map((c, i) => {
+          const r = c.getBoundingClientRect();
+          const above = steps[i]!.getBoundingClientRect();
+          const below = steps[i + 1]!.getBoundingClientRect();
+          return {
+            above: above.bottom,
+            top: r.top,
+            bottom: r.bottom,
+            below: below.top,
+          };
+        }),
+      };
+    });
+
+    // The cards must still fill the track. Centring the group rather than the
+    // connector content-sizes the cards, which turned the pipeline into a ragged
+    // staircase of 117-150px cards in a 380px track.
+    for (const [i, ratio] of geom.cardsFullWidth.entries()) {
+      expect(
+        ratio,
+        `card ${i + 1} fills only ${(ratio * 100).toFixed(0)}% of the track on mobile`,
+      ).toBeGreaterThan(0.9);
+    }
+
+    // Each connector is within a few px of the track's centre line.
+    for (const [i, offset] of geom.offsets.entries()) {
+      expect(
+        Math.abs(offset),
+        `connector ${i + 1} sits ${offset.toFixed(0)}px off the centre line, in the ` +
+          `gutter beside the card instead of the gap between cards`,
+      ).toBeLessThanOrEqual(3);
+    }
+
+    // And it is inside the vertical gap between the two cards, with room either
+    // side — a bar flush against one card is the thing being fixed.
+    for (const [i, g] of geom.gap.entries()) {
+      expect(g.top, `connector ${i + 1} starts above the card it follows`).toBeGreaterThanOrEqual(
+        g.above,
+      );
+      expect(g.bottom, `connector ${i + 1} ends below the card it leads to`).toBeLessThanOrEqual(
+        g.below,
+      );
+      const above = g.top - g.above;
+      const below = g.below - g.bottom;
+      expect(
+        Math.abs(above - below),
+        `connector ${i + 1} is ${above.toFixed(0)}px below the upper card and ` +
+          `${below.toFixed(0)}px above the lower one, so it is not centred in the gap`,
+      ).toBeLessThanOrEqual(4);
     }
   });
 });

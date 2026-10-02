@@ -72,6 +72,17 @@ function motionWelcomeBlock(css: string): string {
   return end === -1 ? rest : rest.slice(0, end + 1);
 }
 
+/** Everything inside the narrow-viewport block, which is where the stacked
+ *  pipeline lives. Same shape as the two helpers above: good enough for a file
+ *  this size, and it returns "" loudly rather than matching the wrong block. */
+function narrowBlock(css: string): string {
+  const start = css.indexOf("@media (max-width: 768px)");
+  if (start === -1) return "";
+  const rest = css.slice(start);
+  const end = rest.slice(1).search(/^\}/m);
+  return end === -1 ? rest : rest.slice(0, end + 1);
+}
+
 /** Infinite or scroll-driven ambient animations, and the colour blobs and
  *  scanline declared in the Home module. */
 const AMBIENT_SELECTORS = [".codeGrid", ".codeFragment"] as const;
@@ -766,5 +777,263 @@ describe("Home terminal entrance", () => {
     expect(reset, "the panel has no reduced-motion reset").not.toBeNull();
     expect(reset![1]).toMatch(/opacity:\s*1/);
     expect(reset![1]).toMatch(/transform:\s*none/);
+  });
+});
+
+/**
+ * The Home pipeline timeline (#353).
+ *
+ * This is the assertion that would have caught the defect #353 fixed. Five
+ * cards shared one keyframe, each delayed by its own 2s slice — and the lit
+ * state sat at 20-30% of *local* time, which is the *next* slice's opening. So
+ * the sweep began a step late and each card was bright while a neighbouring card
+ * was brighter. It looked fine: motion was present, the order was roughly right,
+ * and nothing was ever counted.
+ *
+ * A screenshot cannot see this (a highlighted card is a highlighted card) and a
+ * value assertion cannot see it (the page has no values). Only the agreement
+ * between the keyframe's percentages, the animation duration and the delays can.
+ */
+describe("the Home pipeline timeline is self-consistent (#353)", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+
+  /** `@keyframes name { ... }` body, or `""` when absent. */
+  function keyframeBody(name: string): string {
+    return homeCss.match(new RegExp(`@keyframes\\s+${name}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+  }
+
+  /** The percentage stops in a keyframe body, as `[percent, declarations]`. */
+  function stops(body: string): [number, string][] {
+    return [...body.matchAll(/([\d.]+)%\s*,\s*([\d.]+)%\s*\{([^}]*)\}|([\d.]+)%\s*\{([^}]*)\}/g)].map(
+      (m) =>
+        m[1] !== undefined
+          ? ([Number(m[1]), `${m[2]}% {${m[3]}}`] as [number, string])
+          : ([Number(m[4]), `${m[4]}% {${m[5]}}`] as [number, string]),
+    );
+  }
+
+  it("gives every step the same cycle and one slice of it", () => {
+    // Five classes, hand-written because a CSS module cannot loop. These are the
+    // numbers the keyframe percentages below are relative to, so they are read
+    // rather than restated.
+    const delays: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const block = homeCss.match(new RegExp(`\\.step${i}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+      // Only the delay. An earlier version read the `animation` shorthand first,
+      // which captured the *duration* (`10s`) for all five classes and then
+      // compared five identical values against five different expectations.
+      delays[i] = /animation-delay:\s*([\d.]+s)/.exec(block)?.[1] ?? "";
+      expect(block, `.step${i} not found`).not.toBe("");
+      expect(block, `.step${i} must animate on the shared keyframe`).toContain(
+        "pipelineStepActive",
+      );
+      expect(block, `.step${i} must run on the same 10s cycle`).toContain(
+        "pipelineStepActive 10s",
+      );
+    }
+    // One 2s slice each, in order. A duplicated or skipped delay is the exact
+    // failure this file is here to prevent, and it is invisible in a screenshot.
+    expect(delays).toEqual([
+      "0s",
+      "2s",
+      "4s",
+      "6s",
+      "8s",
+    ]);
+  });
+
+  it("lights each step inside its own slice, not the next one", () => {
+    const body = keyframeBody("pipelineStepActive");
+    expect(body, "pipelineStepActive was not found").not.toBe("");
+
+    // The lit declaration is the one that paints the accent. Where it sits in
+    // local time is the whole claim.
+    const lit = stops(body).filter(([, decls]) =>
+      decls.includes("border-color: var(--color-primary)"),
+    );
+    expect(lit.length, "the lit keyframe no longer paints the accent").toBeGreaterThan(0);
+    const [litAt] = lit[0]!;
+
+    // 20% of a 10s cycle is the *next* step's opening — the old bug.
+    expect(
+      litAt,
+      `the card lights at ${litAt}% of local time, which is step ${
+        (litAt / 20) | 0
+      }'s slice rather than its own`,
+    ).toBeLessThanOrEqual(20);
+
+    // And it must be back to rest before the next step opens, or two cards are
+    // lit at once and the sequence stops being readable.
+    const litMax = Math.max(...lit.map(([pct]) => pct));
+    expect(
+      litMax,
+      `the card is still lit at ${litMax}%, past the next step's opening`,
+    ).toBeLessThan(40);
+  });
+
+  it("runs each connector in the slice of the step it leads into", () => {
+    // The delays used to match the step on the connector's *left*, so every
+    // arrow lit while the step behind it was still running and the flow read
+    // backwards. `arrowN` now leads into step N+1.
+    for (let i = 0; i < 4; i += 1) {
+      const block =
+        homeCss.match(new RegExp(`\\.pipelineConnector\\.arrow${i}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+      expect(block, `.arrow${i} not found`).not.toBe("");
+      expect(block).toContain("connectorFlow");
+      expect(
+        /animation-delay:\s*([\d.]+s)/.exec(block)?.[1],
+        `.arrow${i} must light as the step after it becomes active`,
+      ).toBe(`${(i + 1) * 2}s`);
+    }
+    // Nothing lights in the first slice: there is no flow to show before step one.
+    expect(homeCss).not.toMatch(/\.pipelineConnector\.arrow0\s*\{[^}]*animation-delay:\s*0s/);
+  });
+
+  it("holds each progress bar level instead of ramping through it", () => {
+    const body = keyframeBody("progressStages");
+    expect(body, "progressStages was not found").not.toBe("");
+
+    const declared = stops(body).map(([pct, decls]) => [
+      pct,
+      /width:\s*([\d.]+%)/.exec(decls)?.[1] ?? null,
+      /opacity:\s*([\d.]+)/.exec(decls)?.[1] ?? null,
+    ]);
+
+    // A single linear ramp ignored the cards entirely: the bar was halfway while
+    // step one was still lit. The ladder itself is the first half of the fix.
+    const levels = [...new Set(declared.map(([, w]) => w).filter(Boolean))];
+    expect(levels).toEqual(["4%", "24%", "44%", "64%", "84%", "100%"]);
+
+    // And this is the half that is invisible in a screenshot. One stop per level
+    // is *not* a plateau: it is a ramp that merely decelerates at each level,
+    // because `ease-in-out` flattens the slope at a keyframe it is passing
+    // through. Measured over a cycle, that ramp never once reached zero slope —
+    // every 0.5s window gained 23 to 80px, with the slow windows drifting just
+    // after each boundary rather than standing still — so the bar was still
+    // creeping while the step it was waiting for finished. A plateau needs the
+    // level declared at two different percentages.
+    for (const level of levels) {
+      const at = declared.filter(([, w]) => w === level).map(([pct]) => pct);
+      expect(
+        at.length,
+        `${level} is declared only at ${at.join("/")}%, so the bar ramps past it ` +
+          `instead of resting there`,
+      ).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("hides the progress bar's reset across the loop seam", () => {
+    // A looping `width` animation has to jump back to its start, and this one
+    // did it in a single frame while fully opaque: 1060px to 42px between two
+    // consecutive samples, with card five still fading out. A filmstrip sampled
+    // at 0.5s intervals steps straight over a 17ms discontinuity, so nothing
+    // short of a per-frame measurement catches this.
+    const body = keyframeBody("progressStages");
+    expect(body, "progressStages was not found").not.toBe("");
+    const declAt = (pct: number) => stops(body).find(([p]) => p === pct)?.[1] ?? "";
+    const width = (d: string) => /width:\s*([\d.]+%)/.exec(d)?.[1] ?? "";
+    const opacity = (d: string) => Number(/opacity:\s*([\d.]+)/.exec(d)?.[1] ?? "1");
+
+    // First: the wrap point is not a discontinuity, which is the only reason a
+    // fade is needed at all. If these drift apart there is a snap to hide.
+    expect(
+      width(declAt(100)),
+      "the bar's last frame and its first frame disagree on width, so the loop " +
+        "point is a jump whatever the opacity does",
+    ).toBe(width(declAt(0)));
+
+    // Second: the reset has to happen in the dark, on both sides of the wrap.
+    expect(opacity(declAt(100)), "the bar is still visible as it resets").toBe(0);
+    expect(opacity(declAt(0)), "the bar pops back in rather than fading").toBe(0);
+
+    // Third: something has to bring it back, or this is just a disappearing bar.
+    const fadesBack = stops(body).some(
+      ([pct, d]) => pct > 0 && pct < 20 && Number(/opacity:\s*([\d.]+)/.exec(d)?.[1] ?? "0") === 1,
+    );
+    expect(fadesBack, "nothing fades the bar back in after the seam").toBe(true);
+  });
+
+  it("centres the stacked pipeline's connectors in the gaps they join", () => {
+    const narrow = narrowBlock(homeCss);
+    expect(narrow, "no max-width: 768px block found in Home.module.css").not.toBe("");
+    const rule = (selector: string) =>
+      new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(narrow)?.[1] ?? "";
+
+    // The connectors used to stay in the group's row, which on a stacked layout
+    // put a 2px bar hard against the right border of the card: x=390 in a track
+    // ending at x=396, so 7px from the card and 4px from the container edge,
+    // with nothing at all in the middle of the gap. Measured on screen it read
+    // as a stray hairline at the screen edge — the first guess was a scrollbar
+    // fragment — because that is what a tick beside a full-bleed card looks
+    // like. Centring it in the gap is the only place a connector reads as one.
+    expect(rule(".pipelineGroup"), ".pipelineGroup is not stacked on mobile").toContain(
+      "flex-direction: column",
+    );
+    expect(rule(".pipelineConnector"), ".pipelineConnector does not centre itself").toMatch(
+      /align-self:\s*center/,
+    );
+
+    // `align-self: center` is not enough on its own: the group's base
+    // `align-items: center` also content-sizes the cards horizontally, which
+    // turned the pipeline into a ragged staircase of 117-150px-wide cards. The
+    // mobile rule has to put the cards back to full width.
+    expect(
+      rule(".pipelineGroup"),
+      "the mobile group re-centres the cards as well as the connectors",
+    ).toMatch(/align-items:\s*stretch/);
+
+    // The gap between two stacked cards is built from the connector's own
+    // margins now, so the track's gap has to go or the gap is counted twice.
+    expect(rule(".pipelineTrack"), ".pipelineTrack still adds its own gap").toMatch(
+      /gap:\s*0/,
+    );
+    expect(rule(".pipelineConnector"), ".pipelineConnector has no symmetric margin").toMatch(
+      /margin:\s*var\(--space-2\)\s+0/,
+    );
+  });
+
+  it("opts every named timeline out for a reduced-motion reader", () => {
+    // All nine per-index classes plus the bar, and the cards' entrance. A new
+    // keyframe name has to be listed by hand here, which is the point: the
+    // generic loop rule in this file cannot match them, because each names its
+    // own keyframe.
+    const reduce = reducedMotionBlock(homeCss);
+    expect(reduce, "no reduced-motion block found in Home.module.css").not.toBe("");
+    for (const selector of [
+      ".step0",
+      ".step1",
+      ".step2",
+      ".step3",
+      ".step4",
+      ".pipelineConnector.arrow0",
+      ".pipelineConnector.arrow1",
+      ".pipelineConnector.arrow2",
+      ".pipelineConnector.arrow3",
+      ".progressBar",
+    ]) {
+      expect(
+        new RegExp(`${selector.replace(/\./g, "\\.")}\\s*(,|\\{)`).test(reduce),
+        `${selector} animates forever and is not opted out for reduced motion`,
+      ).toBe(true);
+    }
+  });
+
+  it("hides the step cards only when motion is welcome", () => {
+    // The entrance hides the cards with `opacity: 0`, and the state is undone by
+    // `data-entered` rather than by the animation's own end. If that hiding rule
+    // escaped the `no-preference` block, a reduced-motion reader would be one
+    // missed selector away from four invisible cards — the same trap `.animPanel`
+    // documents in this file's reduced-motion block.
+    expect(homeCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{\s*\.stepCard\s*\{[^}]*opacity:\s*0/,
+    );
+    expect(homeCss).toMatch(
+      /\.stepsGrid\[data-entered="true"\]\s+\.stepCard\s*\{\s*animation:\s*stepCardIn/,
+    );
+    // ...and the reduced-motion block has to name that cascade too, or it replays
+    // for anyone who reached `data-entered` with motion reduced.
+    expect(reducedMotionBlock(homeCss)).toMatch(
+      /\.stepsGrid\[data-entered="true"\]\s+\.stepCard\s*\{\s*animation:\s*none/,
+    );
   });
 });

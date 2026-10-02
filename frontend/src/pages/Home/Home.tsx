@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
@@ -119,12 +120,22 @@ function statStartMs(index: number): number {
   return STAT_START_MS + index * (STAT_DURATION_MS + STAT_GAP_MS);
 }
 
+/**
+ * The five pipeline steps, phrased alike on purpose (#353).
+ *
+ * The previous set mixed an imperative with descriptions — "Write challenge",
+ * "AI generates code", "Get score" — so the labels ranged from 9 to 17
+ * characters and wrapped to different line counts. The cards are equal-height
+ * only if their content is, and the fifth card came out 27px taller than the
+ * first four purely because of its wording. Every label is now a verb and its
+ * object, 12-16 characters, which is what makes one cadence fit all five.
+ */
 const PIPELINE = [
-  { icon: "📝", label: "Write challenge", desc: "Prompt + tests" },
-  { icon: "🤖", label: "Pick provider", desc: "6 providers · demo is free" },
-  { icon: "⚙️", label: "AI generates code", desc: "Sandboxed" },
-  { icon: "🧪", label: "Tests run", desc: "Your suite, isolated" },
-  { icon: "📊", label: "Get score", desc: "Pass/fail + metrics" },
+  { icon: "📝", label: "Write a challenge", desc: "Prompt + tests" },
+  { icon: "🤖", label: "Pick a provider", desc: "6 providers · demo is free" },
+  { icon: "⚙️", label: "Generate code", desc: "Sandboxed execution" },
+  { icon: "🧪", label: "Run your tests", desc: "Your suite, isolated" },
+  { icon: "📊", label: "Get a score", desc: "Pass/fail + metrics" },
 ];
 
 /** Typed into the demo terminal, then "evaluated". */
@@ -148,6 +159,22 @@ const CODE_FRAGMENTS = [
   { text: "[ok] 142ms", top: "38%", left: "11%", delay: "-11s" },
   { text: "eval#4207 · streaming", top: "8%", right: "18%", delay: "-5s" },
 ];
+
+/**
+ * Card accent per step, keyed by the figure's own accent (#353).
+ *
+ * `Card` already takes a `--card-accent` custom property (#347), so the four
+ * cards can be tinted from the single accent each step already declares rather
+ * than a second list that could drift from `STEPS`. The values are `var(...)`
+ * strings on purpose: the hue stays defined in tokens, so a theme swap does not
+ * need this map touched.
+ */
+const STEP_ACCENTS: Record<(typeof STEPS)[number]["stat"]["accent"], string> = {
+  primary: "var(--color-primary)",
+  teal: "var(--color-accent-teal)",
+  violet: "var(--color-accent-violet)",
+  rose: "var(--color-accent-rose)",
+};
 
 function Home() {
   const { user } = useAuth();
@@ -249,9 +276,24 @@ function Home() {
           />
         </div>
         <Reveal>
-          <div className={styles.stepsGrid} ref={stepsRef}>
+          {/* `data-entered` drives the per-card entrance below. It is the same
+              gate the stat sweep uses (#354), so the figures and the cards that
+              explain them arrive together rather than one leading the other. */}
+          <div
+            className={styles.stepsGrid}
+            ref={stepsRef}
+            data-entered={stepsInView ? "true" : "false"}
+          >
             {STEPS.map((step, index) => (
-              <Card key={step.title} padding="compact">
+              <Card
+                key={step.title}
+                padding="compact"
+                className={styles.stepCard}
+                // A CSSProperties cast rather than a typed record: `--card-accent`
+                // is a custom property, which TypeScript cannot express in
+                // CSSProperties without listing every name.
+                style={{ "--card-accent": STEP_ACCENTS[step.stat.accent] } as CSSProperties}
+              >
                 <div className={styles.stepNumber}>{index + 1}</div>
                 <StatValue stat={step.stat} index={index} active={stepsInView} />
                 <h3 className={styles.stepTitle}>{step.title}</h3>
