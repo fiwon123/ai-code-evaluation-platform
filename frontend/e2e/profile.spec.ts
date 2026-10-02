@@ -392,19 +392,38 @@ async function sideBySide(page: Page) {
  * **no tile is ever narrower than the width its label needs**, which is the
  * thing the two-line row came from.
  *
- * The label needs 168px: at 165px "Challenges created" wraps and at 168px it
- * does not. So the floor in the stylesheet is 168px and this asserts tiles are
- * never below it — which means the two findings travel together. If a label or
- * a font size changes and the floor goes stale, this fails.
+ * The label's own width sets the floor, and that floor sets the density of the
+ * whole row: 141px lets a 360px phone fit two columns, where the 166px floor a
+ * 131.9px label ("Challenges created") forced fitted only one. #383 shortened
+ * that label, so the floor is now set by "Completion rate" at 107.2px.
+ *
+ * The floor is read from `--tile-min` at every assertion rather than hardcoded
+ * here. It used to be a `LABEL_FLOOR_PX = 168` constant in this file, which is a
+ * second source of truth for a number that lives in the stylesheet — and it has
+ * now needed editing twice because of it. Reading it back is safe precisely
+ * because the next test proves the floor is *sufficient*: if the stylesheet's
+ * floor were too small, that test fails on the wrapping label rather than
+ * quietly agreeing with itself.
  *
  * The widths are the ones where something changes: 360px is where two columns
- * stop fitting, 412px is the Pixel 7, and 700px is the top of the band where
- * four columns used to wrap even though the row had plenty of width.
+ * start fitting again, 412px is the Pixel 7, and 700px is the top of the band
+ * where four columns used to wrap even though the row had plenty of width.
  */
-const LABEL_FLOOR_PX = 168;
 const WIDTHS = [320, 360, 412, 480, 560, 640, 700, 768, 900, 1280];
 
-test.describe("Profile stat tiles size themselves to their labels (#376)", () => {
+/**
+ * The `--tile-min` token resolved to px, read from the page rather than
+ * duplicated here. Multiplied by the root font size because the token is rem.
+ */
+const floorPx = (page: Page): Promise<number> =>
+  page.evaluate(() => {
+    const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+    const raw = parseFloat(getComputedStyle(row).getPropertyValue("--tile-min"));
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return +(raw * rootPx).toFixed(1);
+  });
+
+test.describe("Profile stat tiles size themselves to their labels (#376, #383)", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
   });
@@ -454,10 +473,11 @@ test.describe("Profile stat tiles size themselves to their labels (#376)", () =>
           .map((o) => `${o.label} (${o.lines} lines in ${o.width}px)`)
           .join(", ")}`,
       ).toEqual([]);
+      const floor = await floorPx(page);
       expect(
         measured.narrowest,
-        `at ${width}px a tile is ${measured.narrowest}px wide, under the ${LABEL_FLOOR_PX}px its label needs`,
-      ).toBeGreaterThanOrEqual(LABEL_FLOOR_PX - 0.5);
+        `at ${width}px a tile is ${measured.narrowest}px wide, under the ${floor}px floor its labels need`,
+      ).toBeGreaterThanOrEqual(floor - 0.5);
       expect(measured.horizontalScroll, `at ${width}px the page scrolls sideways`).toBeLessThanOrEqual(1);
     }
 
@@ -477,9 +497,10 @@ test.describe("Profile stat tiles size themselves to their labels (#376)", () =>
     // So the floor is tested directly: the row is forced to a single track of
     // exactly the floor, and each label is asked whether it wraps there. Reading
     // the floor and the label's width and comparing those two numbers does not
-    // work — "Challenges created" is 131.9px of text, and the 168px floor is
-    // really 131.9px of text plus the tile's own padding. Measuring the rendered
-    // result avoids having to know which of the two the boundary came from.
+    // work — the label's text and the tile's padding are both inside that width,
+    // and a floor derived from only the label it was shortened for wrapped five
+    // of the eleven widths below. Measuring the rendered result avoids having to
+    // know which of the two the boundary came from.
     await openProfile(page);
 
     const measured = await page.evaluate(() => {
@@ -514,6 +535,28 @@ test.describe("Profile stat tiles size themselves to their labels (#376)", () =>
     ).toEqual([]);
   });
 
+  test("the floor buys two columns on a 360px phone", async ({ page }) => {
+    // The point of #383. The two tests above only say nothing wraps; on their own
+    // they are also satisfied by a single column, which is what the 166px floor
+    // produced — legible, 485px tall, wasting half the row. A floor is a claim
+    // about density as much as about legibility, so the density gets asserted:
+    // two columns of 148px at 360px, which is what a 141px floor buys.
+    await openProfile(page);
+    await page.setViewportSize({ width: 360, height: 900 });
+
+    const measured = await page.evaluate(() => {
+      const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+      const tiles = [...row.children];
+      return {
+        perRow: new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().x))).size,
+        rowH: Math.round(row.getBoundingClientRect().height),
+      };
+    });
+
+    expect(measured.perRow, "360px should fit two columns").toBe(2);
+    expect(measured.rowH, "the row should stay one tile tall").toBeLessThanOrEqual(260);
+  });
+
   test("the row still clears the tap target, and shows all four", async ({ page }) => {
     await page.setViewportSize({ width: 412, height: 900 });
     await openProfile(page);
@@ -527,11 +570,12 @@ test.describe("Profile stat tiles size themselves to their labels (#376)", () =>
     });
 
     expect(measured, "the tile row lost a tile").toHaveLength(4);
+    const floor = await floorPx(page);
     // A `StatCard` is not itself a control, so this is about legibility of the
     // hit area rather than a button: nothing here is interactive, and the audit
     // that does care about 44px covers the cards further down this page.
     for (const [i, t] of measured.entries()) {
-      expect(t.w, `tile ${i} is ${t.w}px wide`).toBeGreaterThanOrEqual(LABEL_FLOOR_PX - 0.5);
+      expect(t.w, `tile ${i} is ${t.w}px wide, under the ${floor}px floor`).toBeGreaterThanOrEqual(floor - 0.5);
       expect(t.h, `tile ${i} is ${t.h}px tall`).toBeGreaterThanOrEqual(44);
     }
   });

@@ -128,23 +128,27 @@
 
      `auto-fit` with a `minmax` floor makes the wrapping impossible instead of
      merely unlikely. The floor is the width at which the longest label fits on
-     one line: measured, 165px wraps and 168px does not, so it is 10.5rem.
-     10.5rem rather than a literal because the label's width scales with the root
-     font size, and a hard-coded 168px would go stale the moment that changed.
-
-     At 412px this lands on two columns of 174px; at 700px on three; at 768px and
-     up on four. A fixed breakpoint cannot express that — there is a label-wrap
-     band between 560px and 700px, where four columns still wrapped, and another
-     below 412px where two still do.
+     one line: it is that label's own width plus the tile's padding and border,
+     so 107.2px of text ("Completion rate", the widest) + 33px of chrome = 141px,
+     and the floor is 8.9rem. rem rather than a literal because the label's width
+     scales with the root font size, and a hard-coded 141px would go stale the
+     moment that changed.
 
      The floor is the whole mechanism, so it is a named token rather than a
-     literal inside `minmax`: `e2e/profile.spec.ts` compares each label's
-     measured single-line width against this value, which is the check that
-     actually matters. Sampling viewports for a wrap does not come close —
-     `auto-fit` expands tracks to fill, so a floor that is a few pixels too small
-     only produces a wrapped label in a narrow band of viewport widths, and a
-     sweep that misses that band passes on a broken row. */
-  --tile-min: 10.5rem;
+     literal inside `minmax`. `e2e/profile.spec.ts` forces the row to a single
+     track of exactly this width and asks each label whether it wraps there,
+     which is the check that actually matters. Sampling viewports for a wrap does
+     not come close — `auto-fit` expands tracks to fill, so a floor that is a few
+     pixels too small only produces a wrapped label in a narrow band of viewport
+     widths, and a sweep that misses that band passes on a broken row.
+
+     Because the floor sets the column count, it also sets the row's density: at
+     141px a 360px phone fits two columns, where a floor set by a 131.9px label
+     ("Challenges created") fitted only one and left the row 485px tall. That is
+     why this label is "Challenges" and not "Challenges created" — the longest
+     label is the binding constraint on every width, so shortening the outlier
+     buys density everywhere below the floor. */
+  --tile-min: 8.9rem;
   grid-template-columns: repeat(auto-fit, minmax(var(--tile-min), 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-8);
