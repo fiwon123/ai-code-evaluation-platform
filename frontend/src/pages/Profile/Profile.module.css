@@ -118,7 +118,34 @@
    visible change on purpose rather than by accident. */
 .statsRow {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* The column count is derived from the label rather than picked (#376).
+
+     This rule was `repeat(4, 1fr)`, which is the right answer on a desktop and
+     the wrong one everywhere else: four equal tracks at 412px give each tile
+     79px, and "Challenges created" at `--font-size-xs` then wraps to two lines
+     in all four tiles — so the widest label sets the height of the whole row and
+     the tiles end up 128px tall carrying three words.
+
+     `auto-fit` with a `minmax` floor makes the wrapping impossible instead of
+     merely unlikely. The floor is the width at which the longest label fits on
+     one line: measured, 165px wraps and 168px does not, so it is 10.5rem.
+     10.5rem rather than a literal because the label's width scales with the root
+     font size, and a hard-coded 168px would go stale the moment that changed.
+
+     At 412px this lands on two columns of 174px; at 700px on three; at 768px and
+     up on four. A fixed breakpoint cannot express that — there is a label-wrap
+     band between 560px and 700px, where four columns still wrapped, and another
+     below 412px where two still do.
+
+     The floor is the whole mechanism, so it is a named token rather than a
+     literal inside `minmax`: `e2e/profile.spec.ts` compares each label's
+     measured single-line width against this value, which is the check that
+     actually matters. Sampling viewports for a wrap does not come close —
+     `auto-fit` expands tracks to fill, so a floor that is a few pixels too small
+     only produces a wrapped label in a narrow band of viewport widths, and a
+     sweep that misses that band passes on a broken row. */
+  --tile-min: 10.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(var(--tile-min), 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-8);
 }

@@ -375,6 +375,168 @@ async function sideBySide(page: Page) {
   });
 }
 
+/**
+ * The page's own row of four stat tiles (#376).
+ *
+ * `.statsRow` was `repeat(4, 1fr)`, which made sense on a desktop and not on a
+ * phone: at 412px each tile got 79px and every label wrapped to two lines, so
+ * the widest label set the height of the whole row. The rule is now
+ * `repeat(auto-fit, minmax(10.5rem, 1fr))`, which derives the column count from
+ * the label's own width.
+ *
+ * What this asserts is the *invariant*, not the column count. A test that
+ * counted columns would be asserting the implementation: `auto-fit` also
+ * reports collapsed zero-width tracks in `gridTemplateColumns` (six of them at
+ * 1280px, for four tiles), and a future `minmax` retune would fail a count
+ * assertion without the page being any worse. The claim worth locking is that
+ * **no tile is ever narrower than the width its label needs**, which is the
+ * thing the two-line row came from.
+ *
+ * The label needs 168px: at 165px "Challenges created" wraps and at 168px it
+ * does not. So the floor in the stylesheet is 168px and this asserts tiles are
+ * never below it — which means the two findings travel together. If a label or
+ * a font size changes and the floor goes stale, this fails.
+ *
+ * The widths are the ones where something changes: 360px is where two columns
+ * stop fitting, 412px is the Pixel 7, and 700px is the top of the band where
+ * four columns used to wrap even though the row had plenty of width.
+ */
+const LABEL_FLOOR_PX = 168;
+const WIDTHS = [320, 360, 412, 480, 560, 640, 700, 768, 900, 1280];
+
+test.describe("Profile stat tiles size themselves to their labels (#376)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("no label wraps, at any width", async ({ page }) => {
+    await openProfile(page);
+
+    const report: string[] = [];
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      // Resized in place rather than re-navigated: the grid reflows on a
+      // viewport change and the tiles are already mounted, so this measures the
+      // same four elements at each width instead of four fresh fetches.
+      await page.waitForFunction(() => {
+        const row = document.querySelector('[class*="statsRow"]');
+        return row !== null && row.children.length === 4;
+      });
+
+      const measured = await page.evaluate(() => {
+        const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+        const tiles = [...row.children];
+        return {
+          offenders: tiles
+            .map((tile) => {
+              const label = tile.querySelector('[class*="statLabel"]') as HTMLElement;
+              const lineHeight = parseFloat(getComputedStyle(label).lineHeight);
+              return {
+                label: label.textContent ?? "",
+                width: +tile.getBoundingClientRect().width.toFixed(1),
+                lines: Math.round(label.getBoundingClientRect().height / lineHeight),
+              };
+            })
+            .filter((t) => t.lines > 1),
+          narrowest: +Math.min(...tiles.map((t) => t.getBoundingClientRect().width)).toFixed(1),
+          // Distinct x positions, i.e. tiles per row — not `gridTemplateColumns`,
+          // which reports `auto-fit`'s collapsed tracks too.
+          perRow: new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().x))).size,
+          horizontalScroll:
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+
+      report.push(`${String(width).padStart(4)}px  ${measured.perRow}/row  narrowest ${measured.narrowest}px`);
+      expect(
+        measured.offenders,
+        `at ${width}px these labels wrap: ${measured.offenders
+          .map((o) => `${o.label} (${o.lines} lines in ${o.width}px)`)
+          .join(", ")}`,
+      ).toEqual([]);
+      expect(
+        measured.narrowest,
+        `at ${width}px a tile is ${measured.narrowest}px wide, under the ${LABEL_FLOOR_PX}px its label needs`,
+      ).toBeGreaterThanOrEqual(LABEL_FLOOR_PX - 0.5);
+      expect(measured.horizontalScroll, `at ${width}px the page scrolls sideways`).toBeLessThanOrEqual(1);
+    }
+
+    // Written to the report so a failure names the shape of the row rather than
+    // just the first bad width.
+    test.info().annotations.push({ type: "tiles", description: report.join(" | ") });
+  });
+
+  test("every label still fits on one line at the declared floor", async ({ page }) => {
+    // The check a viewport sweep cannot make. `auto-fit` expands tracks to fill
+    // the row, so a floor a few pixels under what the label needs does not
+    // produce a visibly narrow tile everywhere — it produces a wrap in a narrow
+    // *band* of viewport widths, where the row just barely fits one more column
+    // than it should. A sweep sampled coarsely skips that band and passes on a
+    // row that still wraps. (A 164px floor against a 10-width sweep was one.)
+    //
+    // So the floor is tested directly: the row is forced to a single track of
+    // exactly the floor, and each label is asked whether it wraps there. Reading
+    // the floor and the label's width and comparing those two numbers does not
+    // work — "Challenges created" is 131.9px of text, and the 168px floor is
+    // really 131.9px of text plus the tile's own padding. Measuring the rendered
+    // result avoids having to know which of the two the boundary came from.
+    await openProfile(page);
+
+    const measured = await page.evaluate(() => {
+      const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+      const computed = getComputedStyle(row);
+      const floor =
+        parseFloat(computed.getPropertyValue("--tile-min")) *
+        parseFloat(getComputedStyle(document.documentElement).fontSize);
+
+      // One track, exactly the floor. The tiles then stack, which is irrelevant
+      // here — what matters is the width each one gets.
+      row.style.gridTemplateColumns = `${floor}px`;
+      const labels = [...row.querySelectorAll('[class*="statLabel"]')] as HTMLElement[];
+      const rows = labels.map((label) => {
+        const lineHeight = parseFloat(getComputedStyle(label).lineHeight);
+        return {
+          text: label.textContent ?? "",
+          lines: Math.round(label.getBoundingClientRect().height / lineHeight),
+          tileWidth: +(label.parentElement as HTMLElement).getBoundingClientRect().width.toFixed(1),
+        };
+      });
+      row.style.gridTemplateColumns = "";
+      return { floor: +floor.toFixed(1), rows };
+    });
+
+    const wrapped = measured.rows.filter((r) => r.lines > 1);
+    expect(
+      wrapped,
+      `at the declared floor of ${measured.floor}px these labels wrap: ` +
+        wrapped.map((w) => `"${w.text}" (${w.lines} lines in a ${w.tileWidth}px tile)`).join(", ") +
+        `. Raise --tile-min in Profile.module.css, or shorten the label.`,
+    ).toEqual([]);
+  });
+
+  test("the row still clears the tap target, and shows all four", async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 900 });
+    await openProfile(page);
+
+    const measured = await page.evaluate(() => {
+      const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+      return [...row.children].map((tile) => {
+        const r = tile.getBoundingClientRect();
+        return { w: +r.width.toFixed(1), h: +r.height.toFixed(1) };
+      });
+    });
+
+    expect(measured, "the tile row lost a tile").toHaveLength(4);
+    // A `StatCard` is not itself a control, so this is about legibility of the
+    // hit area rather than a button: nothing here is interactive, and the audit
+    // that does care about 44px covers the cards further down this page.
+    for (const [i, t] of measured.entries()) {
+      expect(t.w, `tile ${i} is ${t.w}px wide`).toBeGreaterThanOrEqual(LABEL_FLOOR_PX - 0.5);
+      expect(t.h, `tile ${i} is ${t.h}px tall`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
+
 test.describe("Profile list alignment", () => {
   test("both columns give every card the same height", async ({ page }) => {
     await openLists(page);
