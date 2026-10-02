@@ -141,6 +141,71 @@ const PIPELINE = [
 /** Typed into the demo terminal, then "evaluated". */
 
 /**
+ * The compact "here is what your first evaluation looks like" log (#355).
+ *
+ * Every line is read off the backend rather than written for effect, because
+ * this is the same trap #352 walked into: the hero terminal once claimed a score
+ * of 88 next to a visible failing test, when `services/evaluation.py` computes
+ * `round((passed / total) * 100, 1)` and would have printed 66.7. A landing page
+ * that shows a figure its own backend would not produce is lying about the
+ * product, so each line here cites the thing it came from:
+ *
+ *   POST /api/challenges      `app/api/challenges.py` — `@router.post("")`
+ *   POST /api/submissions     `app/api/submissions.py` — `@router.post("")`
+ *   demo                      `_PROVIDERS` in `app/services/llm.py`: the free,
+ *                             network-independent provider. Named as the provider
+ *                             *key*, which is what an API caller passes.
+ *   python                    one of `EXECUTABLE_LANGUAGES`,
+ *                             `app/services/languages.py`
+ *   66.7 · 142ms              the same sample run `AnimatedTerminal` plays, and
+ *                             the same arithmetic: two of three tests pass, so
+ *                             `round(2 / 3 * 100, 1)` is 66.7. Reusing the hero's
+ *                             figures also means the page cannot contradict
+ *                             itself two screens apart.
+ *
+ * Deliberately *not* a shell session. There is no CLI — `backend/pyproject.toml`
+ * declares no `[project.scripts]` and nothing in `docs/` documents one — so a
+ * `$ platform generate` prompt would be inventing a product surface. Framed as
+ * the API calls the platform actually exposes, every line is a thing a reader
+ * could check.
+ *
+ * The granularity is also the point: the hero types out one submission beat by
+ * beat, and this summarises the whole run in five rows. A second character-level
+ * terminal at the foot of the page would be the same animation twice.
+ */
+const TEASER_RUN: readonly {
+  label?: string;
+  detail?: string;
+  /** Test outcomes, rendered as chips on their own row. */
+  results?: readonly { name: string; passed: boolean }[];
+  /** The row that carries the score, set apart from the log above it. */
+  score?: boolean;
+}[] = [
+  { label: "POST /api/challenges", detail: "challenge#4821 · python · 3 tests" },
+  { label: "POST /api/submissions", detail: "queued · provider demo" },
+  { label: "evaluating", detail: "pytest · 3 tests" },
+  {
+    results: [
+      { name: "two_sum_basic", passed: true },
+      { name: "two_sum_unsorted", passed: false },
+    ],
+  },
+  { label: "score", detail: "66.7 · 142ms", score: true },
+];
+
+/**
+ * Milliseconds between one teaser row's entrance and the next.
+ *
+ * Supplied to the CSS as `--teaser-delay` rather than written into the
+ * `animation-delay` calc there, so the stagger has one definition. The
+ * `calc(var(--teaser-i) * 260ms)` shape would have worked, but then the number
+ * lives in two files with nothing holding them together — and the two are the
+ * kind of value that has to agree (see `TERMINAL_ENTRANCE_MS`, where a CSS/JS
+ * disagreement cost a whole entrance).
+ */
+const TEASER_STAGGER_MS = 260;
+
+/**
  * Decorative code fragments drifting behind the hero.
  *
  * Purely atmospheric: they carry no product claim, so the whole list is
@@ -182,6 +247,10 @@ function Home() {
   // must start on the same turn of the sweep anyway, so a shared gate is both
   // cheaper and the only way their stagger stays meaningful.
   const { ref: stepsRef, inView: stepsInView } = useInView<HTMLDivElement>({ threshold: 0.15 });
+  // The teaser run log at the foot of the page (#355). Separate from the sweep
+  // above because they are separate sections that arrive at separate times, and
+  // one observer cannot gate two elements at different depths in the document.
+  const { ref: teaserRef, inView: teaserInView } = useInView<HTMLDivElement>({ threshold: 0.2 });
   return (
     <div>
       <section className={styles.hero}>
@@ -358,7 +427,18 @@ function Home() {
         </Reveal>
       </section>
 
-      {/* Guest teaser — routes guests to the live demo, members to their first run */}
+      {/* Guest teaser — routes guests to the live demo, members to their first
+          run. #355 gave it the compact run log below: the section used to be
+          the only one on the page with a heading, a sentence and a button and
+          nothing else, so the page went flat for its last two screens.
+
+          `data-entered` gates the rows the same way the step cards' entrance is
+          gated (#353) and for the same reason: the reveal runs once, when the
+          section arrives, rather than on mount — an animation at the foot of the
+          page that finishes before anyone scrolls to it is one nobody watched.
+          `useInView` reports visible immediately under reduced motion and
+          without IntersectionObserver, so the rows are never withheld from
+          someone who will not see the animation anyway. */}
       <section className={styles.section}>
         <Reveal>
           <div className="sectionHighlight teaser">
@@ -377,6 +457,53 @@ function Home() {
                 <Button to="/demo" size="lg">Try the live demo</Button>
               )}
             </div>
+
+            {/* `aria-hidden`: it restates the sentence above in a form the
+                button already leads to, and a screen reader announcing a fake
+                log line by line is worse than not announcing it. */}
+            <div
+              className={styles.teaserPanelWrap}
+              ref={teaserRef}
+              data-entered={teaserInView ? "true" : "false"}
+              aria-hidden="true"
+            >
+              <div className={styles.teaserPanel}>
+                {TEASER_RUN.map((row, index) => (
+                  <div
+                    key={row.label ?? `row-${index}`}
+                    className={row.score ? styles.teaserScoreRow : styles.teaserRow}
+                    style={
+                      {
+                        "--teaser-delay": `${index * TEASER_STAGGER_MS}ms`,
+                      } as CSSProperties
+                    }
+                  >
+                    {row.results ? (
+                      <span className={styles.teaserResults}>
+                        {row.results.map((result) => (
+                          <span
+                            key={result.name}
+                            className={result.passed ? styles.teaserPass : styles.teaserFail}
+                          >
+                            <span aria-hidden="true">{result.passed ? "✓" : "✗"}</span>
+                            {result.name}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <>
+                        {row.label && <span className={styles.teaserLabel}>{row.label}</span>}
+                        {row.detail && <span className={styles.teaserDetail}>{row.detail}</span>}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className={styles.teaserPanelCaption}>
+                Sample run on the free demo provider — your own challenge, tests
+                and score
+              </p>
+            </div>
           </div>
         </Reveal>
       </section>
@@ -384,6 +511,12 @@ function Home() {
       <section className={`${styles.section} ${styles.sectionAlt}`}>
         <Reveal>
           <div className={styles.cta}>
+            {/* The page's closing motif (#355): a faint ring sweeping once
+                around the banner, echoing the score ring in the hero terminal
+                that the reader met at the top. Decorative and pointer-inert, so
+                it never affects layout or hit-testing. */}
+            <span className={styles.ctaRing} aria-hidden="true" />
+            <span className={styles.ctaAura} aria-hidden="true" />
             <h2 className={styles.ctaTitle}>Ready to try it?</h2>
             <p className={styles.ctaText}>
               Create an account, write your first challenge, and watch the

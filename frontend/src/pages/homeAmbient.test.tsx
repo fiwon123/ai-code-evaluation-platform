@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { restoreMatchMedia, stubMatchMedia } from "../test/matchMedia.ts";
 import Home from "./Home/Home.tsx";
+import animatedTerminalSource from "./Home/AnimatedTerminal.tsx?raw";
 
 vi.mock("../context/AuthContext.tsx", () => ({
   useAuth: () => ({
@@ -293,5 +294,71 @@ describe("Home copy stays true to the code", () => {
     const text = homeText();
     expect(text).not.toMatch(/can never/i);
     expect(text).not.toMatch(/never harm/i);
+  });
+
+  /**
+   * The teaser run log added in #355.
+   *
+   * It is the same trap as the score this describe already guards. #352 had the
+   * hero terminal claiming a score of 88 beside a visible failing test, when
+   * `services/evaluation.py` computes `round((passed / total) * 100, 1)` and would
+   * have printed 66.7 — a landing page stating a number its own backend would
+   * never produce. A second panel that reports a run is a second place to get
+   * that wrong, so it is asserted rather than trusted.
+   */
+  it("shows the score the backend would compute for the tests it shows", () => {
+    const text = homeText();
+    // Two of the three sample tests pass, which is what the two chips say. The
+    // rule in `services/evaluation.py` is `round((passed / total) * 100, 1)`, so
+    // 2/3 is 66.7 and not a rounder number.
+    expect(text).toMatch(/two_sum_basic/);
+    expect(text).toMatch(/two_sum_unsorted/);
+    expect(text).toMatch(/66\.7/);
+
+    // ...and the same figure the hero's terminal plays, because two panels
+    // quoting different scores for one run is the defect again with a new page.
+    //
+    // Compared against the *source* constant, not against the rendered DOM: the
+    // hero's terminal only reveals its score at the end of its story, so on a
+    // fresh render there is exactly one `66.7` on the page and a
+    // "does it appear twice" assertion would fail on correct code.
+    const heroScore = animatedTerminalSource.match(/SAMPLE_SCORE\s*=\s*([\d.]+)/)?.[1];
+    expect(heroScore, "could not read SAMPLE_SCORE out of AnimatedTerminal.tsx").toBeDefined();
+    expect(text, "the teaser and the hero quote different scores for one run").toContain(
+      heroScore as string,
+    );
+  });
+
+  it("names provider keys and endpoints that exist", () => {
+    const text = homeText();
+    // `demo` is a key of `_PROVIDERS` in `app/services/llm.py` — the free,
+    // network-independent one. Naming it as a display name would read as a
+    // product tier that does not exist.
+    expect(text).toMatch(/provider demo/);
+    // The two paths are real: `@router.post("")` under `/challenges` and under
+    // `/submissions` (`app/api/challenges.py`, `app/api/submissions.py`).
+    expect(text).toMatch(/POST \/api\/challenges/);
+    expect(text).toMatch(/POST \/api\/submissions/);
+    // No path the app does not serve. `results` is keyed by *share token*, not
+    // by submission id, so a `GET /api/results/<id>` line would be wrong in a
+    // way nothing else on the page would reveal.
+    expect(text).not.toMatch(/GET \/api\/results\//);
+  });
+
+  it("invents no command line", () => {
+    // There is no CLI: `backend/pyproject.toml` declares no `[project.scripts]`
+    // and nothing in `docs/` documents one. A `$ platform generate` prompt on the
+    // landing page would advertise a product surface that does not exist — the
+    // same class of claim as the old score, one level up.
+    const text = homeText();
+    expect(text).not.toMatch(/\$\s*(platform|ai-eval|python -m|eval)\b/);
+  });
+
+  it("marks the run as a sample rather than a live result", () => {
+    // #354 removed a strip that undercut the page because two of its four
+    // numbers were illustrative and nothing said so. This panel is illustrative
+    // too, so it says so on its face.
+    const text = homeText();
+    expect(text).toMatch(/Sample run/i);
   });
 });

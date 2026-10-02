@@ -744,3 +744,322 @@ test.describe("the Home pipeline timeline (#353)", () => {
     }
   });
 });
+
+/**
+ * The two sections that used to end the page flat (#355).
+ *
+ * Both motions are new and both are invisible in a paused frame: the teaser rows
+ * only differ from one another *in time*, and the CTA ring only moves. So this
+ * steers the animations and reads the computed values, the same way the pipeline
+ * test above does — which is also what caught the #353 progress-bar defect, and
+ * what the visual sweep could not see.
+ */
+test.describe("the Home closing sections (#355)", () => {
+  /** Both row classes. The score row is `.teaserScoreRow` and does not also carry
+   *  `teaserRow` — the two share a comma-separated rule rather than composing, so
+   *  that one element never answers to both names. */
+  const ROWS = '[class*="teaserRow"], [class*="teaserScoreRow"]';
+
+  /** The teaser panel, once the section has entered view. */
+  async function openTeaser(page: Page) {
+    await mockApi(page, undefined, { auth: true });
+    await page.goto("/");
+    const wrap = page.locator('[class*="teaserPanelWrap"]').first();
+    await wrap.scrollIntoViewIfNeeded();
+    // The reveal is gated on the section arriving, so the rows only have
+    // animations once `data-entered` is set. Measuring before that would read the
+    // resting state and prove nothing about the stagger.
+    await expect(wrap).toHaveAttribute("data-entered", "true");
+    await expect(wrap.locator(ROWS)).toHaveCount(5);
+    return wrap;
+  }
+
+  test("reveals the teaser rows in order, and never backwards", async ({ page }) => {
+    const wrap = await openTeaser(page);
+
+    const sampled = await wrap.evaluate((el, rowsSelector) => {
+      // `getAnimations()` reports *pending and running* animations only, so by
+      // the time this ran the entrances had finished and there was nothing left
+      // to steer — the first attempt read an empty list rather than a wrong one.
+      // The reveal is gated on `data-entered` and nothing else, so clearing the
+      // attribute and putting it straight back restarts all five in one
+      // synchronous step, with no reflow in between to let them finish.
+      el.setAttribute("data-entered", "false");
+      void (el as HTMLElement).offsetHeight;
+      el.setAttribute("data-entered", "true");
+
+      const rows = [...el.querySelectorAll(rowsSelector)] as HTMLElement[];
+      const anims = rows
+        .flatMap((r) => r.getAnimations() as CSSAnimation[])
+        // By pattern, not equality: Vite scopes a *locally* declared keyframe on
+        // both sides (`teaserRowIn` → `_teaserRowIn_<hash>`), which still
+        // resolves. Only a reference into another file comes apart (#366), so an
+        // exact-name match fails on a working animation.
+        .filter((a) => /teaserRowIn/.test(a.animationName));
+
+      /** Opacity of every row at time `t`, after steering them all there. */
+      const opacityAt = (t: number): number[] => {
+        for (const a of anims) {
+          a.pause();
+          a.currentTime = t;
+        }
+        return rows.map((r) => Number(getComputedStyle(r).opacity));
+      };
+
+      // 50ms is fine enough that no 420ms row can cross its whole range between
+      // two samples. Past the last row's end, so `end` is the finished state.
+      const STEP = 50;
+      const frames: { at: number; opacities: number[] }[] = [];
+      for (let t = 0; t <= 2_400; t += STEP) {
+        frames.push({ at: t, opacities: opacityAt(t) });
+      }
+
+      /** When each row after the first becomes visible, and the leader's state
+       *  at that moment. This is the offset that defines a stagger. */
+      const leaderAtStart: number[] = [];
+      for (let n = 1; n < rows.length; n++) {
+        const frame = frames.find((f) => f.opacities[n] > 0.05);
+        if (frame) leaderAtStart.push(frame.opacities[n - 1]);
+      }
+
+      const firstMoving = frames.find((f) => f.opacities.some((o) => o > 0.01))?.at ?? 0;
+      const lastUnsettled = frames.filter((f) => f.opacities.some((o) => o < 0.99)).at(-1)?.at ?? 0;
+
+      return {
+        names: anims.map((a) => a.animationName),
+        rowCount: rows.length,
+        animationCount: anims.length,
+        // Read back from the engine, so a stagger that stopped being a stagger
+        // shows up here rather than only in the source.
+        durations: anims.map((a) => Number(a.effect?.getComputedTiming().duration ?? 0)),
+        delays: anims.map((a) => Number(a.effect?.getComputedTiming().delay ?? 0)),
+        start: frames[0].opacities,
+        end: frames[frames.length - 1].opacities,
+        leaderAtStart,
+        // Watchable: first row moving to last row settled.
+        cascadeSpan: lastUnsettled - firstMoving,
+        // A cascade overlaps, so some frame has two rows mid-transition at once.
+        // Zero here would mean the rows pop one after another instead.
+        overlappingFrames: frames.filter(
+          (f) => f.opacities.filter((o) => o > 0.05 && o < 0.95).length >= 2,
+        ).length,
+      };
+    }, ROWS);
+
+    expect(sampled.rowCount).toBe(5);
+
+    // #366 in miniature: an animation whose name resolves to no keyframes is
+    // *absent* from `getAnimations`, so this catches a rename that built cleanly
+    // and moved nothing — which a screenshot cannot tell from a still ornament.
+    for (const name of sampled.names) {
+      expect(
+        /teaserRowIn/.test(name),
+        `the rows are running "${name}" rather than their own keyframe`,
+      ).toBe(true);
+    }
+
+    // Every row has its own instance, and they do not all start together. If they
+    // shared one animation the stagger would be an illusion and the five rows
+    // would land as a single blink.
+    expect(sampled.animationCount).toBe(5);
+    expect(sampled.durations[0]).toBeGreaterThan(0);
+    for (const d of sampled.durations) expect(d).toBeCloseTo(sampled.durations[0], 0);
+    expect(new Set(sampled.delays).size, "every row started at the same instant").toBe(5);
+    const [earliest, ...later] = sampled.delays;
+    for (const delay of later) {
+      expect(delay, "the delays do not ascend with the rows").toBeGreaterThan(earliest);
+    }
+
+    // At the start of the reveal every row is at the keyframe's `from`...
+    for (const [i, o] of sampled.start.entries()) {
+      expect(o, `row ${i + 1} was already visible before its entrance`).toBeLessThan(0.02);
+    }
+
+    // ...and at the end all of them have arrived. This is the assertion that
+    // matters most: the whole class of bug here is a row left invisible at the
+    // foot of the page.
+    for (const o of sampled.end) {
+      expect(o, "a teaser row never finished its entrance — blank space at the foot").toBeGreaterThan(0.99);
+    }
+
+    // The stagger is real, in the sense that matters: row N+1 starts moving while
+    // row N is already well under way, so the eye has something to follow.
+    //
+    // Note what is *not* asserted: that row N+1 is still dark when row N
+    // finishes. That is not what a stagger means — a cascade overlaps — and on
+    // this easing row 2 is already at 0.72 when row 1 completes, which is the
+    // point. What has to hold is that row N+1 starts before row N is done, and
+    // that two rows are mid-fade at once (the `overlappingFrames` check below).
+    //
+    // Both of those were false when this entrance was on `--ease-out-expo`: it
+    // front-loads so hard that each row cleared the visible band in ~67ms, less
+    // than the 260ms stagger, so nothing ever overlapped and the section read as
+    // five blinks. Changing the easing was the fix; `ease` is what `Reveal` uses,
+    // so the section now matches the page's motion language too.
+    expect(sampled.leaderAtStart.length, "fewer rows started than expected").toBe(4);
+    for (const [i, lead] of sampled.leaderAtStart.entries()) {
+      expect(
+        lead,
+        `row ${i + 2} began while row ${i + 1} was only ${lead.toFixed(2)} lit — not staggered`,
+      ).toBeGreaterThan(0.4);
+    }
+
+    // Watchable, not a blink.
+    expect(
+      sampled.cascadeSpan,
+      `the cascade resolved in ${sampled.cascadeSpan}ms — too fast to follow`,
+    ).toBeGreaterThan(700);
+    expect(
+      sampled.overlappingFrames,
+      "no two rows were ever mid-transition together — the rows pop one at a time",
+    ).toBeGreaterThan(0);
+  });
+
+  test("keeps the CTA decoration off the button and out of the way of clicks", async ({
+    page,
+  }) => {
+    await mockApi(page, undefined, { auth: true });
+    await page.goto("/");
+
+    // Anchored on the ring, then its parent. `[class*="cta"]` would match the
+    // hero's `.ctaPrimary` button first in DOM order, which is not the banner.
+    const ring = page.locator('[class*="ctaRing"]').first();
+    await expect(ring).toBeAttached();
+    const banner = ring.locator("xpath=..");
+    await banner.scrollIntoViewIfNeeded();
+
+    const button = banner.getByRole("link", { name: /create free account/i });
+    await expect(button).toBeVisible();
+
+    // The ring is `width: 132%` of the banner and hangs 62% above it, so it does
+    // cover the button. Unless it is pointer-inert the CTA does not work.
+    const hit = await page.evaluate(() => {
+      const link = [...document.querySelectorAll("a")].find((a) =>
+        /create free account/i.test(a.textContent ?? ""),
+      );
+      if (!link) return { tag: null as string | null, inside: false };
+      const box = link.getBoundingClientRect();
+      const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return { tag: top?.tagName ?? null, inside: link.contains(top) || top === link };
+    });
+    expect(hit.tag, "nothing rendered at the centre of the CTA button").not.toBeNull();
+    expect(
+      hit.inside,
+      `the CTA decoration intercepted the click — topmost element at the button's centre was <${hit.tag?.toLowerCase()}>`,
+    ).toBe(true);
+
+    // And the ring is genuinely turning, not sitting still as a static ornament.
+    // A screenshot cannot tell those apart, which is why the seam between
+    // "styled" and "animating" is invisible to every other check here.
+    const sweep = await page.evaluate(() => {
+      const ring = document.querySelector('[class*="ctaRing"]');
+      const anims = ring?.getAnimations() as CSSAnimation[] | undefined;
+      if (!anims?.length) return { name: null, steps: [] as number[], duration: 0, sampled: 0 };
+      const anim = anims[0];
+      anim.pause();
+
+      // Spread across the whole cycle, not its first fifth: four samples inside
+      // 19% of a 64s loop cannot see an oscillation, and the mutation check
+      // proved it — swapping the sweep for an out-and-back turn stayed green.
+      // 60s rather than 64s, because at exactly one period the animation has
+      // already looped back to its first value.
+      const SAMPLES = [0, 15_000, 30_000, 45_000, 60_000];
+      const at = (t: number): DOMMatrixReadOnly => {
+        anim.currentTime = t;
+        return new DOMMatrixReadOnly(getComputedStyle(ring!).transform);
+      };
+      const matrices = SAMPLES.map(at);
+      // Signed angle from one sample to the next, taken as a difference of the
+      // two matrices rather than of two `atan2` results: `atan2` returns [-180,
+      // 180], so a ring that has swept past vertical reads as suddenly reversing
+      // when in fact it is carrying on. The matrix difference is
+      //
+      //   atan2(sin(dm)cos(dp) - cos(dm)sin(dp), cos(dm)cos(dp) + sin(dm)sin(dp))
+      //     = atan2(sin(dm - dp), cos(dm - dp)) = dm - dp
+      //
+      // which is the forward delta with no discontinuity in it.
+      const steps = matrices.slice(1).map((m, i) => {
+        const prev = matrices[i];
+        return (
+          (Math.atan2(m.b * prev.a - m.a * prev.b, m.a * prev.a + m.b * prev.b) * 180) / Math.PI
+        );
+      });
+      return {
+        name: anim.animationName,
+        steps,
+        sampled: SAMPLES[1] - SAMPLES[0],
+        duration: Number(anim.effect?.getComputedTiming().duration ?? 0),
+      };
+    });
+    // Pattern, for the same reason as the teaser rows: locally declared keyframes
+    // are scoped on both sides, so the runtime name is `_ctaRingSweep_<hash>`.
+    expect(
+      /ctaRingSweep/.test(sweep.name ?? ""),
+      `the CTA ring is not running its keyframe (running "${sweep.name}")`,
+    ).toBe(true);
+
+    // It turns one way and keeps turning. A ring that eased back and forth, or
+    // snapped back between two samples, would pass a "did anything move" check.
+    expect(sweep.duration, "the ring's period is too fast to be a closing gesture").toBeGreaterThanOrEqual(48_000);
+    const expected = (360 / sweep.duration) * sweep.sampled;
+    for (const [i, step] of sweep.steps.entries()) {
+      expect(step, `window ${i + 1} turned ${step.toFixed(1)}deg — stalled or reversed`).toBeGreaterThan(0);
+      // ...and at the rate the keyframe declares. Several times faster and it is
+      // no longer the slow gesture it was written to be; it competes with the
+      // CTA copy above it.
+      expect(
+        Math.abs(step - expected),
+        `window ${i + 1} turned ${step.toFixed(1)}deg, expected about ${expected.toFixed(1)}deg`,
+      ).toBeLessThan(expected * 0.2);
+    }
+  });
+
+  test("shows the teaser finished and stills the CTA for a reduced-motion reader", async ({
+    page,
+  }) => {
+    // Before the navigation: the media query has to be in force when `useInView`
+    // reads it, or the gate opens the ordinary way and this measures nothing
+    // about the reduced-motion path.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await mockApi(page, undefined, { auth: true });
+    await page.goto("/");
+
+    const wrap = page.locator('[class*="teaserPanelWrap"]').first();
+    await wrap.scrollIntoViewIfNeeded();
+    // `useInView` reports visible immediately under reduced motion, so the gate
+    // opens without the animation ever being wanted.
+    await expect(wrap).toHaveAttribute("data-entered", "true");
+
+    const state = await page.evaluate((rowsSelector) => {
+      const wrap = document.querySelector('[class*="teaserPanelWrap"]');
+      const rows = [...wrap!.querySelectorAll(rowsSelector)] as HTMLElement[];
+      const ring = document.querySelector('[class*="ctaRing"]');
+      const running = new Set(
+        (document.getAnimations() as CSSAnimation[]).map((a) => a.animationName),
+      );
+      return {
+        opacities: rows.map((r) => Number(getComputedStyle(r).opacity)),
+        rowCount: rows.length,
+        ringAnimations: (ring?.getAnimations() as CSSAnimation[] | undefined)?.length ?? 0,
+        stillAnimating: [...running].filter((n) =>
+          /ctaRingSweep|teaserRowIn|auroraDrift/.test(n),
+        ),
+      };
+    }, ROWS);
+
+    // Content first: five visible rows, not five invisible ones.
+    expect(state.rowCount).toBe(5);
+    for (const [i, o] of state.opacities.entries()) {
+      expect(o, `teaser row ${i + 1} is invisible for a reduced-motion reader`).toBeGreaterThan(0.99);
+    }
+    // ...and no motion at all.
+    expect(
+      state.ringAnimations,
+      "the CTA ring is still animating for a reduced-motion reader",
+    ).toBe(0);
+    expect(
+      state.stillAnimating,
+      "ambient animation still running for a reduced-motion reader",
+    ).toEqual([]);
+  });
+});

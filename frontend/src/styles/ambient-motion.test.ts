@@ -18,6 +18,7 @@
 import { describe, expect, it } from "vitest";
 
 import AnimatedTerminalSource from "../pages/Home/AnimatedTerminal.tsx?raw";
+import homeSource from "../pages/Home/Home.tsx?raw";
 import globalsCss from "./globals.css?raw";
 import ambientCss from "./ambient.css?raw";
 import enterCss from "./enter.css?raw";
@@ -1035,5 +1036,138 @@ describe("the Home pipeline timeline is self-consistent (#353)", () => {
     expect(reducedMotionBlock(homeCss)).toMatch(
       /\.stepsGrid\[data-entered="true"\]\s+\.stepCard\s*\{\s*animation:\s*none/,
     );
+  });
+});
+
+describe("Home closing sections (#355)", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+
+  /**
+   * The two sections that used to end the page flat: the teaser and the CTA.
+   *
+   * Both are new motion, and both are places where the obvious implementation is
+   * wrong in a way only a test catches. The teaser rows would be invisible if
+   * their hidden state were declared on the rule rather than in the keyframe,
+   * and the CTA's decoration would paint over its own copy if the stacking were
+   * left to source order.
+   */
+
+  it("hides the teaser rows from their own keyframe, not from a resting opacity", () => {
+    // The failure direction matters more than usual here. The teaser is the last
+    // section on the page, so "invisible until observed" that never un-observes
+    // is a section of blank space at the foot of the page rather than a card
+    // glitch in the middle. Resting opacity must be 1 — or unset — with the
+    // hidden state reached through the keyframe and `fill-mode: both`.
+    expect(homeCss).not.toMatch(/\.teaserRow\s*\{[^}]*opacity:\s*0/);
+    expect(homeCss).not.toMatch(/\.teaserScoreRow\s*\{[^}]*opacity:\s*0/);
+    expect(homeCss).toMatch(/@keyframes\s+teaserRowIn\s*\{\s*from\s*\{[^}]*opacity:\s*0/);
+  });
+
+  it("starts the teaser rows on the section arriving, not on mount", () => {
+    // An animation at the foot of the page that plays before anyone scrolls to
+    // it is one nobody watched — the same reason the step cards and the stat
+    // sweep are gated (`useInView`, #353/#354). Gating it in CSS means the
+    // reveal cannot be orphaned by a re-render: there is no state to lose.
+    expect(homeCss).toMatch(
+      /\.teaserPanelWrap\[data-entered="true"\]\s+\.teaserRow[\s\S]*?animation:\s*teaserRowIn/,
+    );
+    expect(homeCss).not.toMatch(
+      /^\.teaserRow\s*\{[^}]*animation:/m,
+    );
+  });
+
+  it("takes the teaser stagger from the component's one number", () => {
+    // `TEASER_STAGGER_MS` in Home.tsx. A `calc(var(--i) * 260ms)` written here
+    // would also work, and then the number would live in two files with nothing
+    // holding them together — the `TERMINAL_ENTRANCE_MS` disagreement this file
+    // already documents, where the CSS and the JS each set half of one entrance.
+    expect(homeCss).toMatch(/animation-delay:\s*var\(--teaser-delay/);
+    expect(homeCss).not.toMatch(/animation-delay:[^;]*260ms/);
+    expect(homeSource).toMatch(/TEASER_STAGGER_MS/);
+  });
+
+  it("leaves the teaser rows visible when the animation is taken away", () => {
+    // `animation: none` under reduced motion has to be the *only* thing keeping
+    // them visible, which is only true because of the test above.
+    expect(reducedMotionBlock(homeCss)).toMatch(
+      /\.teaserPanelWrap\[data-entered="true"\]\s+\.teaserRow[\s\S]*?animation:\s*none/,
+    );
+  });
+
+  it("keeps the CTA decoration behind the copy", () => {
+    // `.cta::after` is an `inset: 0` light spill that goes to `opacity: 1` on
+    // hover. The new layers are absolutely positioned siblings, so without an
+    // explicit stacking order they paint over the heading and the buttons — and
+    // a hover that washes out the CTA text is worse than no animation.
+    expect(homeCss).toMatch(/\.cta\s*>\s*\*\s*\{[^}]*position:\s*relative[^}]*z-index:\s*1/);
+    expect(homeCss).toMatch(/\.cta\s*>\s*\.ctaRing[\s\S]*?z-index:\s*0/);
+  });
+
+  it("keeps the CTA decoration out of the way of pointer events", () => {
+    // `.cta` clips with `overflow: hidden`, so the ring's overhang is already
+    // cropped — but the layers still cover the whole banner, and a decoration
+    // that eats a click on "Create free account" is a broken CTA.
+    expect(homeCss).toMatch(/\.ctaRing\s*\{[^}]*pointer-events:\s*none/);
+    expect(homeCss).toMatch(/\.ctaAura\s*\{[^}]*pointer-events:\s*none/);
+  });
+
+  it("drifts the CTA bloom on the shared ambient keyframe rather than naming it", () => {
+    // Issue #366 in its purest form: naming a keyframe from a CSS module builds
+    // cleanly and animates nothing, because the build rewrites the reference and
+    // not the definition. `composes` keeps both in one compilation — and carries
+    // the reduced-motion opt-out with it, so this layer cannot reintroduce the
+    // bug by forgetting one.
+    expect(homeCss).toMatch(
+      /\.ctaAura\s*\{\s*composes:\s*ambientDrift from "\.\.\/\.\.\/styles\/ambient\.css"/,
+    );
+    expect(homeCss).not.toMatch(/animation:\s*auroraDrift/);
+    // Re-timed with the longhand, never the shorthand: a local `animation`
+    // shorthand would outrank the shared class's own `animation: none`.
+    expect(homeCss).toMatch(/\.ctaAura\s*\{[^}]*animation-duration:/);
+    expect(homeCss).not.toMatch(/\.ctaAura\s*\{[^}]*animation:\s*auroraDrift/);
+  });
+
+  it("sweeps the CTA ring slowly enough not to compete with the copy", () => {
+    // Everything else on this page moves in 6-22s. The closing ring is on a 64s
+    // loop: a reader looking at it sees it move, a reader reading the CTA does
+    // not notice it at all. Asserted rather than left to taste, because "slow
+    // enough" is exactly the number that gets halved by a later edit.
+    const ring = homeCss.match(/\.ctaRing\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(ring).toMatch(/animation:\s*ctaRingSweep\s+(\d+)s/);
+    const seconds = Number(ring.match(/animation:\s*ctaRingSweep\s+(\d+)s/)?.[1]);
+    expect(seconds).toBeGreaterThanOrEqual(48);
+
+    // And it must actually rotate: a ring that only fades or scales is a
+    // different ornament than the one described.
+    const keyframe = homeCss.match(/@keyframes\s+ctaRingSweep\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    expect(keyframe).toMatch(/rotate\(/);
+  });
+
+  it("keeps the CTA decoration out of flow", () => {
+    // The regression this exists for: `.cta > *` raises the banner's children to
+    // `z-index: 1` so the copy paints above the decoration, and it also set
+    // `position: relative` on them. That rule and `.ctaRing` have equal
+    // specificity, so the later one won and the two layers came back *in flow* —
+    // empty inline boxes two pixels wide, still carrying the sweep animation.
+    // The animation ran, this file's other contracts held, and the ring was
+    // never on screen. So the opt-out rule has to restore `position` as well as
+    // `z-index`, and this asserts the pair rather than either alone.
+    const optOut =
+      homeCss.match(/\.cta\s*>\s*\.ctaRing\s*,\s*\.cta\s*>\s*\.ctaAura\s*\{[\s\S]*?\n\}/)?.[0] ??
+      "";
+    expect(optOut, "no `.cta > .ctaRing, .cta > .ctaAura` opt-out rule found").not.toBe("");
+    expect(optOut).toMatch(/position:\s*absolute/);
+    expect(optOut).toMatch(/z-index:\s*0/);
+  });
+
+  it("opts the CTA ring out for a reader who asked for no motion", () => {
+    const reduce = reducedMotionBlock(homeCss);
+    expect(reduce, "no reduced-motion block found in Home.module.css").not.toBe("");
+    for (const selector of [".ctaRing", ".ctaAura"]) {
+      expect(
+        new RegExp(`${selector.replace(/\./g, "\\.")}\\s*(,|\\{)`).test(reduce),
+        `${selector} animates and is not opted out for reduced motion`,
+      ).toBe(true);
+    }
   });
 });

@@ -68,6 +68,45 @@ async function holdPipelineCycle(page: Page): Promise<void> {
   await expect(track).toBeInViewport();
 }
 
+/**
+ * Park the closing sections in frame and hold them there (#355).
+ *
+ * Two different holds, for two different reasons:
+ *
+ * * The teaser reveal is a one-shot entrance — it plays when the panel first
+ *   intersects and never again, so the scroll has to land inside the recording
+ *   and the hold only has to outlast the last row's delay. 260ms between five
+ *   rows plus a 420ms duration is ~1.7s.
+ * * The CTA ring loops every 64s. Holding a full lap would make the file
+ *   enormous, and the rate is already pinned exactly by the sampled assertions
+ *   in `ambient-motion.spec.ts`; what a recording adds is whether the arc reads
+ *   as a slow dial rather than as a static dashed rectangle. 14s is ~79 degrees
+ *   of turn — plenty to see.
+ */
+async function holdClosingSections(page: Page, target: string, ms: number): Promise<void> {
+  await mockApi(page, undefined, { auth: true });
+  await page.goto("/");
+
+  const el = page.locator(target).first();
+  await el.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(ms);
+
+  // Same liveness check as the pipeline: a recording of nothing must not pass.
+  await expect(el).toBeInViewport();
+}
+
+test.describe("Home closing sections, recorded as video (#355)", () => {
+  test.use({ reducedMotion: "no-preference" });
+
+  test("records the teaser reveal", async ({ page }) => {
+    await holdClosingSections(page, '[class*="teaserPanelWrap"]', 3_000);
+  });
+
+  test("records the CTA ring turning", async ({ page }) => {
+    await holdClosingSections(page, '[class*="_cta_"]', 14_000);
+  });
+});
+
 test.describe("Home pipeline, recorded as video", () => {
   // The whole point: the recording has to contain the motion, so motion cannot
   // be reduced away. Every other spec emulates reduced motion precisely because

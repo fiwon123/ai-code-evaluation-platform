@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TERMINAL_TIMING } from "../hooks/useTerminalStory.ts";
@@ -7,6 +7,18 @@ import About from "./About/About.tsx";
 import Demo from "./Demo/Demo.tsx";
 import Features from "./Features/Features.tsx";
 import Home from "./Home/Home.tsx";
+/**
+ * The hero terminal's sample report, scoped.
+ *
+ * Since #355 the page carries a second panel that lists the *same* sample test
+ * names — the teaser run log, which is a summary of the run the terminal plays in
+ * full. So a page-wide query for `two_sum_basic` now matches twice, and the
+ * assertions that concern the story have to say which panel they mean.
+ * `[class*=...]` because the module hash is part of the emitted name.
+ */
+const storyReport = () =>
+  within(document.querySelector('[class*="sampleReport"]') as HTMLElement);
+
 import { TERMINAL_ENTRANCE_MS } from "./Home/AnimatedTerminal.tsx";
 import Pricing from "./Pricing/Pricing.tsx";
 
@@ -248,20 +260,18 @@ describe("landing pages", () => {
       // the browser would. jsdom has no IntersectionObserver at all, so without
       // this stub the hook takes its "unavailable" path and is visible
       // immediately — which is exactly the case that hides this regression.
-      let deliver: ((el: Element) => void) | null = null;
+      // Every callback, not just the last one. This used to keep a single
+      // `deliver`, which silently assumed the page mounts one observer — true
+      // until #355 added a second `useInView` for the teaser log, at which point
+      // `deliver` held the *teaser's* callback and the test was asserting that
+      // the stat sweep never runs while delivering the one event that starts it.
+      const callbacks: IntersectionObserverCallback[] = [];
       class FakeObserver {
         constructor(cb: IntersectionObserverCallback) {
           // A block body on purpose: an expression-bodied arrow returns
           // `act`'s thenable, which makes the enclosing `act` look async and
           // React then demands an `await` that a sync test cannot give.
-          deliver = (el: Element) => {
-            act(() => {
-              cb(
-                [{ isIntersecting: true, target: el } as IntersectionObserverEntry],
-                {} as IntersectionObserver,
-              );
-            });
-          };
+          callbacks.push(cb);
         }
         observe() {}
         disconnect() {}
@@ -290,7 +300,18 @@ describe("landing pages", () => {
         ).toEqual(["0", "0", "0", "0 KB"]);
 
         // On screen, the sweep runs — the deferral is a delay, not a removal.
-        act(() => deliver?.(document.body));
+        // Annotated as `Element` rather than left as `HTMLElement`: the partial
+        // entry literal is only comparable to the full entry type at the
+        // declared width the callback expects.
+        const target = document.body as Element;
+        act(() => {
+          for (const cb of callbacks) {
+            cb(
+              [{ isIntersecting: true, target } as IntersectionObserverEntry],
+              {} as IntersectionObserver,
+            );
+          }
+        });
         act(() => void vi.advanceTimersByTime(30_000));
         expect(sweep().map((v) => v.text)).toEqual(["13", "6", "3", "64 KB"]);
       } finally {
@@ -425,7 +446,7 @@ describe("landing pages", () => {
         screen.getByText("$", { exact: false }).textContent,
         "prompt characters were typed before the panel was visible",
       ).not.toMatch(/Implement/);
-      expect(screen.queryByText("two_sum_basic")).not.toBeInTheDocument();
+      expect(storyReport().queryByText("two_sum_basic")).not.toBeInTheDocument();
       expect(document.querySelector(".ringValue")?.textContent).toBe("0%");
 
       // Now the panel comes into view, and the story runs from the top.
@@ -441,7 +462,7 @@ describe("landing pages", () => {
       act(() =>
         void vi.advanceTimersByTime(TERMINAL_ENTRANCE_MS + firstTestAt + 1),
       );
-      expect(screen.getByText(/two_sum_basic/)).toBeInTheDocument();
+      expect(storyReport().getByText(/two_sum_basic/)).toBeInTheDocument();
       // And the opening beat was not skipped over on the way there.
       expect(panel()).toHaveAttribute("data-entered", "true");
     } finally {
@@ -464,14 +485,14 @@ describe("landing pages", () => {
       ["two_sum_duplicates", "✓"],
       ["two_sum_unsorted", "✗"],
     ] as const) {
-      const row = screen.getByText(name).closest("li");
+      const row = storyReport().getByText(name).closest("li");
       expect(row, `${name} has no row`).not.toBeNull();
       expect(row).toHaveAttribute("data-state", "done");
       expect(row?.querySelector('[aria-hidden="true"]')?.textContent).toBe(mark);
     }
     // No unresolved rows at rest: the story has finished, so nothing is left
     // wearing the "still running" mark.
-    expect(screen.queryByText("⋯")).not.toBeInTheDocument();
+    expect(storyReport().queryByText("⋯")).not.toBeInTheDocument();
   });
 
   it("summarises the sample report in the counts the platform would print", () => {
