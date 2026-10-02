@@ -195,16 +195,34 @@ test.describe("ambient motion", () => {
           getComputedStyle((a.effect as KeyframeEffect).target as Element).transform,
         );
       const first = read();
-      // A real sample interval. Shorter and a paused animation could pass.
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      return { first, second: read() };
+      // Wait for the transform to actually change rather than for a fixed 400ms.
+      //
+      // A sleep guarantees wall-clock elapsed, not that any animation frame was
+      // delivered: under full-suite CPU saturation both samples came back
+      // byte-identical (`matrix(1, 0, 0, 1, -20.8, -10.4)` etc.), which reads as
+      // "the animation is stuck" when the truth was "no frame had run yet"
+      // (#385). Polling on `requestAnimationFrame` waits for the signal the test
+      // is actually about — a rendered frame moving the blob — so a loaded host
+      // simply takes longer, while a genuinely stuck or `paused` animation still
+      // fails, on the deadline rather than on a guess.
+      const moved = await new Promise<boolean>((resolve) => {
+        const deadline = performance.now() + 4000;
+        const tick = () => {
+          if (read().some((transform, i) => transform !== first[i])) return resolve(true);
+          if (performance.now() > deadline) return resolve(false);
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      return { first, second: read(), moved };
     });
 
     expect(sampled.first.length, "no auroraDrift animations to sample").toBeGreaterThan(0);
     expect(
-      sampled.second,
+      sampled.moved,
       "the blobs are registered but their transform never changes",
-    ).not.toEqual(sampled.first);
+    ).toBe(true);
+    expect(sampled.second).not.toEqual(sampled.first);
   });
 
   /**

@@ -49,6 +49,26 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
+  // Playwright's default is 5s, which is tuned for an unloaded machine running a
+  // spec or two. This suite runs fully parallel against one shared Vite dev
+  // server on a 6-core box, and 5s is not enough headroom there: under CPU
+  // saturation `openCreateForm`'s heading wait expires with "element(s) not
+  // found" before the page has rendered at all (#385).
+  //
+  // This is not a timeout that papers over a slow assertion — the failure above
+  // was the page never appearing, and no amount of assertion patience would
+  // have found a defect in it. Raising the ceiling gives the loaded host room to
+  // actually run the test; it does not weaken any assertion, because every one
+  // of them still polls until it passes or the (now larger) budget runs out.
+  //
+  // The alternative considered and rejected was `retries`. A retry re-runs the
+  // test, which hides the symptom while leaving the suite ~5 minutes slower on
+  // every run, and it would have masked this rather than fixing it. Nothing here
+  // is non-deterministic: the same spec passes 6/6 unloaded and fails 1/12
+  // saturated, which is a resource problem, not a race.
+  expect: {
+    timeout: 15_000,
+  },
   reporter: "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
