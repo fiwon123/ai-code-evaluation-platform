@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { restoreMatchMedia, stubMatchMedia } from "../test/matchMedia.ts";
@@ -137,6 +137,95 @@ describe("Home ambient layer", () => {
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/repair attempts/i);
     expect(text).not.toMatch(/3 repairs/i);
+  });
+
+  /**
+   * Each step card is told apart by hue (#353).
+   *
+   * Asserted on the rendered inline custom property rather than on a class name,
+   * because the colour is handed to `Card` as `--card-accent` (#347) and the CSS
+   * never names the four hues in one place — the whole point is that the accent
+   * travels from `STEPS` rather than being listed twice.
+   */
+  it("gives every step card the accent of the figure it explains", () => {
+    renderHomeAtRest();
+    // The card class, not the `stepStat` prefix: that prefix also matches
+    // `.stepStatValue` and `.stepStatLabel`, which would find twelve elements.
+    const cards = document.querySelectorAll("[class*=stepCard]");
+    expect(cards.length, "the four step cards were not found").toBe(4);
+
+    const accents = [...cards].map((card) => {
+      const accent = (card as HTMLElement).style.getPropertyValue("--card-accent").trim();
+      // The figure's own accent, read from the attribute its CSS keys off, so
+      // this checks the two agree rather than merely that four cards exist.
+      const statAccent = card.querySelector("[data-accent]")?.getAttribute("data-accent");
+      return { accent, statAccent };
+    });
+
+    // The four token references, written out rather than derived from
+    // `statAccent`: deriving them would make this assertion agree with whatever
+    // the component happened to emit. Note that `primary` is `--color-primary`
+    // and not an `--color-accent-` token, which is why the mapping cannot be
+    // built by string-building the accent name — the first version of this test
+    // did exactly that and asked for `--color-accent-primary`.
+    const expected = [
+      "var(--color-primary)",
+      "var(--color-accent-teal)",
+      "var(--color-accent-violet)",
+      "var(--color-accent-rose)",
+    ];
+    expect(accents.map((a) => a.accent)).toEqual(expected);
+
+    // ...and each card agrees with *its own* figure, which the list above cannot
+    // see: a mapping keyed by array position instead of `stat.accent` would
+    // still emit those four tokens in order, just on the wrong cards.
+    for (const { accent, statAccent } of accents) {
+      expect(
+        statAccent,
+        "a step card has no accent declared on its figure",
+      ).not.toBeNull();
+      // Every hue's token contains its own name, so this resolves the figure's
+      // accent to the token it is supposed to be painted with. (Deriving the
+      // token by string-building `--color-accent-${statAccent}` instead asks
+      // for `--color-accent-primary`, which is not a token that exists.)
+      expect(accent).toBe(
+        expected.find((token) => token.includes(statAccent as string)) ?? "no such accent",
+      );
+    }
+    // Four distinct hues: two cards sharing one would make the grid read as two
+    // pairs rather than four steps.
+    expect(new Set(accents.map((a) => a.accent)).size).toBe(4);
+  });
+
+  it("phrases the pipeline steps in one cadence", () => {
+    renderHome();
+    // The labels used to range from 9 to 17 characters ("Get score" /
+    // "AI generates code"), which wrapped to different line counts and made the
+    // fifth card 27px taller than the first four for no reason but wording.
+    const labels = ["Write a challenge", "Pick a provider", "Generate code", "Run your tests", "Get a score"];
+    // Scoped to the pipeline track: "Pick a provider" is also a step-card title,
+    // so a page-wide `getByText` finds two and throws.
+    const track = document.querySelector("[class*=pipelineTrack]");
+    expect(track, "the pipeline track was not found").not.toBeNull();
+    for (const label of labels) {
+      expect(
+        within(track as HTMLElement).getByText(label),
+        `"${label}" is missing from the pipeline strip`,
+      ).toBeInTheDocument();
+    }
+    const cards = track!.querySelectorAll("[class*=pipelineStep]");
+    expect(cards.length, "the five pipeline cards were not found").toBe(5);
+    for (const label of labels) {
+      const owner = [...cards].find((c) => c.textContent?.includes(label));
+      expect(owner, `no pipeline card holds "${label}"`).toBeDefined();
+    }
+    const lengths = labels.map((l) => l.length);
+    expect(Math.max(...lengths), "pipeline labels have drifted apart in length").toBeLessThanOrEqual(
+      18,
+    );
+    // Each label is a verb and its object, so the strip scans left to right as
+    // five actions rather than as three actions and two descriptions.
+    expect(labels.map((l) => l.split(" ").length)).toEqual([3, 3, 2, 3, 3]);
   });
 
   it("reads terminal → how it works → pipeline", () => {
