@@ -873,20 +873,45 @@
  * This was a single linear ramp from 0% to 100%, which meant the bar and the
  * cards disagreed for most of the loop: the bar was halfway while step one was
  * still lit, and full while step three was running. It read as an unrelated
- * progress indicator rather than a readout of this sequence. Now each segment
- * spans exactly one step's window and the bar reaches its target as the last
- * card lights.
+ * progress indicator rather than a readout of this sequence.
  *
- * `ease-in-out` flattens the slope at every keyframe, so the bar settles at
- * each step boundary instead of sliding through it — it beats in step with the
- * cards rather than running continuously past them. */
+ * The duplicated percentages are the whole point, and getting them wrong is
+ * invisible in a screenshot. One stop per level — `0/20/40/60/80/100`, which
+ * is what this keyframe first shipped as — is not five plateaus. It is one
+ * continuous ramp that happens to *decelerate* at each level, because
+ * `ease-in-out` flattens the slope at a keyframe it is passing through. Measured
+ * over one cycle, that ramp never once reached zero slope: every 0.5s window
+ * gained between 23 and 80px, with the slow windows drifting just after each
+ * boundary rather than standing still. So the bar was still creeping while the
+ * step it was supposedly waiting for finished. Duplicate stops hold the value
+ * flat, and the move to the next level is compressed into the 2% either side of
+ * the boundary so the bar steps *with* the card lighting rather than trailing
+ * it for the rest of the slice.
+ *
+ * The tail exists for the loop seam. A looping `width` animation has to jump
+ * from its last value back to its first, and it did that in a single frame:
+ * 1060px to 42px between two consecutive samples, while card five was still
+ * fading out. A one-frame teleport is the exact thing this review was looking
+ * for, and a filmstrip sampled at 0.5s intervals would have missed it. Fading
+ * the bar out across the seam hides the reset and makes the wrap continuous —
+ * `100%` and `0%` now declare the same width and the same opacity, so the loop
+ * point is not a discontinuity at all. The bar is dark for 3% of the cycle
+ * (300ms), which is less noticeable than the snap it replaces. */
 @keyframes progressStages {
-  0% { width: 4%; }
-  20% { width: 24%; }
-  40% { width: 44%; }
-  60% { width: 64%; }
-  80% { width: 84%; }
-  100% { width: 100%; }
+  0% { width: 4%; opacity: 0; }
+  2% { opacity: 1; }
+  18% { width: 4%; opacity: 1; }
+  20% { width: 24%; opacity: 1; }
+  38% { width: 24%; opacity: 1; }
+  40% { width: 44%; opacity: 1; }
+  58% { width: 44%; opacity: 1; }
+  60% { width: 64%; opacity: 1; }
+  78% { width: 64%; opacity: 1; }
+  80% { width: 84%; opacity: 1; }
+  94% { width: 84%; opacity: 1; }
+  96% { width: 100%; opacity: 1; }
+  99% { width: 100%; opacity: 0; }
+  100% { width: 4%; opacity: 0; }
 }
 
 .pipelineCaption {
@@ -1372,28 +1397,53 @@
     padding: var(--space-12) var(--space-4);
   }
 
+  /* The connectors used to stay in the group's row on a stacked layout, which
+   * put a 2px bar hard against the right border of the card above it: measured
+   * at x=390 in a track ending at x=396, so 7px from the card and 4px from the
+   * container edge, with nothing in the middle of the gap it was supposed to
+   * join. It read as a stray tick at the screen edge — the video review's
+   * first guess was a scrollbar fragment — because that is what a hairline in
+   * the gutter beside a full-bleed card looks like. Turning the group into a
+   * column centres each bar in the gap it actually connects, which is the only
+   * place a connector can read as one. */
   .pipelineTrack {
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 0;
     align-items: stretch;
   }
 
+  /* The base `.pipelineGroup` is `align-items: center`, which is right for the
+     desktop row (it centres the connector against the card) and wrong here: on
+     a column it content-sizes the cards horizontally and the pipeline becomes a
+     ragged staircase of differently-wide cards. Stretch keeps the cards full
+     width; the connector opts out on its own with `align-self: center`. */
   .pipelineGroup {
-    flex-direction: row;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .pipelineConnector {
     width: 2px;
-    height: var(--space-5);
+    height: var(--space-4);
+    /* The space between two stacked cards is now built here rather than by the
+     * track's gap, because the bar has to sit in the middle of it: equal margin
+     * either side, and the track's own gap removed so the gap is not counted
+     * twice. `align-self` rather than `align-items: center` on the group, because
+     * centring the group also sizes the cards to their text and the pipeline
+     * turns into a ragged staircase of differently-wide cards. */
+    align-self: center;
+    margin: var(--space-2) 0;
   }
 
   .pipelineConnector::after {
     content: "↓";
     right: auto;
-    top: auto;
-    bottom: -2px;
+    /* Below the bar, not overlapping the margin below it, so the glyph and the
+     * bar read as one mark. */
+    top: 100%;
+    bottom: auto;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -2px);
   }
 
   .sampleReport {
