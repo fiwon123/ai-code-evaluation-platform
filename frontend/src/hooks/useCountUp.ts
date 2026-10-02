@@ -6,13 +6,18 @@ import { useEffect, useRef, useState } from "react";
  * - Honors `prefers-reduced-motion`: returns the target immediately.
  * - Uses requestAnimationFrame with an ease-out curve when available,
  *   falling back to a timer-based step otherwise (test environments).
+ * - `startDelayMs: null` *waits*: the count-up does not start until a later
+ *   render supplies a real delay. Callers use it to defer an off-screen
+ *   animation until it is scrolled into view (see `useInView`), rather than
+ *   restarting from zero when the gate opens — the count-up is a single run
+ *   with a start offset, not a restartable one.
  *
  * Returns the current animated value.
  */
 export function useCountUp(
   target: number,
   durationMs = 800,
-  startDelayMs = 0,
+  startDelayMs: number | null = 0,
 ): number {
   const reduced =
     typeof window !== "undefined" &&
@@ -26,6 +31,12 @@ export function useCountUp(
   useEffect(() => {
     if (reduced) {
       setValue(target);
+      return;
+    }
+    // Deferred: nothing scheduled, and the value stays where it is until the
+    // gate opens. Not an early `return target` — that would snap the value to
+    // its target and then count back down to zero when the gate opens.
+    if (startDelayMs === null) {
       return;
     }
 

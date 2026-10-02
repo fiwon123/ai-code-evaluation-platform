@@ -18,7 +18,7 @@ test.describe("Guest landing page", () => {
     await mockApi(page);
   });
 
-  test("renders hero, sample report, and sample stats", async ({ page }) => {
+  test("renders hero, sample report, and the step figures", async ({ page }) => {
     await page.goto("/");
 
     await expect(
@@ -40,9 +40,93 @@ test.describe("Guest landing page", () => {
     await expect(page.getByText("two_sum_unsorted")).toBeVisible();
     await expect(page.getByText("Report ready")).toBeVisible();
 
-    // Stats strip.
-    await expect(page.getByText("Languages supported")).toBeVisible();
-    await expect(page.getByText("Sample figures for the prototype")).toBeVisible();
+    // The four figures now sit in the How-it-works cards (#354). `emulateMedia`
+    // reduces motion above, so each value is already at its target on the first
+    // frame and this asserts the numbers, not the sweep.
+    for (const label of [
+      "languages supported",
+      "LLM providers",
+      "attempts per submission",
+      "of logs captured",
+    ]) {
+      await expect(page.getByText(label, { exact: true })).toBeVisible();
+    }
+    await expect(page.getByText("Sample figures for the prototype")).toHaveCount(0);
+  });
+
+  test("puts the four figures inside the step that explains each one", async ({ page }) => {
+    await page.goto("/");
+
+    // Not merely "four numbers exist": each has to be in the same card as the
+    // step whose claim it supports. A strip of figures below all four steps
+    // would satisfy a count and read as four unrelated facts.
+    // The four step cards are the direct children of the steps grid — they are
+    // the shared `Card` component, which has no page-specific class of its own,
+    // so the grid is the stable anchor rather than a `[class*=stepCard]` guess.
+    const grid = page.locator("[class*=stepsGrid]");
+    await expect(grid).toBeVisible();
+    const cards = grid.locator("> *");
+    await expect(cards).toHaveCount(4);
+    for (const [value, label] of [
+      ["13", "languages supported"],
+      ["6", "LLM providers"],
+      ["3", "attempts per submission"],
+      ["64 KB", "of logs captured"],
+    ] as const) {
+      const card = cards.filter({ hasText: label });
+      await expect(card, `no step card contains "${label}"`).toHaveCount(1);
+      await expect(card).toContainText(value);
+    }
+  });
+
+  test("reads terminal, then How it works, then the pipeline", async ({ page }) => {
+    await page.goto("/");
+
+    // Issue #354 is half about order: the section that narrates the flow used
+    // to sit below a pipeline strip that already showed it. Compared as boxes,
+    // not as headings, so a stray heading order cannot pass this.
+    //
+    // `page.evaluate` runs the moment it is called and does not wait for React,
+    // so a bare read here returns Infinity for every anchor and compares three
+    // infinities. `expect.poll` is what makes the measurement wait for the
+    // mounts — and re-reads, so a late reflow cannot pass on a stale frame.
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const y = (sel: string) => {
+            const el = document.querySelector(sel);
+            return el ? Math.round(el.getBoundingClientRect().top) : null;
+          };
+          return {
+            terminal: y("[class*=animPanel]"),
+            steps: y("[class*=stepsGrid]"),
+            pipeline: y("[class*=pipelineTrack]"),
+          };
+        });
+      })
+      .toEqual(
+        { terminal: expect.any(Number), steps: expect.any(Number), pipeline: expect.any(Number) },
+      );
+
+    const boxes = await page.evaluate(() => {
+      const y = (sel: string) => {
+        const el = document.querySelector(sel);
+        return el ? Math.round(el.getBoundingClientRect().top) : Infinity;
+      };
+      return {
+        terminal: y("[class*=animPanel]"),
+        steps: y("[class*=stepsGrid]"),
+        pipeline: y("[class*=pipelineTrack]"),
+      };
+    });
+    expect(
+      boxes.terminal,
+      `terminal (${boxes.terminal}) must sit above the steps (${boxes.steps})`,
+    ).toBeLessThan(boxes.steps);
+    expect(
+      boxes.steps,
+      `steps (${boxes.steps}) must sit above the pipeline (${boxes.pipeline})`,
+    ).toBeLessThan(boxes.pipeline);
   });
 
   test("hero tagline is gradient-clipped to its letters, not a rectangle", async ({ page }) => {

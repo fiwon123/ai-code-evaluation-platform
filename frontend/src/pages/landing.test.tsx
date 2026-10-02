@@ -135,6 +135,186 @@ describe("landing pages", () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * The stat sweep (#354).
+   *
+   * The four values used to all start at the same 200ms delay, so they grew
+   * together. Every one of them still reached the right number, which is why
+   * this could not be caught by asserting the values — only by watching *when*
+   * each one starts.
+   */
+  describe("the How-it-works stat sweep", () => {
+    /** The value in each step card, as `[text, counting]` in DOM order. */
+    function sweep() {
+      return [...document.querySelectorAll<HTMLElement>('[class*="stepStatValue"]')].map(
+        (el) => ({
+          text: el.textContent ?? "",
+          counting: el.dataset.counting,
+        }),
+      );
+    }
+
+    it("runs the values one after another, left to right", () => {
+      vi.useFakeTimers();
+      try {
+        stubMatchMedia(false);
+        render(
+          <MemoryRouter>
+            <Home />
+          </MemoryRouter>,
+        );
+
+        // Long after every delay has elapsed but before the first value could
+        // have finished on its own: nothing has started, and nothing is left
+        // half-finished.
+        const before = sweep();
+        expect(before, "no stat values rendered").toHaveLength(4);
+        for (const value of before) {
+          expect(value.text).toMatch(/^0/);
+        }
+
+        // Walk the whole sweep, recording when each value first leaves zero.
+        // The order is the claim: value 1 must finish before value 2 starts.
+        const startedAt: number[] = [];
+        const settledAt: number[] = [];
+        let elapsed = 0;
+        while (startedAt.length < 4 || settledAt.length < 4) {
+          elapsed += 50;
+          act(() => void vi.advanceTimersByTime(50));
+          sweep().forEach((value, index) => {
+            const moving = value.counting === "true";
+            const atZero = value.text.startsWith("0");
+            if (!atZero && startedAt[index] === undefined) startedAt[index] = elapsed;
+            if (!moving && !atZero && settledAt[index] === undefined) {
+              settledAt[index] = elapsed;
+            }
+          });
+          expect(elapsed, "the sweep never finished").toBeLessThan(30_000);
+        }
+
+        expect(
+          startedAt,
+          "the four values did not start in document order",
+        ).toEqual([...startedAt].sort((a, b) => a - b));
+        for (let i = 1; i < 4; i += 1) {
+          expect(
+            startedAt[i],
+            `value ${i} started at ${startedAt[i]}ms, before value ${i - 1} settled at ${settledAt[i - 1]}ms`,
+          ).toBeGreaterThan(settledAt[i - 1]!);
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("finishes on the exact targets, with nothing left counting", () => {
+      vi.useFakeTimers();
+      try {
+        stubMatchMedia(false);
+        render(
+          <MemoryRouter>
+            <Home />
+          </MemoryRouter>,
+        );
+        act(() => void vi.advanceTimersByTime(30_000));
+        // "Finishes in a stable state" is the acceptance criterion, and it is a
+        // different claim from "reaches the right number": a sweep that stopped
+        // at 96% of its target would pass a value assertion at a glance.
+        expect(sweep().map((v) => [v.text, v.counting])).toEqual([
+          ["13", "false"],
+          ["6", "false"],
+          ["3", "false"],
+          ["64 KB", "false"],
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    /**
+     * The deferral, which is the fix rather than a nicety.
+     *
+     * The sweep used to begin on mount: four rAF loops running a screen above
+     * the section, against the terminal animation that nobody watching them
+     * could see. It was measurable — `terminal-story.spec.ts` asserts on a real
+     * timed animation and failed intermittently while the two competed for the
+     * main thread (three runs, one or two failures each, against a clean
+     * baseline). Deferring to first intersection fixed it and made the page do
+     * less work on load, so it is locked here rather than left to the e2e suite.
+     */
+    it("does not start counting until the section is on screen", () => {
+      vi.useFakeTimers();
+      // Captures the hook's callback so the test can deliver the intersection
+      // the browser would. jsdom has no IntersectionObserver at all, so without
+      // this stub the hook takes its "unavailable" path and is visible
+      // immediately — which is exactly the case that hides this regression.
+      let deliver: ((el: Element) => void) | null = null;
+      class FakeObserver {
+        constructor(cb: IntersectionObserverCallback) {
+          // A block body on purpose: an expression-bodied arrow returns
+          // `act`'s thenable, which makes the enclosing `act` look async and
+          // React then demands an `await` that a sync test cannot give.
+          deliver = (el: Element) => {
+            act(() => {
+              cb(
+                [{ isIntersecting: true, target: el } as IntersectionObserverEntry],
+                {} as IntersectionObserver,
+              );
+            });
+          };
+        }
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+        takeRecords() {
+          return [];
+        }
+      }
+      vi.stubGlobal("IntersectionObserver", FakeObserver);
+
+      try {
+        stubMatchMedia(false);
+        render(
+          <MemoryRouter>
+            <Home />
+          </MemoryRouter>,
+        );
+
+        // Long past the whole sweep: an observer exists, nothing has intersected,
+        // and so no value may have moved.
+        act(() => void vi.advanceTimersByTime(30_000));
+        expect(
+          sweep().map((v) => v.text),
+          "the sweep ran while the section was off-screen",
+          // The 4th keeps its " KB" suffix — only the value is deferred.
+        ).toEqual(["0", "0", "0", "0 KB"]);
+
+        // On screen, the sweep runs — the deferral is a delay, not a removal.
+        act(() => deliver?.(document.body));
+        act(() => void vi.advanceTimersByTime(30_000));
+        expect(sweep().map((v) => v.text)).toEqual(["13", "6", "3", "64 KB"]);
+      } finally {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("shows every value settled for a reduced-motion reader", () => {
+      // No sweep at all: `useCountUp` returns its target when motion is reduced,
+      // so all four are final on the first frame.
+      renderHomeAtRest();
+      expect(sweep().map((v) => v.text)).toEqual([
+        "13",
+        "6",
+        "3",
+        "64 KB",
+      ]);
+      for (const value of sweep()) {
+        expect(value.counting).toBe("false");
+      }
+    });
+  });
+
   it("holds the digits at 0% through the shake, then counts to the score", () => {
     // On fake timers, because the claim is a sub-second window in the story and
     // the browser version of this assertion could miss it entirely on a loaded
@@ -302,11 +482,22 @@ describe("landing pages", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the Home stats strip and guest teaser", () => {
+  it("renders the step figures and guest teaser", () => {
     renderHomeAtRest();
-    expect(screen.getByText("Sample figures for the prototype")).toBeInTheDocument();
-    expect(screen.getByText("Languages supported")).toBeInTheDocument();
-    expect(screen.getByText("LLM providers")).toBeInTheDocument();
+    // The four figures moved into the How-it-works cards (#354), so there is no
+    // strip and no caption left to assert. Their honesty is covered in
+    // homeAmbient.test.tsx, which checks each number against the backend.
+    for (const label of [
+      "languages supported",
+      "LLM providers",
+      "attempts per submission",
+      "of logs captured",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(
+      screen.queryByText("Sample figures for the prototype"),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
         name: "See a sample evaluation — no account needed",
