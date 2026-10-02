@@ -96,6 +96,16 @@ const E2E_EXEMPT: Record<string, { count: number; because: RegExp }> = {
     count: 1,
     because: /two holds of STEP_CYCLE_MS/,
   },
+  // #353's motion recordings. The subject is a timeline that advances on its own
+  // clock and the product is a *recording* of it, so there is no state to await:
+  // every state-based alternative returns immediately and cuts the file short of
+  // the cycle it exists to capture. One wait site, shared by both tests, so the
+  // count here stays at 1 if the file grows a third test rather than silently
+  // accruing more.
+  "../../e2e/motion-qa.spec.ts": {
+    count: 1,
+    because: /the only honest way/,
+  },
 };
 
 /** e2e files whose wall-clock waits are not accounted for. */
