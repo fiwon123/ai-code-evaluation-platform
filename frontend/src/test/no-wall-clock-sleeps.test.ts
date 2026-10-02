@@ -102,8 +102,13 @@ const E2E_EXEMPT: Record<string, { count: number; because: RegExp }> = {
   // the cycle it exists to capture. One wait site, shared by both tests, so the
   // count here stays at 1 if the file grows a third test rather than silently
   // accruing more.
+  // Two wait sites, not one: `holdPipelineCycle` for the #353 pipeline and
+  // `holdClosingSections` for the #355 teaser reveal and CTA ring. Both are the
+  // same argument — a recording of something that advances on its own clock, so
+  // the only state to await is "long enough". The count is stated per site so
+  // the next recording has to be argued for rather than inherited.
   "../../e2e/motion-qa.spec.ts": {
-    count: 1,
+    count: 2,
     because: /the only honest way/,
   },
 };

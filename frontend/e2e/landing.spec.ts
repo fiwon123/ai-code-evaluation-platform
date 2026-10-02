@@ -35,9 +35,18 @@ test.describe("Guest landing page", () => {
     ).toBeVisible();
 
     // Animated terminal + sample evaluation report.
-    await expect(page.getByLabel("Sample evaluation report")).toBeVisible();
-    await expect(page.getByText("two_sum_basic")).toBeVisible();
-    await expect(page.getByText("two_sum_unsorted")).toBeVisible();
+    //
+    // The sample test names are scoped to the report. Since #355 the teaser run
+    // log above it lists the same two names, so a page-wide `getByText` matches
+    // twice and Playwright's strict mode refuses the whole assertion — the same
+    // reason the step figures are queried inside their card.
+    const report = page.getByLabel("Sample evaluation report");
+    await expect(report).toBeVisible();
+    await expect(report.getByText("two_sum_basic")).toBeVisible();
+    await expect(report.getByText("two_sum_unsorted")).toBeVisible();
+    // Left page-wide on purpose: it is the terminal's status line, a sibling of
+    // the report rather than a row inside it, so scoping it to `report` finds
+    // nothing.
     await expect(page.getByText("Report ready")).toBeVisible();
 
     // The four figures now sit in the How-it-works cards (#354). `emulateMedia`
