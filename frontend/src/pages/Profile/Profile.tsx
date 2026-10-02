@@ -890,7 +890,7 @@ function Profile() {
 
       <div className={styles.statsRow}>
         <StatCard
-          label="Challenges created"
+          label="Challenges"
           value={stats.totalChallenges}
           accent="primary"
         />
