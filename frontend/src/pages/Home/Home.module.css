@@ -838,100 +838,65 @@
   color: var(--color-text-secondary);
 }
 
-/* ---- Stats strip ---- */
-.statsStrip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-5);
-  max-width: 900px;
-  margin: var(--space-16) auto 0;
-  padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  transition:
-    box-shadow var(--transition-slow) var(--ease-out-expo),
-    border-color var(--transition-slow) var(--ease-out-expo);
-}
-
-.statsStrip:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
-  box-shadow:
-    var(--shadow-elevated),
-    0 20px 50px -28px color-mix(in srgb, var(--color-primary) 55%, transparent);
-}
-
-.statItem {
+/* ---- Stats, inside the How-it-works cards (#354) ---- */
+/* These used to be a four-up strip under the hero with its own bordered
+   surface, captioned "Sample figures for the prototype". Folded into the step
+   that explains each number they no longer need a container — the card is the
+   surface — so what is left is the value, its accent, and the rule under it.
+   The strip's own rules are gone rather than kept as a fallback: a second
+   definition of the same stat would be one more thing to keep in step. */
+.stepStat {
   --stat-accent: var(--color-primary);
-  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-1);
-  padding: var(--space-2);
-  border-radius: var(--radius-lg);
-  transition:
-    background-color var(--transition-base),
-    transform var(--transition-base) var(--ease-out-expo);
+  margin-bottom: var(--space-3);
 }
 
-/* One identity per stat, so the strip reads as four different facts rather
-   than one number four times. Purely decorative: the value itself is never
-   tinted to imply a verdict, and the label stays on --color-text-secondary so
-   it is unaffected by the accent. */
-.statItem[data-accent="teal"] { --stat-accent: var(--color-accent-teal); }
-.statItem[data-accent="violet"] { --stat-accent: var(--color-accent-violet); }
-.statItem[data-accent="rose"] { --stat-accent: var(--color-accent-rose); }
+/* One identity per step, so the row reads as four different facts rather than
+   one number four times. Purely decorative: the value is never tinted to imply
+   a verdict, and the label stays on --color-text-secondary so it is unaffected
+   by the accent. */
+.stepStat[data-accent="teal"] { --stat-accent: var(--color-accent-teal); }
+.stepStat[data-accent="violet"] { --stat-accent: var(--color-accent-violet); }
+.stepStat[data-accent="rose"] { --stat-accent: var(--color-accent-rose); }
 
-/* A rule under the number gives each stat a colour anchor that survives at any
-   width, where a coloured background alone would fight the strip's own
-   surface. It also gives the hover something to deepen. */
-.statItem::after {
+/* A rule under the value gives each one a colour anchor that survives at any
+   width, where a tinted background would fight the card's own surface. */
+.stepStat::after {
   content: "";
   width: 28px;
   height: 2px;
   margin-top: var(--space-1);
   border-radius: var(--radius-full);
   background: var(--stat-accent);
-  opacity: 0.55;
-  transition: opacity var(--transition-base);
+  /* 0.55 read as a stray hairline rather than a rule, and not equally for all
+     four: on the dark card the blue and violet bars were the first to vanish.
+     One opacity for every accent keeps the four cards equally weighted. */
+  opacity: 0.7;
 }
 
-.statItem:hover {
-  background: color-mix(in srgb, var(--stat-accent) 10%, transparent);
-  transform: translateY(-2px);
-}
-
-.statItem:hover::after {
-  opacity: 1;
-}
-
-.statValue {
-  font-size: var(--font-size-3xl);
+.stepStatValue {
+  font-size: var(--font-size-2xl);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--stat-accent);
   font-variant-numeric: tabular-nums;
 }
 
-.statLabel {
+/* Tabular figures matter more here than they did in the strip: four numbers of
+   different widths counting at once would otherwise reflow their own labels as
+   the digits change. */
+.stepStatValue[data-counting="true"] {
+  min-width: 2ch;
+}
+
+.stepStatLabel {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-/* The caption is the sample-figures disclaimer, so it has to read as a note
-   *under* the figures rather than as a fifth stat. Tracking it out and
-   muting it does that; centring it matches the strip above. */
-.statsCaption {
-  margin-top: var(--space-3);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  text-align: center;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /* ---- Sections ---- */
@@ -1058,6 +1023,13 @@
 }
 
 /* How it works */
+/* The four-across row needs each card to be wide enough for its two lines of
+   copy. Below ~1200px a quarter of the row is under ~230px, every paragraph
+   re-wraps to three lines at a *different* break point per card, and the grid
+   stretches all four to the tallest — so the dead space the desktop row does
+   not have reappears on ordinary laptop widths. Stepping down to two columns
+   fixes the width instead of trimming copy to suit one viewport: at 2-up a card
+   is ~460px, so the line counts stay even by geometry rather than by luck. */
 .stepsGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1088,6 +1060,12 @@
 .stepText {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+  /* The four step paragraphs are 65-75 characters, so a naive wrap leaves a
+     one- or two-word last line on most of them at most widths — a stub line
+     under each card reads as sloppier than the ragged right edge it fixes.
+     Progressive enhancement: a browser that does not know `pretty` ignores the
+     declaration and wraps as before. */
+  text-wrap: pretty;
 }
 
 /* Teaser (uses the global .sectionHighlight shell) */
@@ -1198,6 +1176,13 @@
   margin: 0 auto var(--space-8);
 }
 
+@media (max-width: 1200px) {
+  /* Two up, not four squeezed. See the note on .stepsGrid. */
+  .stepsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .heroTitle {
     font-size: var(--font-size-4xl);
@@ -1239,10 +1224,6 @@
   .featuresGrid,
   .stepsGrid {
     grid-template-columns: 1fr;
-  }
-
-  .statsStrip {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .section {

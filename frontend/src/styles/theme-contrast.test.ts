@@ -4,6 +4,7 @@ import { statusVariant } from "../utils/formatting.ts";
 import languageSource from "../utils/language.ts?raw";
 import globalsCss from "./globals.css?raw";
 import scoreRingCss from "./score-ring.css?raw";
+import homeSource from "../pages/Home/Home.tsx?raw";
 
 /**
  * Guards the "gradient page titles work in BOTH themes" contract (issue #187).
@@ -33,6 +34,16 @@ const GLOBALS = globalsCss;
  * `eager` matters: a lazy glob returns loader functions, so an empty result
  * would silently satisfy every assertion below.
  */
+/**
+ * Strip CSS comments so prose explaining a rule is never read as a declaration.
+ * The Home stylesheet documents its accent decisions in the file itself, and
+ * several of the assertions below are "this value must NOT be mentioned" — a
+ * phrase in a comment would otherwise satisfy them.
+ */
+function stripCssComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 const MODULE_CSS = import.meta.glob("../**/*.module.css", {
   query: "?raw",
   import: "default",
@@ -742,5 +753,62 @@ describe("the Home terminal's stage tag is text on a tint", () => {
       "stage selectors in Home.module.css that useTerminalStory cannot enter: " +
         "dead CSS that a renamed stage would leave behind",
     ).toEqual([]);
+  });
+});
+
+/**
+ * The Home step stats (#354).
+ *
+ * These four numbers used to be a separate strip whose caption said they were
+ * sample figures, two of them being illustrative. They now sit inside the
+ * How-it-works cards, so the values are read as facts about the step above them.
+ * That is only safe if each is painted with a colour that carries 4.5:1 against
+ * the card's own surface — and the accents are decorative hues chosen for
+ * identity, not for contrast, which is exactly the case where a token has to be
+ * checked rather than assumed.
+ */
+describe("the Home step stats are readable in both themes", () => {
+  const homeModule = stripCssComments(MODULE_CSS["../pages/Home/Home.module.css"]!);
+
+  it("paints every value with its accent, never with muted or default text", () => {
+    const value = homeModule.match(/\.stepStatValue\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(value, "could not read .stepStatValue out of Home.module.css").not.toBe("");
+    expect(value).toContain("var(--stat-accent)");
+    // The label is the part that is allowed to recede; the number is the content.
+    expect(value).not.toMatch(/--color-text-secondary|--color-text-muted|--color-text\b/);
+  });
+
+  it("keeps the label legible rather than tinting it with the accent", () => {
+    const label = homeModule.match(/\.stepStatLabel\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(label).not.toBe("");
+    // Tinting the label with the accent would double the coloured area per stat
+    // and push it under 4.5:1 for the lighter hues. It stays on text-secondary.
+    expect(label).not.toContain("var(--stat-accent)");
+    expect(label).toContain("--color-text-secondary");
+  });
+
+  it("gives each of the four accents a rule, so no value renders colourless", () => {
+    // A new accent in STEPS with no matching rule would silently inherit
+    // --color-primary — two steps the same colour, and the identity the class
+    // comment claims would be gone.
+    const painted = [
+      ...homeModule.matchAll(/\.stepStat\[data-accent="([a-z]+)"\]/g),
+    ].map(([, name]) => name!);
+    expect(painted.length, "no .stepStat[data-accent] rules were found").toBeGreaterThan(0);
+
+    const used = [
+      ...homeSource.matchAll(/accent:\s*"([a-z]+)"/g),
+    ].map(([, name]) => name!);
+    expect(used.length, "could not read the accents out of Home.tsx").toBeGreaterThan(0);
+    expect(
+      used.filter((name) => name !== "primary" && !painted.includes(name)),
+      "STEPS accents with no .stepStat rule: these fall back to primary",
+    ).toEqual([]);
+  });
+
+  it("reserves tabular figures so the labels do not shift mid-sweep", () => {
+    // Four values counting at once would otherwise reflow their own labels as
+    // the digit widths changed — the sweep would read as a layout jump.
+    expect(homeModule).toMatch(/\.stepStatValue\s*\{[^}]*font-variant-numeric:\s*tabular-nums/);
   });
 });

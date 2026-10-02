@@ -101,13 +101,77 @@ describe("Home ambient layer", () => {
     expect(screen.getByRole("link", { name: /get started free/i })).toBeInTheDocument();
   });
 
-  it("still labels the sample figures as sample figures", () => {
+  /**
+   * The caption this replaces existed because two of the four figures were
+   * illustrative. Deleting it is only honest if that is no longer true, so this
+   * asserts the *reason* rather than the absence of the caption: every number on
+   * the page is now read off the backend, and each sits in the step it describes.
+   */
+  it("puts a code-derived figure in every How-it-works step", () => {
+    // Reduced motion, so each value is already settled. `useCountUp` starts at 0
+    // and needs timers; asserting the figures against a moving number would be
+    // a test of the animation rather than of the copy.
+    renderHomeAtRest();
+    for (const [value, label] of [
+      ["13", "languages supported"],
+      ["6", "LLM providers"],
+      ["3", "attempts per submission"],
+      ["64", "of logs captured"],
+    ] as const) {
+      const card = screen.getByText(label).closest("[class*=stepCard], div");
+      expect(card, `no card holds "${label}"`).not.toBeNull();
+      expect(card!.textContent).toContain(value);
+    }
+    // The caption is gone because there is nothing left for it to disclaim.
+    expect(
+      screen.queryByText("Sample figures for the prototype"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("states the attempt budget as attempts, not repairs", () => {
     renderHome();
-    // The stats strip counts real registry entries, but "avg. evaluation time"
-    // is illustrative, so the caption has to stay.
-    expect(screen.getByText("Sample figures for the prototype")).toBeInTheDocument();
-    expect(screen.getByText("Languages supported")).toBeInTheDocument();
-    expect(screen.getByText("LLM providers")).toBeInTheDocument();
+    // `evaluation_max_attempts = 3` is the *total* generate-and-test budget:
+    // attempt 1 is the initial generation, leaving two repairs. The old strip
+    // said "repair attempts: 3", which overstated the repair loop by one and
+    // was only defensible because a caption sat underneath it.
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/repair attempts/i);
+    expect(text).not.toMatch(/3 repairs/i);
+  });
+
+  it("reads terminal → how it works → pipeline", () => {
+    renderHome();
+    // Section order is the point of #354: the section that narrates the flow
+    // used to sit two screens below the animation that performs it. Asserted
+    // against the rendered DOM order rather than the source, because a
+    // reordered `<section>` and a reordered stylesheet are different mistakes.
+    const headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((h) => h.textContent ?? "");
+    const terminalPanel = document.querySelector('[class*="animPanel"]');
+    expect(terminalPanel, "the terminal is gone").not.toBeNull();
+
+    const howItWorks = headings.findIndex((h) => /from challenge to score/i.test(h));
+    const pipeline = headings.findIndex((h) => /everything you need to evaluate/i.test(h));
+    expect(howItWorks, "the How-it-works heading is missing").toBeGreaterThan(-1);
+    expect(pipeline, "the pipeline heading is missing").toBeGreaterThan(-1);
+    expect(
+      howItWorks,
+      `How-it-works (${howItWorks}) must come before the pipeline (${pipeline})`,
+    ).toBeLessThan(pipeline);
+
+    // And the terminal must still be the last thing in the hero, above both.
+    const sections = [...document.querySelectorAll("section")];
+    const heroIndex = sections.findIndex((s) => s.contains(terminalPanel));
+    const howSection = sections.findIndex((s) =>
+      s.querySelector('[class*="stepsGrid"]'),
+    );
+    const pipelineSection = sections.findIndex((s) =>
+      s.querySelector('[class*="pipelineTrack"]'),
+    );
+    expect(heroIndex).toBe(0);
+    expect(howSection).toBeGreaterThan(heroIndex);
+    expect(pipelineSection).toBeGreaterThan(howSection);
   });
 });
 
