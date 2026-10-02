@@ -27,13 +27,40 @@
 }
 
 .ringSuccess {
-  stroke: var(--color-success);
+  /* The `-strong` step, not the base hue.
+   *
+   * An arc is a graphical object, so WCAG 1.4.11 wants 3:1 against the surface
+   * behind it. The base hues are text colours tuned against *text* surfaces:
+   * `--color-warning` measures 2.15:1 on white, under the bar. On the Home hero
+   * this arc is a 12px stroke on a large surface, and the Home sample score
+   * (66.7) sits in the warning band, so it is the one most likely to be seen.
+   * The base is still the right colour for the 1px borders and 2px underlines
+   * elsewhere — this rule is about the ring only. */
+  stroke: var(--color-success-strong);
 }
 
 .ringWarning {
-  stroke: var(--color-warning);
+  /* The `-strong` step, not the base hue.
+   *
+   * An arc is a graphical object, so WCAG 1.4.11 wants 3:1 against the surface
+   * behind it. The base hues are text colours tuned against *text* surfaces:
+   * `--color-warning` measures 2.15:1 on white, under the bar. On the Home hero
+   * this arc is a 12px stroke on a large surface, and the Home sample score
+   * (66.7) sits in the warning band, so it is the one most likely to be seen.
+   * The base is still the right colour for the 1px borders and 2px underlines
+   * elsewhere — this rule is about the ring only. */
+  stroke: var(--color-warning-strong);
 }
 
 .ringDanger {
-  stroke: var(--color-danger);
+  /* The `-strong` step, not the base hue.
+   *
+   * An arc is a graphical object, so WCAG 1.4.11 wants 3:1 against the surface
+   * behind it. The base hues are text colours tuned against *text* surfaces:
+   * `--color-warning` measures 2.15:1 on white, under the bar. On the Home hero
+   * this arc is a 12px stroke on a large surface, and the Home sample score
+   * (66.7) sits in the warning band, so it is the one most likely to be seen.
+   * The base is still the right colour for the 1px borders and 2px underlines
+   * elsewhere — this rule is about the ring only. */
+  stroke: var(--color-danger-strong);
 }

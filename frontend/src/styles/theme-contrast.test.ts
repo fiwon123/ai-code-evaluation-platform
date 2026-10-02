@@ -3,6 +3,7 @@ import type { SubmissionStatus } from "../types.ts";
 import { statusVariant } from "../utils/formatting.ts";
 import languageSource from "../utils/language.ts?raw";
 import globalsCss from "./globals.css?raw";
+import scoreRingCss from "./score-ring.css?raw";
 
 /**
  * Guards the "gradient page titles work in BOTH themes" contract (issue #187).
@@ -534,5 +535,212 @@ describe("language accent tags (issue #346)", () => {
     // `expect([]).toEqual([])` above would read as a pass.
     expect(Object.keys(LANGUAGE_ACCENTS).length).toBeGreaterThanOrEqual(20);
     expect(LANGUAGE_ACCENTS["python"]).toBe("#3776AB");
+  });
+});
+
+/**
+ * The other half of the status-pill contract: what the *components* paint.
+ *
+ * Every check above reads `globals.css`. That is the gap both #352 defects fell
+ * through, and it is worth being precise about why:
+ *
+ * The palette has held a `-strong` step for each family since #346, and the pill
+ * checks prove `--color-warning-strong` measures 6.37:1 on its tint. All of that
+ * was true while the Home score ring painted `--color-warning` — the *base* hue
+ * — and shipped at 2.15:1 on the hero surface. A palette can contain a correct
+ * colour and still never be used, and no assertion that only measures the
+ * palette can see that.
+ *
+ * So these read the stylesheets that ship the pixels. The rule is deliberately
+ * narrow — "these specific rules must name the `-strong` step" — because a
+ * general "no base hue anywhere" ban would be wrong: the base hue is the correct
+ * colour for a 1px border and a 2px underline, and banning it would push people
+ * to use a text-weight colour for non-text. What is forbidden is the base hue
+ * for the *large* graphical objects and for text on a tint, where the base
+ * cannot reach the bar.
+ */
+
+/** The body of the first rule whose selector contains `selector`. */
+function ruleBody(css: string, selector: string): string {
+  const at = css.indexOf(selector);
+  expect(at, `no rule matching ${selector}`).toBeGreaterThan(-1);
+  return css.slice(at, css.indexOf("}", at));
+}
+
+/** WCAG 1.4.11 — non-text content, including a thick stroke. */
+const MIN_NON_TEXT = 3;
+
+/**
+ * Two independent ring implementations paint the same three bands.
+ *
+ * `ScoreRing` (the global sheet) is what Home, the Demo and the admin pages use;
+ * ResultReport carries its own copy. Fixing only the shared one would have left
+ * the report ring at 2.15:1 and every assertion in this file green — the same
+ * shape as the #348 gap, which is why both files are named here.
+ */
+const RING_SHEETS = [
+  { file: "src/styles/score-ring.css", css: scoreRingCss },
+  {
+    file: "src/components/ResultReport/ResultReport.module.css",
+    css: MODULE_CSS["../components/ResultReport/ResultReport.module.css"]!,
+  },
+] as const;
+
+const RING_VARIANTS = ["Success", "Warning", "Danger"] as const;
+
+describe("score ring arcs are graphical objects, not text", () => {
+  it.each([
+    ["light", LIGHT],
+    ["dark", DARK],
+  ])("every ring arc clears %s-theme 1.4.11 on a card surface", (_theme, tokens) => {
+    // The number in the middle is text and is held by its own rule; this is the
+    // 12px stroke around it. A user who cannot make out the arc cannot tell
+    // 40% from 70% from 95%, which is the entire content of the ring.
+    const surface = tokens["color-surface"]!;
+    for (const family of ["success", "warning", "danger"]) {
+      const strong = tokens[`color-${family}-strong`]!;
+      expect(strong, `--color-${family}-strong must exist`).toBeDefined();
+      expect(
+        contrastRatio(strong, surface),
+        `--color-${family}-strong is only ${contrastRatio(strong, surface).toFixed(2)}:1 on ${surface}`,
+      ).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+      // The base is read only to include its number in the message below; it is
+      // not asserted against the bar, because it is not uniformly on the wrong
+      // side of it. `--color-success` measures 3.30:1 on white and would pass.
+      // The bar is the strong step, and the arc rules are held to it uniformly so
+      // the three bands cannot drift apart.
+    }
+  });
+
+  it.each(
+    RING_SHEETS.flatMap((sheet) =>
+      RING_VARIANTS.map((variant) => ({ file: sheet.file, css: sheet.css, variant })),
+    ),
+  )("$file paints .ring$variant with the -strong step", ({ css, variant }) => {
+    const family = variant.toLowerCase();
+    const body = ruleBody(css, `.ring${variant} {`);
+    // The measured reason, in the message, because "use the strong step" is a
+    // rule someone will eventually want to relax. Note the base is not
+    // uniformly bad here: `--color-success` already clears 1.4.11 on white at
+    // 3.30:1, while `--color-warning` does not. So this is a uniformity rule —
+    // one band may use the base, the other two may not — and the failure message
+    // says which case you are in.
+    expect(
+      body,
+      `the ${variant} arc is a graphical object; on the light surface the base hue ` +
+        `measures ${contrastRatio(LIGHT[`color-${family}`]!, LIGHT["color-surface"]!).toFixed(2)}:1 ` +
+        `against a 3:1 bar, and the strong step ${contrastRatio(LIGHT[`color-${family}-strong`]!, LIGHT["color-surface"]!).toFixed(2)}:1`,
+    ).toMatch(new RegExp(`stroke:\\s*var\\(--color-${family}-strong\\)`));
+    expect(body).not.toMatch(new RegExp(`stroke:\\s*var\\(--color-${family}\\)`));
+  });
+});
+
+describe("the Home terminal's stage tag is text on a tint", () => {
+  /**
+   * The tag's colours are keyed off `data-stage` rather than a class per stage,
+   * so a new stage that nobody added a rule for would render as unstyled
+   * inherited text. `STAGES` is therefore read from the hook's own label
+   * function: the list cannot drift from the values the component emits.
+   */
+  /** The hook's own source, for the union read below. */
+  const useTerminalStorySource = import.meta.glob("../hooks/useTerminalStory.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  })["../hooks/useTerminalStory.ts"] as string;
+
+  const STAGE_TINTS: Record<string, { family: string; since: string }> = {
+    generating: { family: "primary", since: "before the prompt is typed" },
+    prompt: { family: "primary", since: "while the prompt is typed" },
+    running: { family: "warning", since: "the first test starts" },
+    results: { family: "warning", since: "the last test resolves" },
+    score: { family: "primary", since: "the suite has resolved" },
+    ready: { family: "success", since: "the score lands" },
+  };
+
+  it("gives every stage a tint and a -strong text colour", () => {
+    const css = MODULE_CSS["../pages/Home/Home.module.css"]!;
+    for (const [stage, { family, since }] of Object.entries(STAGE_TINTS)) {
+      const at = css.indexOf(`.animStatus[data-stage="${stage}"]`);
+      expect(at, `no .animStatus rule for stage "${stage}" (${since})`).toBeGreaterThan(-1);
+      // Read to the end of the group: the selectors for one family are written
+      // as a comma list, so a stage's colours are on a shared line with others.
+      const group = css.slice(at, css.indexOf("}", at));
+      expect(
+        group,
+        `stage "${stage}" paints text with var(--color-${family}) — the base hue, ` +
+          `which is ${contrastRatio(LIGHT[`color-${family}`]!, LIGHT[`color-${family}-light`]!).toFixed(2)}:1 on its own tint`,
+      ).toMatch(new RegExp(`color:\\s*var\\(--color-${family}-strong\\)`));
+      expect(group).toMatch(new RegExp(`background:\\s*var\\(--color-${family}-light\\)`));
+    }
+  });
+
+  it.each([
+    ["light", LIGHT],
+    ["dark", DARK],
+  ])("every stage tag clears %s-theme AA on its tint", (_theme, tokens) => {
+    for (const [stage, { family }] of Object.entries(STAGE_TINTS)) {
+      const ratio = contrastRatio(
+        tokens[`color-${family}-strong`]!,
+        tokens[`color-${family}-light`]!,
+      );
+      expect(ratio, `stage "${stage}" is only ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    }
+  });
+
+  it("paints every stage the story can actually enter", () => {
+    // The same trap the status-pill list fell into: `STAGE_TINTS` above and the
+    // states `useTerminalStory` emits are two separate hand-kept inventories, and
+    // nothing forced them to agree. The hook is the source of truth, so its union
+    // is read out of the source and checked against the stylesheet.
+    //
+    // (TypeScript already closes half of this: `STAGE_LABELS` is
+    // `Record<StoryStage, string>`, so a new stage cannot be added without a
+    // label. It says nothing about the CSS, which is the half that was missing.)
+    const homeModule = MODULE_CSS["../pages/Home/Home.module.css"]!;
+    const stages = [
+      ...(useTerminalStorySource.match(
+        /export type StoryStage\s*=([\s\S]*?);/,
+      )?.[1] ?? "").matchAll(/"([a-z]+)"/g),
+    ].map(([, name]) => name!);
+
+    // The vacuity guard, and it is not optional. The first version of this test
+    // named the type `TerminalStage` when the hook calls it `StoryStage`, so the
+    // regex matched nothing, the loop iterated zero times, and it passed green
+    // while checking nothing at all — the exact failure mode the "scans the real
+    // table, not an empty one" test above exists to prevent, reintroduced one
+    // screen away from it. If the union is renamed or reformatted, this fails
+    // loudly instead of the next assertion going quietly hollow.
+    expect(
+      stages.length,
+      "could not read the StoryStage union out of useTerminalStory.ts — " +
+        "this check is only meaningful if it found the stages",
+    ).toBeGreaterThanOrEqual(6);
+
+    expect(
+      stages.filter((name) => !(name in STAGE_TINTS)),
+      "stages the story can enter that no .animStatus rule paints: a stage " +
+        "with no colour falls back to inherited text on no tint",
+    ).toEqual([]);
+    // And the reverse, scanning the *stylesheet* rather than the table above.
+    // The first version compared the hook against `Object.keys(STAGE_TINTS)`,
+    // which can only ever contain stages the hook already has — it was authored
+    // by the same hand as the union, so the "dead CSS" direction had nothing to
+    // find. Reading the `data-stage="…"` selectors out of the module asks the
+    // question that can actually fail: does the CSS paint a stage that no longer
+    // exists, or one renamed without this file being updated.
+    const painted = [
+      ...homeModule.matchAll(/\.animStatus\[data-stage="([a-z]+)"\]/g),
+    ].map(([, name]) => name!);
+    expect(
+      painted.length,
+      "no .animStatus[data-stage] selectors were found — the stage scan " +
+        "would check nothing",
+    ).toBeGreaterThan(0);
+    expect(
+      [...new Set(painted)].filter((name) => !stages.includes(name)),
+      "stage selectors in Home.module.css that useTerminalStory cannot enter: " +
+        "dead CSS that a renamed stage would leave behind",
+    ).toEqual([]);
   });
 });

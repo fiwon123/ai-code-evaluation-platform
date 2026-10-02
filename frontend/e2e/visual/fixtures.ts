@@ -452,4 +452,13 @@ export async function openRoute(page: Page, route: SweepRoute, theme: SweepTheme
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   await expect(page.getByRole("heading", { name: route.heading, level: 1 })).toBeVisible();
   await waitForTextSettled(page);
+  // Pages whose resting state is reached by a JS timeline rather than by their
+  // content being present. `waitForTextSettled` and the settle helper both look
+  // at text and CSS animations; neither can see a `setTimeout` chain, so `/`
+  // would otherwise be photographed mid-story and filed under "at rest".
+  if (route.atRest) {
+    await expect(page.locator(route.atRest)).toBeVisible({
+      timeout: 30_000,
+    });
+  }
 }

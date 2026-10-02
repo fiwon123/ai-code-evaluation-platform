@@ -4,8 +4,11 @@ import { mockApi } from "./data";
 /**
  * Guest landing-page walkthrough.
  *
- * The Home page animates a typewriter + status chips; `reducedMotion` is
- * emulated so the terminal completes instantly and the assertions are stable.
+ * The Home page animates a terminal story — one status tag per stage, a typed
+ * prompt, results revealed as they resolve, and a count-up score ring;
+ * `reducedMotion` is emulated so the story resolves to its resting state
+ * instantly and the assertions below are stable. The story's own sequence is
+ * covered by `e2e/terminal-story.spec.ts`, which does not reduce motion.
  * `mockApi` guards the /demo CTA (the Demo page fetches /api/challenges on
  * mount).
  */
