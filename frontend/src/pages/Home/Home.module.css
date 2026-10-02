@@ -147,39 +147,6 @@
   box-shadow: var(--shadow-elevated), 0 0 0 3px var(--color-focus-ring);
 }
 
-/* Toolchain chips. Monospace, low-contrast, and deliberately quiet — they
-   are supporting evidence for the headline, not a second headline. */
-.chipRow {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  list-style: none;
-  margin: var(--space-6) 0 0;
-  padding: 0;
-}
-
-.chip {
-  padding: 4px var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  transition:
-    color var(--transition-fast),
-    border-color var(--transition-fast),
-    background-color var(--transition-fast);
-}
-
-.chip:hover {
-  color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
-  background: var(--color-primary-light);
-}
-
 .heroBadgeRow {
   display: flex;
   justify-content: center;
@@ -199,7 +166,22 @@
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-elevated);
   overflow: hidden;
-  transition: box-shadow var(--transition-slow) var(--ease-out-expo);
+  /* The entrance is the panel's own, not a `Reveal` wrapper's, so that
+     `TERMINAL_ENTRANCE_MS` in the component sets this fade and the story's
+     lead-in to the same number. `data-entered` is the single signal both read.
+     The fallbacks are the values the component passes, so the panel still
+     behaves if the custom properties stop arriving. */
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    box-shadow var(--transition-slow) var(--ease-out-expo),
+    opacity var(--terminal-entrance, 550ms) ease var(--terminal-entrance-delay, 320ms),
+    transform var(--terminal-entrance, 550ms) ease var(--terminal-entrance-delay, 320ms);
+}
+
+.animPanel[data-entered="true"] {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .animPanel:hover {
@@ -288,24 +270,72 @@
   flex: 1;
 }
 
+/*
+ * The stage tag.
+ *
+ * One element, coloured by `data-stage` rather than a class per stage, so the
+ * pill's geometry is written once and only the two colours vary. The pairing is
+ * the `-strong` step on the `-light` tint — the #346 family rule. The base
+ * tokens are the identity hues and are *not* text-safe here: `--color-primary`
+ * on `--color-primary-light` measures 3.13:1 in the dark theme, which is the
+ * same failure #348 fixed on Profile's status pill and this one missed because
+ * the test only ever looked at the palette.
+ *
+ * The tag means "what is happening now", so it changes colour with the stage
+ * rather than cycling: at any instant the pill and the rows below it are
+ * describing the same beat.
+ */
 .animStatus {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--font-size-xs);
   font-weight: 600;
-  color: var(--color-primary);
-  background: var(--color-primary-light);
   border-radius: var(--radius-full);
   padding: 2px var(--space-3);
+  white-space: nowrap;
 }
 
+.animStatus[data-stage="generating"],
+.animStatus[data-stage="prompt"],
+.animStatus[data-stage="score"] {
+  color: var(--color-primary-strong);
+  background: var(--color-primary-light);
+}
+
+.animStatus[data-stage="running"],
+.animStatus[data-stage="results"] {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+}
+
+.animStatus[data-stage="ready"] {
+  color: var(--color-success-strong);
+  background: var(--color-success-light);
+}
+
+/*
+ * The dot pulses only while the panel is actually working.
+ *
+ * The pulse is declared once, on the bare selector, and `data-active` only
+ * decides whether it runs. Writing it as five `[data-stage="…"] .animStatusDot`
+ * rules instead looks tidier and is worse: the reduced-motion opt-out below is
+ * written for `.animStatusDot`, and `ambient-motion.test.ts` matches an opt-out
+ * to a looping animation by *exact selector*, so the compound form left five
+ * looping rules with no opt-out it could see. `paused` holds the animation at
+ * its 0% frame, which is `opacity: 1` — the resting look, not a frozen mid-pulse.
+ */
 .animStatusDot {
   width: 6px;
   height: 6px;
   border-radius: var(--radius-full);
   background: currentColor;
   animation: statusPulse 1.2s ease-in-out infinite;
+  animation-play-state: paused;
+}
+
+.animStatusDot[data-active="true"] {
+  animation-play-state: running;
 }
 
 @keyframes statusPulse {
@@ -370,6 +400,56 @@
   background: var(--color-surface);
 }
 
+/*
+ * The ring's slot, and the shake that opens the score.
+ *
+ * `data-scoring` is on for the whole score stage, but the animation is one-shot
+ * and shorter than that stage, so it shakes for exactly `shakeMs` and the rest
+ * of the stage is the count-up. The shake is *not* gated on reduced motion at
+ * the element level — `@media` below turns it off, and a reduced-motion reader
+ * is already at the resting stage so the attribute is never set anyway. Two
+ * independent reasons, either of which is enough.
+ */
+.scoreWrap {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.sampleReport[data-scoring="true"] .scoreWrap {
+  animation-name: scoreShake;
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/*
+ * A short lateral shudder that decays, rather than a loop: it reads as the
+ * number landing, and it hands straight over to the count-up. Transform-only so
+ * it does not trigger layout on every frame.
+ */
+@keyframes scoreShake {
+  0% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-5px);
+  }
+  30% {
+    transform: translateX(5px);
+  }
+  45% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
 .sampleMeta {
   flex: 1;
   min-width: 0;
@@ -390,24 +470,47 @@
   text-align: left;
 }
 
-.sampleTestPass {
-  color: var(--color-success);
-  opacity: 0;
-  animation: rowIn 500ms ease-out forwards;
-}
-
-.sampleTestFail {
-  color: var(--color-danger);
-  opacity: 0;
-  animation: rowIn 500ms ease-out 200ms forwards;
-}
-
-.sampleTestPass,
-.sampleTestFail {
+/*
+ * One rule for the row, and the state in an attribute.
+ *
+ * The previous version had `.sampleTestPass` and `.sampleTestFail` each
+ * declaring `opacity: 0` and their own `rowIn` delay — three rows, two delays,
+ * so the failing row appeared at the same instant as the first passing one, and
+ * a reduced-motion override that missed a selector would have left a result
+ * permanently invisible. Rows are now *rendered* only once the story reveals
+ * them (see `useTerminalStory`), so there is no hidden state to leak: what is
+ * in the DOM is what is on screen.
+ */
+.sampleTestRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, currentColor 14%, transparent);
+  color: var(--color-text-secondary);
   white-space: nowrap;
+  animation: rowIn 320ms ease-out backwards;
+}
+
+/* A test that is running has no verdict yet, so it is not painted as one. */
+.sampleTestRow[data-state="running"] {
+  color: var(--color-primary-strong);
+  background: var(--color-primary-light);
+}
+
+.sampleTestPass {
+  color: var(--color-success-strong);
+  background: color-mix(in srgb, var(--color-success-strong) 14%, transparent);
+}
+
+.sampleTestFail {
+  color: var(--color-danger-strong);
+  background: color-mix(in srgb, var(--color-danger-strong) 14%, transparent);
+}
+
+.sampleTestPending {
+  color: var(--color-primary-strong);
 }
 
 .sampleMetaRow {
@@ -422,13 +525,18 @@
 }
 
 .sampleMetaLink {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 600;
 }
 
 @keyframes rowIn {
   from {
-    opacity: 0;
+    /* Not 0. The pending mark is the one thing on this row that has to be
+       legible the instant it appears — `⋯` saying "not resolved yet" is the
+       whole point of the row, and fading in from nothing spends the first third
+       of its 320ms entrance rendering that message invisible. 0.25 keeps the
+       arrival soft and the text readable from frame one. */
+    opacity: 0.25;
     transform: translateX(-6px);
   }
   to {
@@ -437,14 +545,67 @@
   }
 }
 
-/* Score ring arc fills up to the 88% — keep DOM value stable for a11y/tests */
+/*
+ * The arc fills up to the sample score, *after* the shake.
+ *
+ * The animation is gated on `data-scoring` rather than merely delayed. A
+ * wall-clock `animation-delay` looks equivalent and is not: the story is a chain
+ * of per-character re-renders that runs late under load, and a fixed delay fills
+ * the arc while the suite is still running — which the e2e suite caught at 26%
+ * with two of three tests outstanding. Keying the animation off the attribute
+ * means the arc starts because the score stage started.
+ *
+ * `--ring-delay` is therefore the 400ms shake, not the story's absolute score
+ * time, so the arc and the digits land together. That is the one number both
+ * read, and it is small enough that being slightly late is invisible.
+ *
+ * `animation-name: none` in the base rule is load-bearing: with the name set
+ * unconditionally, the fill would run on mount and the attribute rule below
+ * would only ever re-trigger it. The reduced-motion override is written against
+ * the same selector as the rule that sets the name, or the higher specificity
+ * would win and reduced-motion readers would get the animation back.
+ */
 .animPanel .sampleReport :global(.ringProgress) {
-  animation: ringFill 1.2s ease-out 900ms both;
+  /* Empty until the score stage, and empty *by construction* rather than by an
+     animation having not started yet. `stroke-dasharray` is
+     `<arc> <circumference>`, so an offset of exactly `arc` slides the whole
+     filled segment into the gap: nothing drawn. Without this the arc sat at its
+     final two-thirds for the whole run, next to digits reading 0% — a ring that
+     looks finished before the suite is. */
+  stroke-dashoffset: var(--ring-arc);
+  animation-name: none;
+  animation-duration: var(--ring-duration, 1.2s);
+  animation-timing-function: ease-out;
+  animation-delay: var(--ring-delay, 0ms);
+  /* `forwards`, not `backwards`. The base rule now starts the arc *empty*, so
+     the fill's end state has to be held: with `backwards` the animation stops
+     applying the moment it finishes and the ring springs back to empty beside a
+     67% number at rest. `forwards` is also all that is needed for the delay
+     period, because the base value *is* the empty state — which is what
+     `backwards` used to be covering. */
+  animation-fill-mode: forwards;
 }
 
+.animPanel .sampleReport[data-scoring="true"] :global(.ringProgress) {
+  animation-name: ringFill;
+}
+
+/* Settled: the arc stays drawn once the score is out. Same value the keyframes
+   end on, so the hand-off from `forwards` to this rule is invisible — which is
+   the point, because the score stage is over by the time this takes effect and
+   the alternative was the ring emptying at the exact moment the number stopped
+   moving. */
+.animPanel .sampleReport[data-complete="true"] :global(.ringProgress) {
+  stroke-dashoffset: 0;
+}
+
+/* Empty to filled, in the score's own units. The `to` end is 0 — the arc exactly
+   where `stroke-dasharray` already puts it — and the `from` end is the score's arc
+   length, which is what makes the fill land on the score rather than on whatever
+   a number happened to be. */
 @keyframes ringFill {
   from {
-    stroke-dashoffset: 300;
+    stroke-dashoffset: var(--ring-arc);
   }
   to {
     stroke-dashoffset: 0;
@@ -1128,18 +1289,40 @@
      would fight the component for the same element. */
 
   .animStatusDot,
-  .animCaret {
+  .animCaret,
+  .sampleTestRow {
     animation: none;
   }
 
-  .sampleTestPass,
-  .sampleTestFail {
-    animation: none;
+  /* The panel's own entrance. It is the one place on this panel that hides
+     itself with `opacity: 0` and relies on a state change to undo it, so it
+     needs the reset spelled out for the same reason the rows used to: if the
+     selector were missed, or `data-entered` never arrived, the whole terminal
+     would be invisible rather than one row. The hook also reports "on screen"
+     immediately when motion is reduced, so the state change is not the only
+     thing standing between a reduced-motion reader and the content. */
+  .animPanel {
     opacity: 1;
+    transform: none;
+    transition: none;
   }
 
-  .animPanel .sampleReport :global(.ringProgress) {
+  /* The shake and the arc both. Note there is no `opacity: 1` reset alongside
+     the row opt-out any more: the rows no longer hide themselves, so there is
+     no hidden state for a missed selector to strand.
+     The arc needs both selectors: the `data-scoring` one is more specific than
+     the base rule, so opting out only the base would leave the fill running for
+     anyone who somehow reached the score stage with motion reduced.
+     And it needs `stroke-dashoffset: 0` as well, because opting the animation
+     out is not the same as asking for a filled ring: the base rule now starts
+     the arc *empty* on purpose, so a reduced-motion reader who skipped the
+     animation would otherwise get an empty track beside a 67% number — the same
+     disagreement the empty arc was introduced to remove, just relocated. */
+  .sampleReport[data-scoring="true"] .scoreWrap,
+  .animPanel .sampleReport :global(.ringProgress),
+  .animPanel .sampleReport[data-scoring="true"] :global(.ringProgress) {
     animation: none;
+    stroke-dashoffset: 0;
   }
 
   .step0,

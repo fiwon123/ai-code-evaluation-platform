@@ -1,12 +1,11 @@
-import { useEffect, useState } from "react";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Reveal from "../../components/Reveal/Reveal.tsx";
-import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useCountUp } from "../../hooks/useCountUp.ts";
+import AnimatedTerminal from "./AnimatedTerminal";
 import styles from "./Home.module.css";
 
 const FEATURES = [
@@ -55,22 +54,6 @@ const PIPELINE = [
 ];
 
 /** Typed into the demo terminal, then "evaluated". */
-const TYPED_PROMPT =
-  "Write a function two_sum(nums, target) that returns the indices of two numbers summing to the target.";
-
-const STATUS_SEQUENCE = [
-  "Generating code…",
-  "Running tests…",
-  "Scoring…",
-  "Report ready",
-];
-
-const SAMPLE_TESTS = [
-  { name: "two_sum_basic", passed: true },
-  { name: "two_sum_duplicates", passed: true },
-  { name: "two_sum_unsorted", passed: false },
-];
-
 /** Illustrative platform figures — labeled as sample data. */
 const STATS: Array<{
   value: number;
@@ -108,63 +91,8 @@ const CODE_FRAGMENTS = [
   { text: "eval#4207 · streaming", top: "8%", right: "18%", delay: "-5s" },
 ];
 
-/** Toolchain chips — reinforce what the platform actually talks to. */
-const STACK_CHIPS = [
-  "OpenAI",
-  "Anthropic",
-  "pytest",
-  "node --test",
-  "JUnit",
-  "go test",
-];
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
 function Home() {
   const { user } = useAuth();
-  const [typed, setTyped] = useState(prefersReducedMotion() ? TYPED_PROMPT : "");
-  const [statusIndex, setStatusIndex] = useState(
-    prefersReducedMotion() ? STATUS_SEQUENCE.length - 1 : 0,
-  );
-
-  // Typewriter: reveal the prompt char-by-char, then cycle status chips.
-  useEffect(() => {
-    if (prefersReducedMotion()) {
-      setTyped(TYPED_PROMPT);
-      setStatusIndex(STATUS_SEQUENCE.length - 1);
-      return;
-    }
-    let char = 0;
-    const typeTimer = window.setInterval(() => {
-      char += 1;
-      setTyped(TYPED_PROMPT.slice(0, char));
-      if (char >= TYPED_PROMPT.length) {
-        window.clearInterval(typeTimer);
-      }
-    }, 24);
-
-    const statusTimer = window.setTimeout(() => {
-      const statusId = window.setInterval(() => {
-        setStatusIndex((index) =>
-          index >= STATUS_SEQUENCE.length - 1 ? 0 : index + 1,
-        );
-      }, 1200);
-      // Status cycling is a demo flourish; tie its lifetime to the component.
-      window.setTimeout(() => window.clearInterval(statusId), 30000);
-    }, TYPED_PROMPT.length * 24 + 400);
-
-    return () => {
-      window.clearInterval(typeTimer);
-      window.clearTimeout(statusTimer);
-    };
-  }, []);
-
   return (
     <div>
       <section className={styles.hero}>
@@ -233,75 +161,16 @@ function Home() {
             </div>
           </Reveal>
 
-          {/* Toolchain chips — says what the platform actually talks to, which
-              is the fastest way to make the offer concrete above the fold. */}
-          <Reveal delayMs={300}>
-            {/* Named as examples, not an exhaustive list: six chips standing in
-                for thirteen languages and six providers. The chips are real
-                information rather than decoration, so unlike the code fragments
-                above they stay in the accessibility tree. */}
-            <ul className={styles.chipRow} aria-label="Example integrations and test runners">
-              {STACK_CHIPS.map((chip) => (
-                <li key={chip} className={styles.chip}>
-                  {chip}
-                </li>
-              ))}
-            </ul>
-          </Reveal>
+          {/* The terminal story lives in its own component: it re-renders once
+              per typed character, and at ~18ms a frame that is only affordable
+              if the rest of the page is not re-rendering with it. See
+              AnimatedTerminal for the measurement that forced the split.
 
-          {/* Animated terminal — the matrix-style input → process → result cycle */}
-          <Reveal delayMs={320}>
-            <div className={styles.animPanel}>
-              <span className={styles.panelGlow} aria-hidden="true" />
-              <span className={styles.panelScan} aria-hidden="true" />
-              <div className={styles.animHeader} aria-hidden="true">
-                <span className={styles.animDots}>
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <span className={styles.animTitle}>evaluation · two_sum</span>
-                <span className={styles.animStatus}>
-                  <span className={styles.animStatusDot} />
-                  {STATUS_SEQUENCE[statusIndex]}
-                </span>
-              </div>
-
-              <div className={styles.animPrompt} aria-hidden="true">
-                <span className={styles.animPromptLabel}>$</span>
-                <span className={styles.animPromptText}>
-                  {typed}
-                  <span className={styles.animCaret} />
-                </span>
-              </div>
-
-              {/* Sample report — the evaluation outcome at a glance */}
-              <div
-                className={styles.sampleReport}
-                aria-label="Sample evaluation report"
-              >
-                <ScoreRing value={88} label="Sample score" animate />
-                <div className={styles.sampleMeta}>
-                  <ul className={styles.sampleTests}>
-                    {SAMPLE_TESTS.map((test) => (
-                      <li
-                        key={test.name}
-                        className={
-                          test.passed ? styles.sampleTestPass : styles.sampleTestFail
-                        }
-                      >
-                        {test.passed ? "✓" : "✗"} {test.name}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className={styles.sampleMetaRow}>
-                    <span>3 tests · 142 ms · pytest</span>
-                    <span className={styles.sampleMetaLink}>View report →</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Reveal>
+              Not wrapped in `Reveal`: the panel fades in itself, because it also
+              has to know when the fade finished so the story can wait for it.
+              See `TERMINAL_ENTRANCE_MS` in AnimatedTerminal. Same 320ms stagger
+              and 550ms fade, so the hero still arrives as one piece. */}
+          <AnimatedTerminal />
         </div>
 
         {/* Animated pipeline */}

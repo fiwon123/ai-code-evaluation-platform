@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { restoreMatchMedia, stubMatchMedia } from "../test/matchMedia.ts";
 import Home from "./Home/Home.tsx";
 
 vi.mock("../context/AuthContext.tsx", () => ({
@@ -33,6 +34,24 @@ describe("Home ambient layer", () => {
     );
   }
 
+  /**
+   * Home at rest, with the terminal story already finished.
+   *
+   * jsdom has no `matchMedia`, so the reduced-motion preference reads `false`
+   * and the story is stuck on its first frame — the rows the assertions below
+   * look for would never appear. Stubbed as reduced-motion, the hook renders the
+   * final state immediately. The sequence itself is `useTerminalStory`'s job and
+   * has its own suite.
+   */
+  function renderHomeAtRest() {
+    stubMatchMedia(true);
+    return renderHome();
+  }
+
+  afterEach(() => {
+    restoreMatchMedia();
+  });
+
   it("keeps the drifting code fragments out of the accessibility tree", () => {
     renderHome();
     // The fragments are atmosphere. A screen reader announcing
@@ -42,25 +61,30 @@ describe("Home ambient layer", () => {
     expect(fragment.closest('[aria-hidden="true"]')).not.toBeNull();
   });
 
-  it("keeps the toolchain chips readable, and labels them as examples", () => {
-    renderHome();
-    // Unlike the fragments, the chips carry real information, so they stay in
-    // the tree. The label says "example" because six chips stand in for
-    // thirteen languages and six providers.
-    const chips = screen.getByRole("list", {
-      name: /example integrations and test runners/i,
-    });
-    expect(chips).toBeInTheDocument();
-    expect(screen.getByText("pytest")).toBeInTheDocument();
+  it("names the runner where the work happened, not in a static list", () => {
+    renderHomeAtRest();
+    // The chip row is gone (#352). It was a row of pills above the hero that
+    // asserted nothing about the work below it, and a list of six tools invites
+    // the reading "these are all of them" — understating the platform by seven
+    // languages and five providers. The report's tally names the runner instead,
+    // so the name is attached to a result rather than floating above the fold.
+    expect(screen.getByText(/·\s*pytest$/)).toBeInTheDocument();
   });
 
-  it("does not label the chip row as an exhaustive list", () => {
-    renderHome();
-    // A "Supported providers and test runners" label on six chips reads as a
-    // complete list, which would understate the platform by seven languages.
-    expect(
-      screen.queryByRole("list", { name: /^supported providers/i }),
-    ).not.toBeInTheDocument();
+  it("renders no integrations list, so nothing can over-claim a provider set", () => {
+    renderHomeAtRest();
+    // Provider names belong to the feature copy that explains the choice, and
+    // the old chips needed a "does not say *supported*" test to stay honest. With
+    // no integrations list on the page, the question is gone. Asserting over
+    // `queryAllByRole("list")` rather than one `queryByRole` is the part worth
+    // having: a list can reappear under a different label, and this still fails.
+    for (const list of screen.queryAllByRole("list")) {
+      const label = list.getAttribute("aria-label") ?? "";
+      expect(
+        label,
+        `a labelled list reappeared on Home: ${list.textContent?.slice(0, 60)}`,
+      ).not.toMatch(/supported providers|integrations and test runners/i);
+    }
   });
 
   it("keeps the hero's own content reachable", () => {

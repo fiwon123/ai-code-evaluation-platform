@@ -17,6 +17,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import AnimatedTerminalSource from "../pages/Home/AnimatedTerminal.tsx?raw";
 import globalsCss from "./globals.css?raw";
 import ambientCss from "./ambient.css?raw";
 import enterCss from "./enter.css?raw";
@@ -227,6 +228,107 @@ describe("Home hero decoration", () => {
 
   it("keeps the hero backdrop from intercepting clicks", () => {
     expect(homeCss).toMatch(/\.heroBackdrop\s*\{[^}]*pointer-events:\s*none/);
+  });
+});
+
+/**
+ * The score ring's fill, and the empty state it has to have.
+ *
+ * This pair of rules exists because the arc used to be wrong in a way no test
+ * could see. `ScoreRing` is handed the final score, because the number has to
+ * count up *to* something, so `stroke-dasharray` is the score's arc from the
+ * first frame. The fill was then animated with a keyframe whose `from` was a
+ * hardcoded `stroke-dashoffset: 300` — a number copied from one radius — which
+ * meant the arc was already two-thirds drawn for the whole run, sitting beside
+ * digits reading 0%, and then snapped empty to refill when scoring began. The
+ * screenshots showed it; the DOM assertions, which only asked whether an
+ * animation was *named*, all passed.
+ */
+describe("Home score ring fill", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+
+  it("starts the arc empty, from the score's own arc length", () => {
+    // Empty means "offset by exactly the arc length", which slides the whole
+    // filled segment into the gap the dash pattern leaves behind. A literal
+    // number here is the bug being guarded, not a style preference.
+    const base = homeCss.match(
+      /\.animPanel \.sampleReport :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(base, "no base rule for the panel's ring arc").not.toBeNull();
+    expect(base![1]).toMatch(/stroke-dashoffset:\s*var\(--ring-arc\)/);
+    expect(base![1]).not.toMatch(/stroke-dashoffset:\s*\d/);
+  });
+
+  it("fills from empty rather than from a number copied off another radius", () => {
+    const keyframes = homeCss.match(/@keyframes ringFill\s*\{([\s\S]*?)\n\}/);
+    expect(keyframes, "no ringFill keyframes").not.toBeNull();
+    expect(keyframes![1]).toMatch(/from\s*\{[^}]*stroke-dashoffset:\s*var\(--ring-arc\)/);
+    expect(keyframes![1]).toMatch(/to\s*\{[^}]*stroke-dashoffset:\s*0/);
+    // The specific defect: a literal offset in the `from` end.
+    expect(keyframes![1]).not.toMatch(/from\s*\{[^}]*stroke-dashoffset:\s*\d/);
+  });
+
+  it("fills the arc for a reader who asked for no motion", () => {
+    // Reduced motion removes the animation, which is not the same as asking for
+    // a filled ring — the base rule now starts it empty on purpose. Without this
+    // the same disagreement reappears beside a 67% number, just for the readers
+    // who opted out.
+    const block = reducedMotionBlock(Object.values(HOME_CSS)[0] ?? "");
+    expect(block, "Home.module.css has no reduced-motion block").not.toBe("");
+    const arc = block.match(
+      /[^{}]*:global\(\.ringProgress\)[^{}]*\{([^}]*)\}/,
+    );
+    expect(arc, "the reduced-motion block does not reach the ring arc").not.toBeNull();
+    expect(arc![1], "the arc is not animated off under reduced motion").toMatch(
+      /animation:\s*none/,
+    );
+    expect(arc![1], "a reduced-motion reader gets an empty ring beside the score").toMatch(
+      /stroke-dashoffset:\s*0/,
+    );
+  });
+
+  it("keeps the arc drawn once the score is out", () => {
+    // The trigger and the settled state are two attributes, and conflating them
+    // leaves the ring blank at rest: the score stage ends, `data-scoring` goes
+    // false, the rule naming the fill stops matching, and the arc snaps back to
+    // the empty base while the digits keep the 67% the count-up left them.
+    const settled = homeCss.match(
+      /\.animPanel \.sampleReport\[data-complete="true"\] :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(settled, "no settled state for the ring arc").not.toBeNull();
+    expect(settled![1], "the settled arc is not drawn").toMatch(
+      /stroke-dashoffset:\s*0/,
+    );
+  });
+
+  it("holds the fill's end state rather than springing back to empty", () => {
+    // `backwards` was fine while the base *was* the end state. The base is now
+    // empty on purpose, so the fill has to be held with `forwards` — otherwise
+    // the ring empties the moment the animation finishes.
+    const base = homeCss.match(
+      /\.animPanel \.sampleReport :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(base![1], "the fill is not held after it finishes").toMatch(
+      /animation-fill-mode:\s*forwards/,
+    );
+  });
+
+  it("publishes the arc length the keyframes read", () => {
+    // The CSS is inert without this: `--ring-arc` is only set here, so a rename
+    // on either side silently yields an invalid offset and a ring that never
+    // fills — which looks like a timing bug, not a wiring one.
+    //
+    // Read through the same `import.meta.glob` the rest of this file uses rather
+    // than `readFileSync(new URL(..., import.meta.url))`: under vitest
+    // `import.meta.url` is not a file URL, and `fileURLToPath` throws on it.
+    const sources = import.meta.glob("../components/ScoreRing/ScoreRing.tsx", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>;
+    const ring = stripComments(Object.values(sources)[0] ?? "");
+    expect(ring, "ScoreRing.tsx was not read").not.toBe("");
+    expect(ring).toMatch(/"--ring-arc":\s*`\$\{visibleArc\}`/);
   });
 });
 
@@ -596,5 +698,73 @@ describe("shared motion sources", () => {
     expect(enter).toContain("@keyframes fadeInUp");
     expect(enter).not.toContain("infinite");
     expect(enter).not.toContain("prefers-reduced-motion");
+  });
+});
+
+describe("Home terminal entrance", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+  const source = stripComments(AnimatedTerminalSource);
+
+  /**
+   * The panel fades itself in and the story waits that fade out, so the opening
+   * `generating` beat is watchable instead of being spent at `opacity: 0`. The
+   * two numbers live in different files — a CSS duration and a JS lead-in — so
+   * this is the one place that can notice them disagreeing. A plain snapshot
+   * cannot: nothing throws, the story still completes, and the only symptom is
+   * a frame captured at 700ms showing correct content at 10% opacity.
+   */
+  function entranceMs() {
+    const match = source.match(/TERMINAL_ENTRANCE_MS = (\d+)/);
+    expect(match, "no TERMINAL_ENTRANCE_MS in AnimatedTerminal").not.toBeNull();
+    return Number(match![1]);
+  }
+
+  it("starts the panel hidden and reveals it on data-entered", () => {
+    const base = homeCss.match(/\.animPanel\s*\{([^}]*)\}/);
+    expect(base, "no base rule for the panel").not.toBeNull();
+    expect(base![1]).toMatch(/opacity:\s*0/);
+
+    const shown = homeCss.match(/\.animPanel\[data-entered="true"\]\s*\{([^}]*)\}/);
+    expect(shown, "no [data-entered=true] rule").not.toBeNull();
+    expect(shown![1]).toMatch(/opacity:\s*1/);
+    expect(shown![1]).toMatch(/transform:\s*translateY\(0\)/);
+  });
+
+  it("keeps the CSS fallback in step with the lead-in it stands in for", () => {
+    // The fallbacks only matter if the inline custom properties stop arriving,
+    // and they are only right if they match the numbers the component sends. A
+    // stale fallback would fade in over a different time than the story waits
+    // for, reintroducing the overlap silently.
+    const fallbacks = homeCss.match(/--terminal-entrance,\s*(\d+)ms/g) ?? [];
+    expect(
+      fallbacks.length,
+      "the entrance duration has no numeric CSS fallback",
+    ).toBeGreaterThan(0);
+    for (const fallback of fallbacks) {
+      expect(fallback).toContain(`${entranceMs()}ms`);
+    }
+  });
+
+  it("waits out the whole entrance before the first frame", () => {
+    // The first timeline frame is `generatingMs` long, so the lead-in only has
+    // to outlast the *fade* for the opening beat to be fully visible. If the
+    // lead-in were shorter the panel would still be translucent at t=0, and if
+    // it were absent the beat would be lost entirely.
+    const lead = source.match(/leadInMs: onScreen \? TERMINAL_ENTRANCE_MS : null/);
+    expect(lead, "the story is not gated on the entrance").not.toBeNull();
+    expect(entranceMs()).toBeGreaterThan(0);
+  });
+
+  it("never leaves the panel hidden from a reduced-motion reader", () => {
+    // The one place on this panel that hides itself and relies on a state
+    // change to appear, so the reset has to be declared explicitly. Under
+    // reduced motion the hook also reports "on screen" immediately, and either
+    // mechanism alone being wrong would be a blank terminal.
+    const block = reducedMotionBlock(homeCss);
+    expect(block, "Home.module.css has no reduced-motion block").not.toBe("");
+    const reset = block.match(/\.animPanel\s*\{([^}]*)\}/);
+    expect(reset, "the panel has no reduced-motion reset").not.toBeNull();
+    expect(reset![1]).toMatch(/opacity:\s*1/);
+    expect(reset![1]).toMatch(/transform:\s*none/);
   });
 });

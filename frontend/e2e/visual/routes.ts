@@ -75,6 +75,22 @@ export interface SweepRoute {
    * not "we did not measure it".
    */
   scroll?: readonly ScrollFraction[];
+  /**
+   * A selector that must match before this route counts as settled, for pages
+   * whose resting state is reached by a JS timeline rather than by its content
+   * being present.
+   *
+   * `/` needs it: the terminal story is a ~6s chain of per-character renders, so
+   * a frame shot on load lands wherever the story happened to be. The settle
+   * helper only waits on CSS animations and transitions, and this story is
+   * neither — it is `setTimeout` all the way down, which is the same reason the
+   * story's own tests read state instead of sleeping. Without this the sweep
+   * photographs a moving target and calls it "at rest".
+   *
+   * Matched against the terminal's own stage attribute, so this waits for the
+   * story to *finish*, not merely for the panel to have faded in.
+   */
+  atRest?: string;
   /** Why this entry is shaped the way it is. Read by the reviewer. */
   note?: string;
 }
@@ -91,7 +107,8 @@ export const SWEEP_ROUTES: readonly SweepRoute[] = [
     url: "/",
     heading: "Generate, execute, and evaluate AI-written code — automatically",
     auth: "guest",
-    note: "Carries the most motion surfaces in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the typewriter. Not all of them any more — /demo gained its own Reveal stagger, ambient blobs and a cycling rail in #350, and /pricing has an animated disclosure. SWEEP_MOTION_SURFACES is the checkable version of that list.",
+    atRest: '[class*="animPanel"] [class*="animStatus_"][data-stage="ready"]',
+    note: "Carries the most motion surfaces in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the terminal story. Not all of them any more — the typewriter and the looping status chips were replaced by the terminal story in #352 (one chained timeline, a status tag per stage, results revealed as they resolve and a score ring), /demo gained its own Reveal stagger, ambient blobs and a cycling rail in #350, and /pricing has an animated disclosure. SWEEP_MOTION_SURFACES is the checkable version of that list. The panel also stopped being one of the hero's staggered Reveals in #352: it fades in itself now, because the story has to wait for that fade, so the entrance is a property of the panel rather than a fifth entry in the hero stagger — see `atRest` and the `home-reveal-transition` caption.",
   },
   {
     path: "/features",
@@ -548,7 +565,7 @@ export interface SweepMotion {
 export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = [
   {
     route: "/",
-    why: "Reveal staggers, the `.scrollReveal` view() reveals, the ambient layer and `useCountUp` — all element-level, all seekable, all filmed.",
+    why: "Reveal staggers, the `.scrollReveal` view() reveals, the ambient layer and `useCountUp` — all element-level, all seekable, all filmed. The terminal story's own beats are NOT seekable and are not filmed as a filmstrip: they are a chained setTimeout driven by state, so there is no timeline to place a frame on. The seekable parts of it are filmed with the rest — the ring's `ringFill` and the status dot's pulse are both element-level CSS animations — and the JS-driven number and row reveals are asserted in e2e/terminal-story.spec.ts, which watches the DOM rather than the clock.",
   },
   {
     route: "/demo",
@@ -616,7 +633,7 @@ export const SWEEP_MOTION: readonly SweepMotion[] = [
     // reads as a cascade or as a jump.
     samples: [0, 0.5, 1],
     viewports: ["desktop-chromium"],
-    caption: "Transition filmstrip over the hero's four staggered Reveals, seeked with the Web Animations API. Seeking includes each element's transition-delay, so a delayed reveal is caught mid-flight instead of being reported as still-hidden.",
+    caption: "Transition filmstrip over the hero's staggered Reveals, seeked with the Web Animations API. Seeking includes each element's transition-delay, so a delayed reveal is caught mid-flight instead of being reported as still-hidden. The terminal panel is not in this filmstrip: it stopped being a hero Reveal in #352 and now runs its own entrance, which the story waits out before its first frame — that coupling is covered by the story tests, not here.",
   },
   {
     id: "home-ambient",
