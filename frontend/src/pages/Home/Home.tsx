@@ -363,7 +363,6 @@ function Home() {
                 // CSSProperties without listing every name.
                 style={{ "--card-accent": STEP_ACCENTS[step.stat.accent] } as CSSProperties}
               >
-                <div className={styles.stepNumber}>{index + 1}</div>
                 <StatValue stat={step.stat} index={index} active={stepsInView} />
                 <h3 className={styles.stepTitle}>{step.title}</h3>
                 <p className={styles.stepText}>{step.text}</p>
@@ -389,12 +388,16 @@ function Home() {
           <div className={styles.pipelineTrack}>
             {PIPELINE.map((step, index) => (
               <div key={step.label} className={styles.pipelineGroup}>
-                <div className={`${styles.pipelineStep} ${styles[`step${index}`]}`}>
+                <Card
+                  variant="dark"
+                  padding="default"
+                  className={`${styles.pipelineStep} ${styles[`step${index}`]}`}
+                >
                   <span className={styles.pipelineNum}>{index + 1}</span>
                   <span className={styles.pipelineIcon}>{step.icon}</span>
                   <span className={styles.pipelineLabel}>{step.label}</span>
                   <span className={styles.pipelineDesc}>{step.desc}</span>
-                </div>
+                </Card>
                 {index < PIPELINE.length - 1 && (
                   <span
                     className={`${styles.pipelineConnector} ${styles[`arrow${index}`]}`}
@@ -467,7 +470,7 @@ function Home() {
               data-entered={teaserInView ? "true" : "false"}
               aria-hidden="true"
             >
-              <div className={styles.teaserPanel}>
+              <Card variant="dark" padding="default" className={styles.teaserPanel}>
                 {TEASER_RUN.map((row, index) => (
                   <div
                     key={row.label ?? `row-${index}`}
@@ -498,7 +501,7 @@ function Home() {
                     )}
                   </div>
                 ))}
-              </div>
+              </Card>
               <p className={styles.teaserPanelCaption}>
                 Sample run on the free demo provider — your own challenge, tests
                 and score
@@ -510,7 +513,7 @@ function Home() {
 
       <section className={`${styles.section} ${styles.sectionAlt}`}>
         <Reveal>
-          <div className={styles.cta}>
+          <Card variant="dark" padding="default" className={styles.cta}>
             {/* The page's closing motif (#355): a faint ring sweeping once
                 around the banner, echoing the score ring in the hero terminal
                 that the reader met at the top. Decorative and pointer-inert, so
@@ -532,7 +535,7 @@ function Home() {
                 Explore features
               </Button>
             </div>
-          </div>
+          </Card>
         </Reveal>
       </section>
     </div>
