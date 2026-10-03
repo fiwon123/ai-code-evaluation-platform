@@ -31,7 +31,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--control-height);
-  color: var(--color-text);
+  color: #ffffff;
 }
 
 .brand:hover {
