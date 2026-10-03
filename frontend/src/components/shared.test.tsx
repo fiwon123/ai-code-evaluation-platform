@@ -60,6 +60,20 @@ describe("shared components", () => {
       const { container } = render(<Card padding="compact">Content</Card>);
       expect(container.querySelector("div")?.className).toContain("compact");
     });
+
+    // #387: marketing/informational panels ask for the dark surface without
+    // knowing which theme is active.
+    it("applies the dark variant class on request", () => {
+      const { container } = render(<Card variant="dark">Content</Card>);
+      const className = container.querySelector("div")?.className ?? "";
+      expect(className).toContain("card");
+      expect(className).toContain("dark");
+    });
+
+    it("does not apply the dark class by default", () => {
+      const { container } = render(<Card>Content</Card>);
+      expect(container.querySelector("div")?.className).not.toContain("dark");
+    });
   });
 
   describe("Badge", () => {

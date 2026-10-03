@@ -191,6 +191,33 @@
   --color-code-border: #334155;
   --color-code-text: #e2e8f0;
 
+  /* Inverse marketing surfaces (#387).
+   *
+   * The light palette's marketing and informational cards adopt the code
+   * surface so the product speaks one dark-panel language instead of placing
+   * pale panels on a pale page. `Card variant="dark"` scopes these over the
+   * ordinary tokens for its subtree, so descendants keep reading
+   * `--color-text` and friends and need no dark-aware rules of their own. The
+   * dark palette aliases each back to the corresponding ordinary token, so the
+   * variant is a no-op there — which is why they are declared per-theme rather
+   * than once. */
+  --color-surface-inverse: #0f172a;
+  --color-border-inverse: #334155;
+  --color-text-inverse: #e2e8f0;
+  --color-text-inverse-secondary: #94a3b8;
+
+  /* Form controls are dark in BOTH themes, like the code and prompt surfaces
+   * (#387). A light field on a bright marketing card was the hardest place in
+   * the app to read typed text. These are dedicated tokens rather than the
+   * code-surface set so an input and a code block can be retuned
+   * independently. Measured on the light fill: value #e2e8f0 = 13.86:1,
+   * placeholder #94a3b8 = 6.35:1 (both need 4.5:1). The boundary stays on
+   * `--color-input-border`, which is checked against the surface the field
+   * sits on, not against its own fill. */
+  --color-input-bg: #0f172a;
+  --color-input-text: #e2e8f0;
+  --color-input-placeholder: #94a3b8;
+
   color-scheme: light;
 }
 
@@ -333,6 +360,20 @@
   --color-code-header: #111c34;
   --color-code-border: #24324a;
   --color-code-text: #e2e8f0;
+
+  /* The dark palette's ordinary surfaces, so `Card variant="dark"` renders
+   * exactly like a default card here (#387). Declared as distinct tokens
+   * because the light palette points them at the code surface instead of the
+   * normal card surface. */
+  --color-surface-inverse: #131d33;
+  --color-border-inverse: #2c3d5c;
+  --color-text-inverse: #e6ebf3;
+  --color-text-inverse-secondary: #a9b8cf;
+
+  /* Dark form controls (#387) — the code surface, retuned with it. */
+  --color-input-bg: #0b1220;
+  --color-input-text: #e2e8f0;
+  --color-input-placeholder: #94a3b8;
 
   color-scheme: dark;
 }
