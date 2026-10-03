@@ -616,8 +616,8 @@ function Demo() {
               {selectedChallenge && (
                 <div className={styles.preview}>
                   <div className={styles.previewHeader}>
+                    <LanguageBadge language={selectedChallenge.language} showLabel showSymbol className={styles.previewLanguageBadge} />
                     <h3 className={styles.previewTitle}>What will run</h3>
-                    <LanguageBadge language={selectedChallenge.language} showLabel showSymbol />
                   </div>
                   {selectedChallenge.description && (
                     <p className={styles.previewDescription}>
