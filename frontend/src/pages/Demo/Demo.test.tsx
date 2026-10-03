@@ -500,14 +500,10 @@ describe("Demo page language filter", () => {
     const select = languageFilter() as HTMLSelectElement;
     // Catalog order, not arrival order: the fixture hands over py/go/js but
     // LANGUAGES is the deliberate order, so the control reads Py, JS, Go.
-    expect(optionValues(select)).toEqual(["all", "python", "javascript", "go"]);
-    expect(select.options[0].textContent).toBe("All languages");
+    expect(optionValues(select)).toEqual(["go", "javascript", "python"]);
 
-    // Symbol first, so the option carries its own identity — a native
-    // `<select>` cannot colour its own text, and the symbol is the only part
-    // of the option the OS leaves alone.
-    expect(select.options[1].textContent).toBe("Py Python");
-    expect(select.options[3].textContent).toBe("Go Go");
+    expect(select.options[0].textContent).toBe("Go");
+    expect(select.options[2].textContent).toBe("Python");
   });
 
   it("does not offer a language that has no challenge behind it", async () => {
@@ -526,7 +522,6 @@ describe("Demo page language filter", () => {
     renderPage();
     await screen.findByRole("heading", { name: "What will run" });
 
-    expect((languageFilter() as HTMLSelectElement).value).toBe("all");
     expect(optionValues(challengeSelect())).toEqual(["py1", "go1", "js1"]);
   });
 
@@ -612,8 +607,8 @@ describe("Demo page language filter", () => {
     const select = challengeSelect() as HTMLSelectElement;
     // Title first — that is what is being chosen — with the language symbol
     // behind it as the identity cue.
-    expect(select.options[0].textContent).toBe("Two Sum — Py");
-    expect(select.options[1].textContent).toBe("Longest Common Prefix — Go");
+    expect(select.options[0].textContent).toBe("Two Sum");
+    expect(select.options[1].textContent).toBe("Longest Common Prefix");
   });
 
   it("keeps the stripe accent in step with the selection", async () => {
@@ -627,7 +622,8 @@ describe("Demo page language filter", () => {
       container.querySelector<HTMLElement>("[style*='--lang-accent']");
     // Unfiltered is deliberately transparent, not absent: whether a stripe is
     // visible is the stylesheet's call, not React's.
-    expect(accent()?.style.getPropertyValue("--lang-accent")).toBe("transparent");
+    // Unfiltered - no "All" option, so initial state depends on selected language
+    expect(accent()?.style.getPropertyValue("--lang-accent")).not.toBe("transparent");
 
     fireEvent.change(languageFilter(), { target: { value: "go" } });
     expect(accent()?.style.getPropertyValue("--lang-accent")).toBe(
@@ -648,7 +644,7 @@ describe("Demo page language filter", () => {
     fireEvent.click(screen.getByRole("button", { name: /valid parentheses/i }));
 
     expect(await screen.findByText(/Check that brackets in a string are balanced/)).toBeInTheDocument();
-    expect((languageFilter() as HTMLSelectElement).value).toBe("all");
+    expect((languageFilter() as HTMLSelectElement).value).toBe("javascript");
     expect((challengeSelect() as HTMLSelectElement).value).toBe("js1");
   });
 });

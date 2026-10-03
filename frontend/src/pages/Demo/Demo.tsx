@@ -5,7 +5,7 @@ import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import CodeBlock from "../../components/CodeBlock/CodeBlock.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
-import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
+
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
 import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion.ts";
@@ -20,6 +20,7 @@ import { formatElapsed } from "../../utils/formatting.ts";
 import {
   extensionForLanguage,
   LANGUAGES,
+  languageLabel,
   languageMeta,
   runnerForLanguage,
 } from "../../utils/language.ts";
@@ -68,8 +69,7 @@ const ALL_LANGUAGES = "all";
  * control as a stripe instead, via `--lang-accent`.
  */
 function languageOptionLabel(language: string): string {
-  const meta = languageMeta(language);
-  return `${meta.symbol} ${meta.label}`;
+  return languageMeta(language).label;
 }
 
 /**
@@ -77,7 +77,7 @@ function languageOptionLabel(language: string): string {
  * with its language symbol behind it as the identity cue.
  */
 function challengeOptionLabel(challenge: Challenge): string {
-  return `${challenge.title} — ${languageMeta(challenge.language).symbol}`;
+  return challenge.title;
 }
 
 
@@ -90,7 +90,7 @@ function Demo() {
   const [result, setResult] = useState<Submission | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
-  const [language, setLanguage] = useState(ALL_LANGUAGES);
+  const [language, setLanguage] = useState<string>("");
   const { liveSubmission, state: socketState } = useSubmissionSocket(
     submissionId ?? undefined,
   );
@@ -109,15 +109,17 @@ function Demo() {
    * listing all of it would make "All languages" the only useful option.
    */
   const filterableLanguages = useMemo(() => {
-    const present = new Set(challenges.map((c) => c.language));
-    return LANGUAGES.filter((lang) => present.has(lang));
+    const langs = new Set<string>();
+    for (const c of challenges) {
+      if (c.language) langs.add(c.language);
+    }
+    return Array.from(langs).sort((a, b) =>
+      languageLabel(a).localeCompare(languageLabel(b)),
+    );
   }, [challenges]);
 
   const visibleChallenges = useMemo(
-    () =>
-      language === ALL_LANGUAGES
-        ? challenges
-        : challenges.filter((c) => c.language === language),
+    () => (language ? challenges.filter((c) => c.language === language) : challenges),
     [challenges, language],
   );
 
@@ -200,6 +202,8 @@ function Demo() {
         const items = data.items;
         if (!cancelled && items.length > 0) {
           setChallenges(items);
+          // Start unfiltered - show all challenges
+          setLanguage("");
           setSelectedId(items[0].id);
         }
       } catch {
@@ -226,8 +230,8 @@ function Demo() {
       // effect below then immediately drags the selection to some unrelated Go
       // challenge — the chip would appear to do nothing. Widening to "all" is
       // the only outcome that matches what was clicked.
-      if (language !== ALL_LANGUAGES && match.language !== language) {
-        setLanguage(ALL_LANGUAGES);
+      if (match.language !== language) {
+        setLanguage(match.language);
       }
     }
   }
@@ -440,10 +444,7 @@ function Demo() {
                   className={styles.languageFilter}
                   style={
                     {
-                      "--lang-accent":
-                        language === ALL_LANGUAGES
-                          ? "transparent"
-                          : languageMeta(language).color,
+                      "--lang-accent": languageMeta(language).color,
                     } as React.CSSProperties
                   }
                 >
@@ -455,7 +456,7 @@ function Demo() {
                     aria-label="Filter by language"
                     className={styles.languageSelect}
                   >
-                    <option value={ALL_LANGUAGES}>All languages</option>
+  
                     {filterableLanguages.map((lang) => (
                       <option key={lang} value={lang}>
                         {languageOptionLabel(lang)}
@@ -463,9 +464,7 @@ function Demo() {
                     ))}
                   </SelectInput>
                 </span>
-                <span className={styles.challengeIdentity}>
-                  <LanguageBadge language={selectedChallenge?.language ?? "python"} />
-                </span>
+
               </div>
 
               <div className={styles.runnerRow}>
@@ -617,7 +616,6 @@ function Demo() {
                 <div className={styles.preview}>
                   <div className={styles.previewHeader}>
                     <h3 className={styles.previewTitle}>What will run</h3>
-                    <LanguageBadge language={selectedChallenge.language} />
                   </div>
                   {selectedChallenge.description && (
                     <p className={styles.previewDescription}>

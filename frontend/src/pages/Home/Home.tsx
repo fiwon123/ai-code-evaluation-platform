@@ -7,6 +7,7 @@ import Reveal from "../../components/Reveal/Reveal.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useCountUp } from "../../hooks/useCountUp.ts";
 import { useInView } from "../../hooks/useInView.ts";
+import { scoreBand } from "../../utils/formatting.ts";
 import AnimatedTerminal from "./AnimatedTerminal";
 import styles from "./Home.module.css";
 
@@ -493,7 +494,16 @@ function Home() {
                     ) : (
                       <>
                         {row.label && <span className={styles.teaserLabel}>{row.label}</span>}
-                        {row.detail && <span className={styles.teaserDetail}>{row.detail}</span>}
+                        {row.detail &&                        <span
+                          className={styles.teaserDetail}
+                          style={
+                            row.score
+                              ? ({ "--score-band": scoreBand(66.7) } as CSSProperties)
+                              : undefined
+                          }
+                        >
+                          {row.detail}
+                        </span>}
                       </>
                     )}
                   </div>

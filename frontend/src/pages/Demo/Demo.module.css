@@ -360,7 +360,7 @@
    rather than bleeding into the card behind it. `CodeBlock` owns the surface
    and the tokens; this is only the edge between the two. */
 .previewCode {
-  max-height: 300px;
+  max-height: 420px;
   overflow: auto;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
