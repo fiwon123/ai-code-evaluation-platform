@@ -105,11 +105,24 @@ function parseValidationErrors(
         ? String(err.loc[err.loc.length - 1] ?? "")
         : "";
       const msg =
-        typeof err.msg === "string" ? err.msg : "Invalid value";
+        typeof err.msg === "string" && err.msg.trim() !== ""
+          ? err.msg
+          : "Invalid value";
       if (field && field !== "body") {
         fieldErrors[field] = msg;
       }
-      messages.push(field ? `${field}: ${msg}` : msg);
+      // The summary is user-facing: `extractError` hands it straight to a
+      // form-level banner. So it carries messages only. Prepending the Pydantic
+      // `loc` key leaked internal field names into the UI — the login page
+      // rendered "identifier: String should have at least 3 characters" under a
+      // field labelled "Email or username" (#320). The per-field map above
+      // still holds the keys, which is what the inline errors need.
+      //
+      // Deduplicated, because a form with three under-length fields would
+      // otherwise repeat one sentence three times in a single banner.
+      if (!messages.includes(msg)) {
+        messages.push(msg);
+      }
     }
   }
 
@@ -291,4 +304,5 @@ export const adminApi = {
       `/api/admin/submissions${buildQueryString(params)}`,
       options,
     ),
+  removeSubmission: (id: string) => api.del(`/api/admin/submissions/${id}`),
 };

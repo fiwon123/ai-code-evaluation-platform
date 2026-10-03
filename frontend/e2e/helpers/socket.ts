@@ -44,10 +44,20 @@ export interface WireAttempt {
   created_at: string;
 }
 
+// `WireSubmission` is a hand-written mirror of the API's `Submission`, not an
+// extension of it — `e2e/` may not import from `src/`, so the two can drift
+// silently. #361 added `challenge_title` and this file was left unchanged,
+// which the visual sweep reported as a submission card with a blank heading:
+// the fixture rendered, just without the new field. The render contract is
+// locked by `e2e/profile.spec.ts` ("a submission row is named by its
+// challenge"), so a new field needs adding here too, not just to `src/types.ts`.
 export interface WireSubmission {
   id: string;
   user_id: string;
   challenge_id: string;
+  /** The API resolves the parent challenge's title onto every submission
+   *  (#361), and the profile card renders it as the row's heading. */
+  challenge_title: string;
   status: "pending" | "processing" | "completed" | "failed";
   phase: "generating" | "testing" | "repairing" | null;
   started_at: string | null;
@@ -64,6 +74,7 @@ export interface WireSubmission {
 }
 
 const CHALLENGE_ID = "c-e2e-ws";
+const CHALLENGE_TITLE = "Two Sum";
 
 /** Recent timestamps: the page renders elapsed time and a "taking longer than
  *  usual" banner from them, and stale dates make both read as nonsense. */
@@ -79,6 +90,7 @@ export function processingSubmission(id: string): WireSubmission {
     id,
     user_id: TEST_USER.id,
     challenge_id: CHALLENGE_ID,
+    challenge_title: CHALLENGE_TITLE,
     status: "processing",
     phase: "testing",
     started_at: isoAgo(6),
@@ -324,3 +336,27 @@ export async function mockSubmissionSocket(
     },
   };
 }
+
+/**
+ * Lets frames the mock has already written reach the page's `onmessage`.
+ *
+ * A frame sent from the test is handed to the browser, but the page dispatches it
+ * on its own task queue, so it may not have been handled by the time the next
+ * line runs. Sleeping a fixed number of milliseconds only guesses at that: too
+ * short and the test judges a message that has not arrived yet, too long and every
+ * run pays the delay for nothing. Two animation frames is a boundary the page
+ * actually observes rather than a duration we hope is enough.
+ *
+ * This is still a settling step, not a proof — nothing here can make an assertion
+ * about an *absence* deterministic. Claims of the form "this update changed
+ * nothing" are proved where the state is readable, in
+ * `src/hooks/useSubmissionSocket.test.ts`; this only lets the browser test check
+ * that the page survives the frame.
+ */
+export const settleSocketFrames = (page: Page): Promise<void> =>
+  page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );

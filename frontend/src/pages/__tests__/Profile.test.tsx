@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,6 +55,7 @@ const challenges = [
     prompt: "prompt",
     test_code: "test",
     language: "python",
+    difficulty: "hard",
     owner_id: "u1",
     created_at: "2026-09-10T00:00:00Z",
     updated_at: "2026-09-10T00:00:00Z",
@@ -78,6 +79,10 @@ const submissions = [
     challenge_id: "c1",
     status: "completed",
     provider: "demo",
+    // #348 reads these three off the row: the language badge, the provider and
+    // model line, and the digest behind the test count.
+    model: "llama-3.3-70b",
+    language: "python",
     code: "print(1)",
     score: 100,
     evaluation_result: {
@@ -86,6 +91,7 @@ const submissions = [
       total_tests: 2,
       score: 100,
       logs: "2 passed",
+      logs_summary: "2 passed, 0 failed",
       metrics: { duration_ms: 4200 },
       created_at: "2026-09-10T00:00:00Z",
     },
@@ -164,12 +170,124 @@ describe("Profile", () => {
     expect(screen.getByText(/Member since January 2026/i)).toBeInTheDocument();
   });
 
+  it("gives a challenge card its difficulty, run count and best score (#348)", async () => {
+    // The three fields #348 added to the box. `stats()` is mocked empty by
+    // default, so they are driven from a real rollup here rather than from
+    // defaults that happen to render an em dash.
+    mockSubmissionsStats.mockResolvedValue({
+      items: [
+        {
+          challenge_id: "c1",
+          challenge_title: "My Challenge",
+          description: "desc",
+          language: "python",
+          total_runs: 4,
+          completed_runs: 3,
+          failed_runs: 1,
+          avg_score: 91.5,
+          best_score: 100,
+          last_run_at: "2026-09-20T00:00:00Z",
+          last_duration_ms: 4200,
+        },
+      ],
+    } as never);
+    renderPage();
+    await screen.findByText("alice");
+    // Difficulty comes from `DIFFICULTY_VARIANT`, so the pill colour is the one
+    // #346 held to contrast rather than a local guess.
+    expect(screen.getByText("Hard")).toBeInTheDocument();
+    // Completed of total, not the bare total — and scoped to this column, because
+    // the "evaluations by challenge" section renders its own `3/4` from the same
+    // rollup and would answer for it.
+    expect(myChallenges().getByText("3/4")).toBeInTheDocument();
+    expect(myChallenges().getByText("1")).toBeInTheDocument();
+    // Last *evaluated*, which is a different date from the created date the old
+    // card showed — and the one the issue asked for.
+    //
+    // Asserted on the `dateTime` attribute, not on the words. A test that only
+    // checks the footer says "Last evaluated" is satisfied by a card printing the
+    // *created* date under that label, which is precisely the confusion this
+    // issue is about; the relative string itself cannot carry the assertion,
+    // because "10d ago" and "20d ago" land in the same bucket at some point and
+    // the two would quietly agree.
+    const evaluated = myChallenges().getByText(/Last evaluated/).closest("time");
+    expect(evaluated?.getAttribute("dateTime")).toBe("2026-09-20T00:00:00Z");
+    expect(myChallenges().queryByText(/^Created /)).not.toBeInTheDocument();
+  });
+
+  it("says a never-evaluated challenge has never been evaluated (#348)", async () => {
+    // `stats()` is empty by default, which is also what it is when the fetch
+    // failed — the effect above is deliberately non-fatal. The card has to say
+    // "not evaluated" rather than render a zero, because a zero best score is a
+    // claim about quality and this is an absence of data.
+    renderPage();
+    await screen.findByText("alice");
+    expect(myChallenges().getByText("Not evaluated yet")).toBeInTheDocument();
+    // The created date, not an evaluated one — there is no evaluated date to
+    // report, and inventing a relative string for a run that never happened
+    // would be the same zero-as-data mistake one row up.
+    expect(
+      myChallenges().getByText(/^Created /).closest("time")?.getAttribute("dateTime"),
+    ).toBe("2026-09-10T00:00:00Z");
+    // The em dash is there — several times, in fact, because every absent field
+    // on both cards renders one.
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("falls back to a neutral pill for a difficulty this build does not know (#348)", async () => {
+    // A challenge whose difficulty is a value this build has never heard of. The
+    // vocabulary lives in `utils/difficulty.ts`, so `DIFFICULTY_VARIANT["quantum"]`
+    // is `undefined` and an unguarded lookup paints *no pill at all* — while
+    // `difficultyLabel` has its own capitalising fallback. The two must agree that
+    // the value is unknown: no pill is not the same as a neutral one, and the
+    // label has to stay legible either way.
+    mockChallengesList.mockResolvedValue({
+      items: [{ ...challenges[0], difficulty: "quantum" }],
+      total: 1,
+      page: 1,
+      pages: 1,
+    } as never);
+    renderPage();
+    await screen.findByText("alice");
+    expect(myChallenges().getByText("Quantum")).toBeInTheDocument();
+  });
+
+  it("renders a difficulty of missing as Unknown rather than throwing (#348)", async () => {
+    // The same guard for a field that is *absent* rather than unrecognised, which
+    // is what a row written before the column existed looks like.
+    mockChallengesList.mockResolvedValue({
+      items: [{ ...challenges[0], difficulty: undefined }],
+      total: 1,
+      page: 1,
+      pages: 1,
+    } as never);
+    renderPage();
+    await screen.findByText("alice");
+    expect(myChallenges().getByText("Unknown")).toBeInTheDocument();
+  });
+
   it("shows only the user's own challenges", async () => {
     renderPage();
     await screen.findByText("alice");
     expect(screen.getByText("My Challenge")).toBeInTheDocument();
     expect(screen.queryByText("Someone Else's")).not.toBeInTheDocument();
   });
+
+/**
+ * The "My challenges" column, scoped by its heading.
+ *
+ * This exists because a loose `getAllByText` on this page is not a weaker
+ * assertion, it is a *wrong* one. The #347 "Evaluations by challenge" section
+ * renders its own `3/4` from the same rollup, so `getAllByText("3/4")` stays
+ * green after the challenge card is mutated to print a bare total — the other
+ * card satisfies it. A mutation check is what caught that: the test passed with
+ * `completed_runs/total_runs` replaced by `total_runs`.
+ */
+function myChallenges() {
+  return within(
+    screen.getByRole("heading", { name: "My challenges" }).closest("section")!,
+  );
+}
 
   it("computes stats: 1 challenge, 3 submissions, avg 100%, 33% completion", async () => {
     renderPage();
@@ -189,10 +307,57 @@ describe("Profile", () => {
     expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
   });
 
-  it("shows the recorded duration next to a completed score", async () => {
+  it("shows the recorded duration as a named stat rather than beside the score", async () => {
+    // #348 moved the duration out of the score's inline text and into the card's
+    // stats row, next to the test count. It was previously asserted as a substring
+    // of one text node ("96.7% · 4.2s"), which is exactly the kind of assertion
+    // that goes quiet when the layout changes rather than failing: the duration
+    // had to survive *somehow*, and this is where it lives now. The label matters
+    // as much as the value — a bare "4.2s" in a card is a number nobody can place.
     renderPage();
     await screen.findByText("alice");
-    expect(screen.getByText(/· 4\.2s/)).toBeInTheDocument();
+    // Every completed row carries the label, so `getAllByText` — a single
+    // `getByText("Duration")` is ambiguous across ten rows, which is a fact
+    // about the DOM and not a test bug.
+    expect(screen.getAllByText("Duration").length).toBeGreaterThan(0);
+    expect(screen.getByText("4.2s")).toBeInTheDocument();
+  });
+
+  it("shows the pass/fail test count for a run that produced results", async () => {
+    // #348: the submission card's second stat. `118/120` on its own says nothing
+    // about *which* two failed, which is what the tooltip carries.
+    renderPage();
+    await screen.findByText("alice");
+    expect(screen.getAllByText("Tests").length).toBeGreaterThan(0);
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+  });
+
+  it("puts the full test breakdown in a keyboard-reachable tooltip", async () => {
+    renderPage();
+    await screen.findByText("alice");
+    // `Tooltip` renders its bubble in the DOM and points the trigger at it with
+    // `aria-describedby`, so the description resolves whether or not it is open.
+    const trigger = screen.getByText("2/2");
+    const id = trigger.closest("[aria-describedby]")?.getAttribute("aria-describedby");
+    expect(id, "the test count must be described by the tooltip").toBeTruthy();
+    const bubble = document.getElementById(id!);
+    expect(bubble?.getAttribute("role")).toBe("tooltip");
+    expect(bubble?.textContent).toContain("2 of 2 tests passed");
+    // And the runner's own digest, which is the half the count cannot express.
+    expect(bubble?.textContent).toContain("2 passed, 0 failed");
+    // Reachable by keyboard: `Tooltip` puts the tab stop on its own wrapper when
+    // the trigger cannot hold focus, which is what makes a `<dd>` a valid target.
+    const tabbable = trigger.closest("[tabindex]");
+    expect(tabbable, "the test count must be in the tab order").toBeTruthy();
+  });
+
+  it("gives a submission row its language, provider and model", async () => {
+    renderPage();
+    await screen.findByText("alice");
+    // `LanguageBadge` renders the display name from `languageMeta`, not the raw
+    // catalog value, so this asserts the badge rather than the raw string.
+    expect(screen.getAllByText(/^Python$/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/demo · llama-3\.3-70b/)).toBeInTheDocument();
   });
 
   it("shows a live waiting time on in-progress submissions", async () => {
@@ -393,18 +558,39 @@ describe("Profile", () => {
         "href",
         "/challenges/c1",
       );
-      expect(screen.getByText("80% avg")).toBeInTheDocument();
-      expect(
-        screen.getByText((_, el) =>
-          el?.tagName === "P" &&
-          (el?.textContent?.includes("best 90% · 3 runs · 1 failed") ?? false),
-        ),
-      ).toBeInTheDocument();
-      // A challenge with no completed runs still appears, with a gentle note.
-      expect(screen.getByText("Reverse String")).toBeInTheDocument();
-      expect(screen.getByText(/1 run · no completed runs/)).toBeInTheDocument();
+      // The card is a `<dl>` now (#347), so the stats are named values rather
+      // than a run of digits. Best is a stat of its own and Runs counts
+      // completed of total: the old card printed "best 90% · 3 runs · 1 failed"
+      // as a line of text, and nothing there may go missing in the redesign.
+      const card = screen.getByRole("link", { name: "Two Sum" }).closest("div[class*='card']")! as HTMLElement;
+      const list = card.querySelector<HTMLElement>("dl")!;
+      expect(within(list).getAllByRole("term").map((t) => t.textContent)).toEqual([
+        "Score",
+        "Best",
+        "Runs",
+        "Last run",
+      ]);
+      expect(within(list).getAllByRole("definition").map((d) => d.textContent)).toEqual([
+        "80%",
+        "90%",
+        "2/3",
+        "—",
+      ]);
+      // The failed run is still counted and still visible.
+      expect(within(card).getByText("1 failed")).toBeInTheDocument();
+
+      // A challenge with no completed runs still appears, and says why its
+      // score is an em dash instead of leaving a bare "—" to be guessed at.
+      const empty = screen.getByRole("link", { name: "Reverse String" }).closest("div[class*='card']")! as HTMLElement;
+      expect(within(empty).getAllByRole("definition")[0]).toHaveTextContent("—");
+      expect(within(empty).getByLabelText("no completed runs yet")).toBeTruthy();
+
       // Headline average is computed across all challenges, not just the page.
-      expect(screen.getByText("80%")).toBeInTheDocument();
+      // Scoped to the summary card: the evaluation card's own 80% is the same
+      // string, so a page-wide `getByText` here would be ambiguous by design.
+      expect(
+        within(screen.getByText("Average score").closest("div[class*='card']")! as HTMLElement).getByText("80%"),
+      ).toBeInTheDocument();
     });
 
     it("shows an empty state when no challenge has been evaluated", async () => {

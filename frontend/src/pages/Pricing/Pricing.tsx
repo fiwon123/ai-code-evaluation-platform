@@ -1,6 +1,7 @@
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import ComparisonMark from "../../components/ComparisonMark/ComparisonMark.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import styles from "./Pricing.module.css";
 
@@ -51,14 +52,25 @@ const TIERS = [
   },
 ];
 
-const COMPARISON: { label: string; values: [string, string, string] }[] = [
+/**
+ * A cell is either a yes/no capability or a value.
+ *
+ * `boolean` for the capabilities, `string` for the quantities, so "not included"
+ * is a value the type system recognises rather than the literal character `"—"`
+ * — which meant that a row's meaning lived in a convention about which Unicode
+ * glyph was typed, in a table whose entire purpose is to make the differences
+ * between tiers scannable.
+ */
+type ComparisonValue = boolean | string;
+
+const COMPARISON: { label: string; values: [ComparisonValue, ComparisonValue, ComparisonValue] }[] = [
   { label: "Evaluations / month", values: ["50", "Unlimited", "Unlimited"] },
   { label: "LLM providers", values: ["Demo", "OpenAI, Anthropic, Gemini, Groq", "Everything in Pro"] },
-  { label: "Private challenges", values: ["—", "✓", "✓"] },
+  { label: "Private challenges", values: [false, true, true] },
   { label: "Metrics & history", values: ["7 days", "Unlimited", "Unlimited"] },
   { label: "Support", values: ["Community", "Priority", "Dedicated"] },
-  { label: "Self-hosted deployment", values: ["—", "—", "✓"] },
-  { label: "SSO & audit logging", values: ["—", "—", "✓"] },
+  { label: "Self-hosted deployment", values: [false, false, true] },
+  { label: "SSO & audit logging", values: [false, false, true] },
 ];
 
 const FAQ = [
@@ -89,8 +101,8 @@ function Pricing() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">Pricing</span>
-        <PageTitle size="lg" className={styles.pageTitle}>Simple, transparent pricing</PageTitle>
-        <p className={styles.pageSubtitle}>
+        <PageTitle size="lg" className={styles.title}>Simple, transparent pricing</PageTitle>
+        <p className={styles.subtitle}>
           Start free and scale as your evaluation volume grows.
         </p>
       </header>
@@ -117,7 +129,7 @@ function Pricing() {
             <ul className={styles.tierList}>
               {tier.features.map((feature) => (
                 <li className={styles.tierItem} key={feature}>
-                  <span className={styles.check}>✓</span>
+                  <ComparisonMark value />
                   {feature}
                 </li>
               ))}
@@ -154,7 +166,9 @@ function Pricing() {
                 <tr key={row.label}>
                   <th scope="row">{row.label}</th>
                   {row.values.map((value, index) => (
-                    <td key={`${row.label}-${index}`}>{value}</td>
+                    <td key={`${row.label}-${index}`}>
+                      <ComparisonMark value={value} />
+                    </td>
                   ))}
                 </tr>
               ))}

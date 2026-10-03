@@ -114,7 +114,7 @@ function AdminDashboard() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <PageTitle size="sm" className={styles.title}>Admin dashboard</PageTitle>
+        <PageTitle size="md" className={styles.title}>Admin dashboard</PageTitle>
         <p className={styles.subtitle}>Platform-wide statistics and moderation.</p>
       </div>
 

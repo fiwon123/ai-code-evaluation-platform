@@ -19,8 +19,8 @@ function About() {
     <div className={styles.page}>
       <header className={styles.header}>
         <span className="eyebrow">About</span>
-        <PageTitle size="lg" className={styles.pageTitle}>About this project</PageTitle>
-        <p className={styles.tagline}>
+        <PageTitle size="lg" className={styles.title}>About this project</PageTitle>
+        <p className={styles.subtitle}>
           An open-source platform for automatically verifying AI-generated code.
         </p>
       </header>

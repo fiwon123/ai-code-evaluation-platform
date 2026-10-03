@@ -75,6 +75,22 @@ export interface SweepRoute {
    * not "we did not measure it".
    */
   scroll?: readonly ScrollFraction[];
+  /**
+   * A selector that must match before this route counts as settled, for pages
+   * whose resting state is reached by a JS timeline rather than by its content
+   * being present.
+   *
+   * `/` needs it: the terminal story is a ~6s chain of per-character renders, so
+   * a frame shot on load lands wherever the story happened to be. The settle
+   * helper only waits on CSS animations and transitions, and this story is
+   * neither — it is `setTimeout` all the way down, which is the same reason the
+   * story's own tests read state instead of sleeping. Without this the sweep
+   * photographs a moving target and calls it "at rest".
+   *
+   * Matched against the terminal's own stage attribute, so this waits for the
+   * story to *finish*, not merely for the panel to have faded in.
+   */
+  atRest?: string;
   /** Why this entry is shaped the way it is. Read by the reviewer. */
   note?: string;
 }
@@ -91,7 +107,8 @@ export const SWEEP_ROUTES: readonly SweepRoute[] = [
     url: "/",
     heading: "Generate, execute, and evaluate AI-written code — automatically",
     auth: "guest",
-    note: "Carries every motion surface in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the typewriter.",
+    atRest: '[class*="animPanel"] [class*="animStatus_"][data-stage="ready"]',
+    note: "Carries the most motion surfaces in the app: Reveal stagger, .scrollReveal, ambient blobs/grid/code, useCountUp and the terminal story. Not all of them any more — the typewriter and the looping status chips were replaced by the terminal story in #352 (one chained timeline, a status tag per stage, results revealed as they resolve and a score ring), /demo gained its own Reveal stagger, ambient blobs and a cycling rail in #350, and /pricing has an animated disclosure, and the pipeline gained a sequential timeline plus a staggered step-card entrance in #353 (pipelineStepActive/connectorFlow/progressStages/stepCardIn). SWEEP_MOTION_SURFACES is the checkable version of that list. The panel also stopped being one of the hero's staggered Reveals in #352: it fades in itself now, because the story has to wait for that fade, so the entrance is a property of the panel rather than a fifth entry in the hero stagger — see `atRest` and the `home-reveal-transition` caption.",
   },
   {
     path: "/features",
@@ -289,15 +306,37 @@ export interface SweepStateProof {
   role?: string;
   name?: string;
   /**
-   * Exact text, and it has to be unambiguous.
+   * Exact text. Combine it with `role` to scope the proof into that element.
    *
    * The app says some things twice — a 422 renders the field's message in `Field`
-   * *and* a form-level alert — and a string that appears twice makes
-   * `getByText` a strict-mode violation instead of a proof. When a state needs to
-   * show a repeated string, the proof is the one that carries the field name, and
-   * `note` says why that is the reachable one.
+   * *and* in a form-level `role="alert"` — and a string that appears twice makes
+   * a bare `getByText` a strict-mode violation instead of a proof.
+   *
+   * The earlier answer to that was to match the copy carrying the field name
+   * (`identifier: …`), on the reasoning that it was unique. #326 stopped the
+   * banner from printing that internal key, so the string went to zero matches
+   * and the proof became unsatisfiable — the state silently stopped being
+   * photographable, on a harness whose whole premise is that it cannot silently
+   * pass. Scoping by role is the replacement: it keys off structure instead of
+   * copy, so a wording change does not invalidate it, and it can pin the message
+   * to the live region that announced it.
    */
   text?: string;
+  /**
+   * Where the copy comes from, when it is not in the app's source.
+   *
+   * Most proofs quote app copy and can be checked against `src/`. Some quote
+   * something the app renders but never *ships* — a server's validation message
+   * is the case in point: Pydantic's text arrives in the 422 at runtime, so no
+   * amount of source-grepping can confirm the app still renders it. Declaring
+   * `server` says "this is observable only in a browser", which is the truth
+   * #335 was allowed to paper over.
+   *
+   * Declaring it is not a way out of checking: the lock requires every proof to
+   * be either present in shipped source or declared here, so a state cannot
+   * quietly exempt itself.
+   */
+  origin?: "server";
   /** Why this proof, and not some other marker on the page. */
   note?: string;
 }
@@ -386,21 +425,32 @@ export const SWEEP_STATES: readonly SweepState[] = [
     route: "/login",
     drive: "login-field-errors",
     expect: {
-      text: "identifier: String should have at least 3 characters",
+      // The alert *and* the text it announced. `role` alone would prove only that
+      // something announced; the bare message alone is a strict-mode violation,
+      // because `Field` renders the same string. Together they pin it to the
+      // live region.
+      role: "alert",
+      text: "String should have at least 3 characters",
+      // Pydantic's text, delivered in the 422 body at runtime. The app has no
+      // copy of this string to keep in step — which is the point: it is why the
+      // proof has to be observable in a browser, and why this state went stale
+      // without any test noticing.
+      origin: "server",
       // The real Pydantic message for the real schema: `LoginRequest.identifier`
       // is `Field(min_length=3)`. A two-character identifier satisfies the
       // input's `required` but not the server, so this is reachable rather than
       // a payload invented to make a screenshot.
       //
-      // The `identifier: ` prefix is what makes this proof reachable. The bare
-      // message is on the page twice — in `Field` and in this alert — so
-      // `getByText` on the message alone is a strict-mode violation. The field's
-      // own copy has no hook to scope by: a sibling `<span>` with no id, no role,
-      // and an input with neither `aria-invalid` nor `aria-describedby`. That
-      // absence is the finding, and it is why the proof is the alert.
-      note: "The alert proves the 422 was mapped to a field; the frame also shows the field-level copy, which no locator can reach on its own.",
+      // This proof used to be the text carrying the `identifier: ` prefix, on
+      // the reasoning that the field's copy had no hook to scope by — a sibling
+      // `<span>` with no id and an input with no `aria-invalid`. Both of those
+      // were added in #323/#326, and the prefix was removed in #320/#326, so the
+      // proof matched nothing and this state quietly stopped capturing. See
+      // #335, and the `SweepStateProof` note for why the prefix was the wrong
+      // thing to have relied on.
+      note: "The alert proves the 422 surfaced as a live region; the frame also shows the field-level copy, which is now wired to its input via aria-describedby.",
     },
-    caption: "A 422 rendered as a per-field message, with the input outlined as invalid. Note for the report: the field error is not programmatically linked to the input — no aria-invalid, no aria-describedby — so a screen reader announces neither the invalid state nor the message.",
+    caption: "A 422 rendered as a per-field message: the input outlined and marked `aria-invalid`, its message linked by `aria-describedby` so it is announced with the field, and the form-level copy in a `role=\"alert\"` live region. (The original caption recorded the aria wiring as a missing-feature finding; #323/#326 added it.)",
   },
   {
     id: "login-submitting",
@@ -498,13 +548,69 @@ export interface SweepMotion {
 }
 
 /**
+ * Pages that animate something, whether or not the sweep can film it.
+ *
+ * The list exists because the previous version of this file asserted in a
+ * comment that motion was a `/` speciality — "Home is the only page with a
+ * motion system on it" — and that claim quietly went stale. `/pricing`'s FAQ
+ * disclosure has animated since #332, and because the comment said the matrix
+ * was small *by fact*, the next person to add a motion surface had no reason to
+ * revisit it. A claim in a comment cannot be checked; a row in a table can.
+ *
+ * Each page is either covered by a `SWEEP_MOTION` pass or listed in
+ * `SWEEP_MOTION_EXCEPTIONS` with its reason, and
+ * `src/pages/visual-sweep.lock.test.ts` checks both directions — so a new
+ * motion surface without either a pass or a written exception fails the build.
+ */
+export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = [
+  {
+    route: "/",
+    why: "Reveal staggers, the `.scrollReveal` view() reveals, the ambient layer, `useCountUp` and the pipeline timeline — all element-level, all seekable, all filmed. The pipeline (#353) is five cards sharing one `pipelineStepActive` keyframe with a per-step delay, four `connectorFlow` arrows and a stepped `progressBar`; all infinite, so the ambient filmstrip lands on the cycle at four phases and catches a different step lit in each. The step cards' `stepCardIn` entrance is finite and belongs to the transition pass's remit, though it fires on the `stepsGrid` `data-entered` gate rather than on a `Reveal` transition. The terminal story's own beats are NOT seekable and are not filmed as a filmstrip: they are a chained setTimeout driven by state, so there is no timeline to place a frame on. The seekable parts of it are filmed with the rest — the ring's `ringFill` and the status dot's pulse are both element-level CSS animations — and the JS-driven number and row reveals are asserted in e2e/terminal-story.spec.ts, which watches the DOM rather than the clock.",
+  },
+  {
+    route: "/demo",
+    why: "The `Reveal` stagger on the walkthrough steps and the header's ambient blobs, plus the `STEP_CYCLE_MS` rail that advances the highlighted step.",
+  },
+  {
+    route: "/pricing",
+    why: "The FAQ disclosure. Its glyph is element-level and seekable; its answer animates through `::details-content`, which no `Animation` object represents.",
+  },
+];
+
+/**
+ * Motion surfaces with no filmstrip, and why there isn't one.
+ *
+ * Not an oversight and not a to-do. `/pricing` is listed here because the
+ * honest pass for it does not exist yet, and a plausible-looking one would be
+ * worse than none:
+ *
+ * A `kind: "transition"` pass seeks each animation to a fraction of its own
+ * duration. On this page the census sees **one** animation — the glyph's
+ * `transform` — and the answer's `block-size` is not in the set at all, so the
+ * seek would place the glyph faithfully and leave the panel snapped. Every frame
+ * of that filmstrip would show an open row with an unfinished `+`, which reads
+ * as the exact desync #332 fixed. A reviewer could not tell it from a defect,
+ * and the report's own history already has one instance of a rule filing a
+ * filmstrip frame as a blocker.
+ *
+ * So the invariant is asserted where it can actually be observed — in
+ * `e2e/pricing.spec.ts`, which stretches the transition and compares the two
+ * halves' normalised progress against each other — and the blind spot is
+ * recorded in the manifest by `censusPseudoTransitions` so no run implies it was
+ * covered. A pass that samples the *value* rather than seeking the animation, the
+ * way `useCountUp` is handled, is the missing piece.
+ */
+export const SWEEP_MOTION_EXCEPTIONS: Readonly<Record<string, string>> = {
+  "/pricing":
+    "The FAQ answer animates via ::details-content, which getAnimations() never reports, so a seek-based filmstrip would place the glyph and leave the panel snapped — a sheet that looks like the #332 desync. Asserted numerically in e2e/pricing.spec.ts; the blind spot is recorded in the manifest by censusPseudoTransitions. #334.",
+};
+
+/**
  * The motion passes.
  *
- * Home is the only page with a motion system on it — `Reveal`, `.scrollReveal`,
- * the ambient layer and `useCountUp` all appear there and nowhere else — so the
- * matrix is small by fact, not by omission. A new page that adopts `Reveal`
- * without a pass here is invisible to the sweep, which is a deliberate gap the
- * report should name rather than something to paper over.
+ * `/` is the only page whose motion the sweep can place on a timeline, so the
+ * matrix is small by fact — but "small by fact" is a claim that expires, and it
+ * did: see `SWEEP_MOTION_SURFACES` above, which is the checkable version of it.
  */
 export const SWEEP_MOTION: readonly SweepMotion[] = [
   {
@@ -527,7 +633,7 @@ export const SWEEP_MOTION: readonly SweepMotion[] = [
     // reads as a cascade or as a jump.
     samples: [0, 0.5, 1],
     viewports: ["desktop-chromium"],
-    caption: "Transition filmstrip over the hero's four staggered Reveals, seeked with the Web Animations API. Seeking includes each element's transition-delay, so a delayed reveal is caught mid-flight instead of being reported as still-hidden.",
+    caption: "Transition filmstrip over the hero's staggered Reveals, seeked with the Web Animations API. Seeking includes each element's transition-delay, so a delayed reveal is caught mid-flight instead of being reported as still-hidden. The terminal panel is not in this filmstrip: it stopped being a hero Reveal in #352 and now runs its own entrance, which the story waits out before its first frame — that coupling is covered by the story tests, not here.",
   },
   {
     id: "home-ambient",
@@ -538,6 +644,27 @@ export const SWEEP_MOTION: readonly SweepMotion[] = [
     // run inside its disk budget.
     samples: [0, 0.25, 0.5, 0.75],
     viewports: ["desktop-chromium"],
-    caption: "Ambient filmstrip: the blueprint grid, the drifting code fragments and the hero colour blobs at four fixed phases. These never finish, so every static shot pauses them at phase 0 rather than catching them wherever the machine happened to be.",
+    caption: "Ambient filmstrip: the blueprint grid, the drifting code fragments, the hero colour blobs and the five-step pipeline timeline at four fixed phases — the pipeline is a 10s cycle, so those phases land on steps 1, 2, 3 and 4 in turn (#353). These never finish, so every static shot pauses them at phase 0 rather than catching them wherever the machine happened to be.",
+  },
+  {
+    id: "demo-reveal-transition",
+    route: "/demo",
+    kind: "transition",
+    // The same `Reveal` component Home films, here on the four walkthrough
+    // steps with a 90ms stagger, plus the header's entrance.
+    samples: [0, 0.5, 1],
+    viewports: ["desktop-chromium"],
+    caption: "Transition filmstrip over the walkthrough's four staggered Reveals, seeked with the Web Animations API. Seeking includes each element's transition-delay, so a delayed step is caught mid-flight instead of being reported as still-hidden.",
+  },
+  {
+    id: "demo-ambient",
+    route: "/demo",
+    kind: "ambient",
+    // Two `auroraDrift` blobs on the shared keyframe. Both are `infinite`, so
+    // the static at-rest captures pause them at phase 0 rather than catching
+    // them wherever the machine happened to be.
+    samples: [0, 0.25, 0.5, 0.75],
+    viewports: ["desktop-chromium"],
+    caption: "Ambient filmstrip: the two drifting colour blobs behind the demo header, at four fixed phases. Home's blueprint grid and code fragments are not repeated here — they are the same shared primitives, filmed once on `/`.",
   },
 ];

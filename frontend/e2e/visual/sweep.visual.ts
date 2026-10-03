@@ -207,19 +207,17 @@ test.describe("at rest", () => {
             viewport,
             page: route.path,
             state: `static ${route.path} @ scroll ${fraction}`,
-            settle: {
-              total: settle.total,
-              timeDriven: settle.timeDriven,
-              positionDriven: settle.positionDriven,
-              infinite: settle.infinite,
-              scrollY: settle.scrollY,
-              maxScroll: settle.maxScroll,
-              revealed: settle.revealed,
-              pendingReveals: settle.pendingReveals,
-              revealsTimedOut: settle.revealsTimedOut,
-              unquiesced: settle.unquiesced,
-              unsettledReveals: settle.unsettledReveals,
-            },
+            // Spread, not a hand-written list — and this is the *second* time
+            // this projection has cost a field. The interface above records the
+            // first: a local type, settled fields spelled out a third time, and
+            // a teardown that read `{}` for anything added later. Sharing the
+            // type fixed the compile error but not the omission, because every
+            // name in a hand-written list still exists in both shapes — so
+            // `pseudoTransitions` (#334) reached the manifest's *type* and not
+            // the manifest, which is the identical silent drop with an extra
+            // step. A spread cannot fall behind: a new census field is carried
+            // by construction, and a renamed one is a type error here.
+            settle: { ...settle },
           });
         }
 
@@ -403,9 +401,18 @@ test.describe("at rest", () => {
       // (the lock imports it), and that project has no Playwright types — so the
       // matrix cannot name `AriaRole` without dragging `@playwright/test` into the
       // app's type graph.
-      await expect(
-        page.getByRole(role as Parameters<Page["getByRole"]>[0], { name, exact: true }),
-      ).toBeVisible();
+      const loc = page.getByRole(role as Parameters<Page["getByRole"]>[0], {
+        name,
+        exact: true,
+      });
+      await expect(loc).toBeVisible();
+      // `text` alongside a `role` scopes the proof *into* that element rather
+      // than the whole page, which is how a string the app says twice becomes
+      // addressable: `getByText` alone is a strict-mode violation, and `role`
+      // alone would prove only that *something* announced. Asserting the exact
+      // text of the role-scoped element is stronger than either — it pins the
+      // message to the live region that announced it (#335).
+      if (text) await expect(loc).toHaveText(text);
       return;
     }
     if (text) {

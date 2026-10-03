@@ -1,0 +1,226 @@
+/*
+ * BadgeSelect — a responsive grid of radio options.
+ *
+ * The layout is `auto-fill` + `minmax` rather than a fixed column count, so the
+ * same markup reflows from 4-across to 2-across to 1-across without a media
+ * query and without a hardcoded breakpoint that the content does not control.
+ * The `min()` cap matters: without it a long language name ("Objective-C")
+ * would set the track's min-content width and the grid would overflow its
+ * container on a 360px screen rather than wrapping.
+ */
+
+.group {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.legend {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.options {
+  display: grid;
+  /* 11rem tracks, but never wider than the space actually available. */
+  grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
+  gap: var(--space-2);
+}
+
+/*
+ * `plain` appearance (issue #346): tags, not cards.
+ *
+ * The options stop being a grid of equal tracks and become a wrapping row, so
+ * three short labels sit next to each other instead of each claiming an 11rem
+ * column. The gap is a step up from the card grid's so the pills read as
+ * separate tags rather than as a run of text.
+ */
+.optionsPlain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  /* A radio option is a form control wearing a card's clothes, so it takes the
+     control token rather than --color-border (#345). At 1.50:1 on white the
+     unselected option is not visibly a target at all — the grid read as loose
+     text until the border had weight. */
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+/* `--option-accent` lets an option carry its own identity colour (a language's
+   brand colour) so the selected ring matches the badge it wraps. Falls back to
+   the primary token when an option has no accent. */
+.option {
+  --option-accent: var(--color-primary);
+}
+
+.option:hover {
+  border-color: var(--option-accent);
+}
+
+/* The radio is focusable and visible, so the focus ring is on the control
+   itself and never depends on `:has()`. */
+.radio {
+  flex: none;
+  margin: 0;
+  accent-color: var(--option-accent);
+  cursor: pointer;
+}
+
+.radio:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.optionSelected {
+  border-color: var(--option-accent);
+  background: var(--color-primary-light);
+  box-shadow: 0 0 0 1px var(--option-accent);
+}
+
+/*
+ * The plain variant drops every part of the card that made an option read as a
+ * widget: the border, the surface, the selected fill and the ring. What marks
+ * the selection is the `Badge` inside it, which already has its own
+ * difficulty-coloured tint — so a selected Easy is a *coloured* tag against two
+ * quieter ones, which is a clearer "this one" than a blue outline ever was.
+ *
+ * The radio is hidden rather than removed (see the `appearance` prop): it is
+ * the control that carries `name`/`value` and takes arrow keys, so it must stay
+ * focusable. The focus ring therefore has to move to the label, and it
+ * deliberately does *not* use `:has(:focus-visible)` — that would leave a
+ * keyboard user with no visible focus in a browser without `:has()` support.
+ */
+.optionPlain {
+  /* The containing block for `.radioHidden`'s overlay, and load-bearing: an
+   * absolutely positioned element with `inset: 0` resolves against its nearest
+   * *positioned* ancestor, and this label was not one. With nothing positioned
+   * above it, all three radios resolved against the initial containing block —
+   * measured in Chromium at 1280×720 each, i.e. the entire viewport — and stacked
+   * on top of each other with the last one (`hard`) on top. Clicking the "Easy"
+   * tag therefore checked "Hard", and Playwright reported it as
+   * `…<input value="hard">… intercepts pointer events`: every click anywhere on
+   * the page landed on the same radio.
+   *
+   * jsdom cannot see this — there is no layout, so no overlap and no hit testing,
+   * and the unit tests that click a tag pass happily. The browser is the arbiter:
+   * locked in `challenge-create.spec.ts`, which measures each radio's box against
+   * its own tag rather than the viewport. */
+  position: relative;
+
+  /* `min-height: auto` used to be here, undoing the `--control-height` that
+   * `.option` already sets (#364). That left the plain pill 25.2px tall — the
+   * badge's own height, because `padding` is 0 and `.radioHidden` is an
+   * `inset: 0` overlay, so the control's hit box *is* the label box. The visual
+   * sweep reported that as `touch-target-small` on all 12 instances: 55×25px on
+   * the challenge form, 46×25px on the filter bar.
+   *
+   * Inheriting the card variant's height fixes the hit box without touching what
+   * the user sees, and it is the number the rest of the UI is already built
+   * around:
+   *
+   * - 44px is `--control-height`, so the tag is the same height as the search
+   *   input, the language select and the difficulty filter's neighbours in
+   *   `Challenges`' toolbar. That toolbar is `align-items: center` with
+   *   `_searchWrap`, `_languageFilter` and `SELECT` all at 44px and only the pill
+   *   at 25.2px, so restoring 44px leaves the bar's height unchanged — the
+   *   acceptance criterion, and satisfied by making the outlier match its
+   *   neighbours rather than by compensating with the row `gap`. Gap is the
+   *   *horizontal* space between pills and is untouched by a height change, so
+   *   the shrink-and-reduce-the-gap trick is not needed here.
+   * - 44px is also WCAG 2.5.5 AAA, and 25.2px was already over the 24px AA
+   *   floor, so the sweep filed it minor. It is a real target-size observation,
+   *   not a defect, and it was the only `touch-target-small` in the suite.
+   *
+   * The badge keeps its own 23.2px: `padding: 0` below is what stops this from
+   * rendering as a fat tag, so the pill's *rendered* size is unchanged and only
+   * its activation area grows. A pseudo-element overlay would have achieved the
+   * same box while leaving a real gap between neighbouring targets; the height
+   * is the honest version, and it costs no markup. */
+  padding: 0;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  /* Keeps the ring off the pill's own edge, so it reads as a focus indicator
+     around the tag rather than as a border it happens to have. */
+  outline-offset: 2px;
+}
+
+.optionPlain:hover {
+  border-color: transparent;
+}
+
+.optionPlain.optionSelected {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+
+.optionPlain:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Visually gone, still a real focusable radio. `appearance: none` removes the
+   native glyph without removing the element, so it keeps its name, value,
+   checked state and keyboard behaviour. `inset: 0` plus `width/height: 100%`
+   makes the whole label clickable as the control's hit area. */
+.radioHidden {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/*
+ * The body is allowed to shrink so a long option name truncates with an
+ * ellipsis instead of forcing the track wider. `min-width: 0` on the flex child
+ * is what actually permits that — without it the child refuses to shrink below
+ * its content and the grid overflows.
+ */
+.body {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option {
+    transition: none;
+  }
+}

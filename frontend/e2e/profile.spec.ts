@@ -1,0 +1,883 @@
+import { expect, test, type Page } from "@playwright/test";
+import { expectReadable } from "./helpers/color";
+import { CHALLENGE_STATS, mockApi } from "./data";
+
+/**
+ * `/profile`, behind auth, and specifically the "evaluations by challenge" card
+ * grid (issue #347).
+ *
+ * The unit tests cover what the card *says*. They cannot cover the three
+ * properties that are the whole point of the redesign, because all three are
+ * properties of a rendered pixel rather than of a DOM tree:
+ *
+ *  1. **The whole card is the hit area.** The stretched `::after` is a layout
+ *     claim — only a real box can confirm the overlay actually covers the card
+ *     and that a click near the bottom edge navigates.
+ *  2. **The card clears the 44px tap target** on a phone (2.5.5 AAA), which is
+ *     again a measurement.
+ *  3. **The language accent is per-card.** Computed style in both themes, since
+ *     an accent that vanishes against the dark surface would be invisible here
+ *     and fine in jsdom.
+ *
+ * Also asserted here rather than in jsdom: that the accent *bar* is one element
+ * and not two. An earlier version of this card applied its class to both the
+ * `<li>` and the inner `Card`, which drew the bar and the wash twice — visible
+ * only as a rendered double rule.
+ */
+
+async function openProfile(page: Page, theme: "light" | "dark" = "light") {
+  // Set the theme before the app boots rather than after a `goto` + `reload`.
+  // The reload loaded a second time just to pick up a value the first load could
+  // have had, and on this page it cost a full re-fetch of everything the page
+  // shows.
+  await page.addInitScript((t) => window.localStorage.setItem("theme", t), theme);
+  await mockApi(page, undefined, { auth: true });
+  await page.goto("/profile");
+  await expect(page.getByRole("heading", { name: "Evaluations by challenge" })).toBeVisible();
+  // Wait for the *card grid*, not for `getByRole("listitem")`: the profile
+  // renders two other lists (challenges, submissions) whose items are listitems
+  // too, so that locator resolves long before the stats request lands and every
+  // measurement below silently ran against the empty state. The stats fetch is
+  // also deliberately non-fatal — the dashboard still works without it — so
+  // nothing else announces it either.
+  await expect(page.locator('[class*="statsItem"]').first()).toBeVisible();
+}
+
+/** The card element: the `<li>` is the grid item, the inner div the card. */
+function card(page: Page, title: string): ReturnType<Page["locator"]> {
+  return page
+    .locator('[class*="statsItem"]')
+    .filter({ has: page.getByRole("link", { name: title }) });
+}
+
+test.describe("Profile evaluation cards", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("the whole card is the click target, not just the title", async ({ page }) => {
+    await openProfile(page);
+    const first = card(page, "Two Sum");
+
+    // The title link's overlay has to cover the card's own box, not just sit
+    // under the text. This is the measurement jsdom cannot make.
+    const boxes = await first.evaluate((el) => {
+      const link = el.querySelector<HTMLElement>('[class*="statsTitle"]')!;
+      const cardBox = el.getBoundingClientRect();
+      const after = getComputedStyle(link, "::after");
+      return {
+        card: { w: cardBox.width, h: cardBox.height },
+        afterPosition: after.position,
+        afterInset: [after.top, after.right, after.bottom, after.left].join(" "),
+      };
+    });
+    expect(boxes.afterPosition).toBe("absolute");
+    expect(boxes.afterInset).toBe("0px 0px 0px 0px");
+    // Enough room to be a real target, not a sliver.
+    expect(boxes.card.w).toBeGreaterThan(200);
+    expect(boxes.card.h).toBeGreaterThan(120);
+
+    // And the behaviour: a click low in the card, nowhere near the title, has to
+    // navigate. Clicking the title would pass even with the overlay removed, so
+    // the click position is the part that matters.
+    //
+    // Centre the card, then measure. `scrollIntoViewIfNeeded` is not enough: it
+    // does nothing when the card is *partly* visible, and the click point is 8px
+    // off its bottom edge — which then sat below the 720px fold, so the click
+    // landed on nothing at all.
+    await first.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const box = (await first.boundingBox())!;
+    const bottom = { x: box.x + box.width / 2, y: box.y + box.height - 8 };
+
+    // Now the behaviour, with the bubble deliberately in the way: hover the
+    // bottom of the card so the description bubble is open over the click point,
+    // then click anyway. The bubble does not take the pointer
+    // (`Tooltip`'s `passThrough`), so the click reaches the stretched link
+    // underneath.
+    //
+    // This is not a detail. Without `pointer-events: none` on the bubble, the
+    // click was cancelled outright: mousedown focused the title, the focus opened
+    // the bubble, the bubble covered the point, and mouseup landed on a
+    // different element than mousedown — so the browser never fired a click and
+    // the card silently stopped responding to the mouse. Found by clicking a real
+    // card in a real browser, not by a DOM assertion.
+    await page.mouse.move(bottom.x, bottom.y);
+    await expect(first.getByRole("tooltip")).toBeVisible();
+
+    await page.mouse.click(bottom.x, bottom.y);
+    await expect(page).toHaveURL(`/challenges/${CHALLENGE_STATS[0]!.challenge_id}`);
+  });
+
+  test("each card is tinted with its own language, in both themes", async ({ page }) => {
+    for (const theme of ["light", "dark"] as const) {
+      await openProfile(page, theme);
+      const accents = await page.locator('[class*="statsItem"]').evaluateAll((els) =>
+        els.map(
+          (el) =>
+            getComputedStyle(el)
+              .getPropertyValue("--card-accent")
+              .trim(),
+        ),
+      );
+      expect(accents).toHaveLength(CHALLENGE_STATS.length);
+      // Two different languages must not share one accent, or the language
+      // identity the redesign is built on is not there.
+      expect(new Set(accents).size).toBe(2);
+      for (const accent of accents) {
+        expect(accent).toMatch(/^#[0-9A-Fa-f]{6}$/);
+      }
+      // The bar is a pseudo-element, so it is what carries the colour visibly.
+      const bars = await page.locator('[class*="statsItem"]').evaluateAll((els) =>
+        els.map((el) => {
+          const s = getComputedStyle(el, "::before");
+          return { content: s.content, width: s.width, background: s.backgroundColor };
+        }),
+      );
+      for (const bar of bars) {
+        // One rule, not two: the bug that put the class on both the <li> and
+        // the inner Card drew the accent bar twice.
+        expect(bar.content).toBe('""');
+        expect(Number.parseFloat(bar.width)).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  test("the card is a usable tap target on a phone", async ({ page }) => {
+    await openProfile(page);
+    const box = (await card(page, "Two Sum").boundingBox())!;
+    // 2.5.5 AAA wants 44px. The whole card is the target, so the card's height
+    // is the number that has to clear it — not the title's line box.
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  });
+
+  test("the truncated description is still in full for a keyboard reader", async ({ page }) => {
+    await openProfile(page);
+    const first = card(page, "Two Sum");
+
+    // Clamped by CSS, so the text is all there; only the visible box is short.
+    const text = await first.locator('[class*="statsDescription"]').textContent();
+    expect(text).toContain("the same element may not be used twice");
+    const clipped = await first
+      .locator('[class*="statsDescription"]')
+      .evaluate((el) => el.scrollHeight > el.clientHeight);
+    expect(clipped).toBe(true);
+
+    // And the tooltip carries it without a pointer. Resolved by content: the
+    // bubble belongs to the description, and the card is what triggers it.
+    const bubble = first.getByRole("tooltip").filter({
+      hasText: "the same element may not be used twice",
+    });
+    await expect(bubble).toBeHidden();
+
+    // Hovering the card is the mouse path, and it has to work: the stretched
+    // link is a transparent box over the whole surface, so a tooltip hung on the
+    // description alone would never see a pointer.
+    await first.hover();
+    await expect(bubble).toBeVisible();
+
+    // And the bubble is actually placed below its trigger, not stacked on it.
+    // jsdom does no layout, so `position: relative` on the Tooltip's wrapper is
+    // invisible to the unit tests; only a rendered box can tell.
+    const geometry = await first.evaluate((el) => {
+      const trigger = el.querySelector<HTMLElement>('[class*="statsDescription"]')!;
+      const tip = el.querySelector<HTMLElement>('[role="tooltip"]')!;
+      const t = trigger.getBoundingClientRect();
+      const b = tip.getBoundingClientRect();
+      return { gap: b.top - t.bottom, overlap: b.top < t.bottom && b.bottom > t.top };
+    });
+    expect(geometry.overlap).toBe(false);
+    // The gap is the point, not just "below": it proves the bubble anchors to
+    // its *trigger*. Drop `position: relative` from the Tooltip's wrapper and the
+    // bubble still lands below the trigger — 102px lower, measured against the
+    // card instead, overlapping the stats it was meant to sit under. jsdom does
+    // no layout, so only a rendered box catches that.
+    expect(geometry.gap).toBeGreaterThanOrEqual(0);
+    expect(geometry.gap).toBeLessThan(16);
+
+    await page.keyboard.press("Escape");
+    await expect(bubble).toBeHidden();
+  });
+
+  test("a click on the title navigates instead of popping a tooltip open", async ({ page }) => {
+    await openProfile(page);
+    const first = card(page, "Two Sum");
+
+    await first.getByRole("link", { name: "Two Sum" }).click();
+    await expect(page).toHaveURL(`/challenges/${CHALLENGE_STATS[0]!.challenge_id}`);
+    // Reaching here is the assertion: a mouse press focuses the title, and if
+    // that opened the bubble the click would be cancelled before it navigated.
+  });
+
+  test("the keyboard reaches the description too, and Escape dismisses it", async ({ page }) => {
+    await openProfile(page);
+    const first = card(page, "Two Sum");
+    const bubble = first.getByRole("tooltip").filter({
+      hasText: "the same element may not be used twice",
+    });
+
+    await first.getByRole("link", { name: "Two Sum" }).focus();
+    await expect(bubble).toBeVisible();
+
+    // 1.4.13 Dismissable: Escape hides it without moving focus.
+    await page.keyboard.press("Escape");
+    await expect(bubble).toBeHidden();
+    await expect(first.getByRole("link", { name: "Two Sum" })).toBeFocused();
+  });
+
+  test("focusing the card rings the title, once, in the app's own geometry", async ({ page }) => {
+    await openProfile(page);
+    const title = card(page, "Two Sum").getByRole("link", { name: "Two Sum" });
+    await title.focus();
+
+    // The title link is the card's one focusable element, so the shared
+    // treatment in `styles/focus.css` rings it — the same 3px
+    // `--color-focus-ring` every other control uses. A ring on the card itself
+    // needs `outline: none` on the title to stop a second ring appearing, and
+    // `styles/focus-ring.test.ts` is right to refuse that.
+    const ring = await title.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { outline: s.outline, after: getComputedStyle(el, "::after").boxShadow };
+    });
+    expect(ring.outline).not.toBe("none");
+    expect(ring.outline).toMatch(/solid/);
+    // Exactly one indicator: the stretched pseudo-element carries no ring of its
+    // own, so the shared outline is the only focus signal on the card.
+    expect([undefined, "", "none"]).toContain(ring.after);
+  });
+
+  test("says 'not measured' instead of printing a zero duration", async ({ page }) => {
+    await openProfile(page);
+    // The Go card's run produced no result, so there is no duration. A `0` would
+    // read as "instant", which is a different and wrong claim.
+    const go = card(page, "Concurrent Web Scraper With Retries");
+    await expect(go).toContainText("—");
+    await expect(go).toContainText("1 failed");
+  });
+
+  test("names each stat, so the numbers are not just digits", async ({ page }) => {
+    await openProfile(page);
+    const list = card(page, "Two Sum").locator("dl");
+    await expect(list.getByRole("term")).toHaveText([
+      "Score",
+      "Best",
+      "Runs",
+      "Last run",
+    ]);
+    // Completed of total, not the total alone — the same numbers the old card
+    // made the reader subtract.
+    await expect(list.getByRole("definition")).toHaveText(["75%", "100%", "3/4", "1.2s"]);
+  });
+
+  test("does not overflow a narrow viewport", async ({ page }) => {
+    // Set the width here rather than relying on the project: the same spec runs
+    // on the 1280px desktop profile, where four columns is the correct layout
+    // and asserting one would be asserting the phone on a desktop.
+    await page.setViewportSize({ width: 360, height: 780 });
+    await openProfile(page);
+    // One card per row on a phone, and the stat row wraps rather than squeezing
+    // three columns of four characters.
+    const track = await page
+      .locator('[class*="statsGrid"]')
+      .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+    expect(track).toBe(1);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    );
+    expect(overflow).toBe(true);
+  });
+});
+
+/**
+ * The two dashboard lists (issue #348).
+ *
+ * Everything here is a measurement, because "aligned" is not a property a DOM
+ * assertion can make. The unit tests check that each card *says* the right
+ * things; what this file has to settle is that the two columns share one height
+ * rhythm, and that is a box-model fact.
+ *
+ * The fixture carries submissions of deliberately mixed height — two completed
+ * with results (test count, duration, tooltip and share controls) and one still
+ * processing with none of them. A fixture of uniform rows cannot tell a fixed
+ * rhythm from an accidental one, and the old layout's bug only appeared in the
+ * mixed case.
+ *
+ * Three defects were found here that no unit test could see, each of which
+ * asserted the card was aligned while it was not:
+ *
+ *  1. Each column sized itself to its own tallest card — 224px against 233px — so
+ *     *every* row sat 9px off, not merely the last.
+ *  2. The "My challenges" column header was 44px and the other 24px, because one
+ *     holds a `New` button and the other only a heading. That alone pushed the
+ *     right column's first card 20px above the left one's, with the cards
+ *     themselves irrelevant to it.
+ *
+ * The first was invisible to the unit tests and the second to every test but this
+ * one, which is the argument for measuring rather than asserting on the DOM.
+ */
+async function openLists(page: Page, theme: "light" | "dark" = "light") {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript((t) => window.localStorage.setItem("theme", t), theme);
+  await mockApi(page, undefined, { auth: true });
+  await page.goto("/profile");
+  // Proved, not assumed. The app re-applies the stored theme on boot, so a run
+  // that thinks it is measuring dark while measuring light would report the
+  // light theme's numbers as if they were the dark theme's — every assertion
+  // below silently about the wrong theme. The same trap `contrast.spec.ts`
+  // documents, and the reason it checks the attribute rather than setting it.
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+  // Both columns in full, not just one card. The submissions' shortest card is
+  // the processing one and the challenges' tallest is a two-line title, so waiting
+  // on a single card measures the page mid-load.
+  await expect(page.getByRole("heading", { name: "Recent submissions" })).toBeVisible();
+  await expect(page.locator('[class*="listCard"]')).toHaveCount(6);
+}
+
+/**
+ * A submission row, found by the challenge it names.
+ *
+ * #361: `SubmissionRead` now carries `challenge_title` and the card renders it,
+ * so a row can be addressed the way a reader finds it — by the challenge. The
+ * status badge is deliberately no longer the key: "completed" is not a name,
+ * and it is the one field that says nothing about *which* run this is.
+ */
+function submissionRow(page: Page, title: string) {
+  return column(page, "Recent submissions").filter({
+    has: page.getByText(title, { exact: true }),
+  });
+}
+
+/** One column's cards, scoped by its heading. */
+function column(page: Page, heading: string) {
+  return page
+    .getByRole("heading", { name: heading })
+    .locator("xpath=ancestor::section[1]")
+    .locator('[class*="listCard"]');
+}
+
+/** `top`/`bottom` for every card in a column, in document order. */
+async function edges(page: Page, heading: string) {
+  return column(page, heading).evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
+    }),
+  );
+}
+
+/** True when the two lists sit side by side rather than stacked. */
+async function sideBySide(page: Page) {
+  return page.evaluate(() => {
+    const pick = (h2: string) =>
+      Array.from(document.querySelectorAll("section")).find(
+        (s) => s.querySelector("h2")?.textContent === h2,
+      )!.getBoundingClientRect();
+    return Math.abs(pick("My challenges").top - pick("Recent submissions").top) < 4;
+  });
+}
+
+/**
+ * The page's own row of four stat tiles (#376).
+ *
+ * `.statsRow` was `repeat(4, 1fr)`, which made sense on a desktop and not on a
+ * phone: at 412px each tile got 79px and every label wrapped to two lines, so
+ * the widest label set the height of the whole row. The rule is now
+ * `repeat(auto-fit, minmax(10.5rem, 1fr))`, which derives the column count from
+ * the label's own width.
+ *
+ * What this asserts is the *invariant*, not the column count. A test that
+ * counted columns would be asserting the implementation: `auto-fit` also
+ * reports collapsed zero-width tracks in `gridTemplateColumns` (six of them at
+ * 1280px, for four tiles), and a future `minmax` retune would fail a count
+ * assertion without the page being any worse. The claim worth locking is that
+ * **no tile is ever narrower than the width its label needs**, which is the
+ * thing the two-line row came from.
+ *
+ * The label's own width sets the floor, and that floor sets the density of the
+ * whole row: 141px lets a 360px phone fit two columns, where the 166px floor a
+ * 131.9px label ("Challenges created") forced fitted only one. #383 shortened
+ * that label, so the floor is now set by "Completion rate" at 107.2px.
+ *
+ * The floor is read from `--tile-min` at every assertion rather than hardcoded
+ * here. It used to be a `LABEL_FLOOR_PX = 168` constant in this file, which is a
+ * second source of truth for a number that lives in the stylesheet — and it has
+ * now needed editing twice because of it. Reading it back is safe precisely
+ * because the next test proves the floor is *sufficient*: if the stylesheet's
+ * floor were too small, that test fails on the wrapping label rather than
+ * quietly agreeing with itself.
+ *
+ * The widths are the ones where something changes: 360px is where two columns
+ * start fitting again, 412px is the Pixel 7, and 700px is the top of the band
+ * where four columns used to wrap even though the row had plenty of width.
+ */
+const WIDTHS = [320, 360, 412, 480, 560, 640, 700, 768, 900, 1280];
+
+/**
+ * The `--tile-min` token resolved to px, read from the page rather than
+ * duplicated here. Multiplied by the root font size because the token is rem.
+ */
+const floorPx = (page: Page): Promise<number> =>
+  page.evaluate(() => {
+    const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+    const raw = parseFloat(getComputedStyle(row).getPropertyValue("--tile-min"));
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return +(raw * rootPx).toFixed(1);
+  });
+
+test.describe("Profile stat tiles size themselves to their labels (#376, #383)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("no label wraps, at any width", async ({ page }) => {
+    await openProfile(page);
+
+    const report: string[] = [];
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      // Resized in place rather than re-navigated: the grid reflows on a
+      // viewport change and the tiles are already mounted, so this measures the
+      // same four elements at each width instead of four fresh fetches.
+      await page.waitForFunction(() => {
+        const row = document.querySelector('[class*="statsRow"]');
+        return row !== null && row.children.length === 4;
+      });
+
+      const measured = await page.evaluate(() => {
+        const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+        const tiles = [...row.children];
+        return {
+          offenders: tiles
+            .map((tile) => {
+              const label = tile.querySelector('[class*="statLabel"]') as HTMLElement;
+              const lineHeight = parseFloat(getComputedStyle(label).lineHeight);
+              return {
+                label: label.textContent ?? "",
+                width: +tile.getBoundingClientRect().width.toFixed(1),
+                lines: Math.round(label.getBoundingClientRect().height / lineHeight),
+              };
+            })
+            .filter((t) => t.lines > 1),
+          narrowest: +Math.min(...tiles.map((t) => t.getBoundingClientRect().width)).toFixed(1),
+          // Distinct x positions, i.e. tiles per row — not `gridTemplateColumns`,
+          // which reports `auto-fit`'s collapsed tracks too.
+          perRow: new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().x))).size,
+          horizontalScroll:
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+
+      report.push(`${String(width).padStart(4)}px  ${measured.perRow}/row  narrowest ${measured.narrowest}px`);
+      expect(
+        measured.offenders,
+        `at ${width}px these labels wrap: ${measured.offenders
+          .map((o) => `${o.label} (${o.lines} lines in ${o.width}px)`)
+          .join(", ")}`,
+      ).toEqual([]);
+      const floor = await floorPx(page);
+      expect(
+        measured.narrowest,
+        `at ${width}px a tile is ${measured.narrowest}px wide, under the ${floor}px floor its labels need`,
+      ).toBeGreaterThanOrEqual(floor - 0.5);
+      expect(measured.horizontalScroll, `at ${width}px the page scrolls sideways`).toBeLessThanOrEqual(1);
+    }
+
+    // Written to the report so a failure names the shape of the row rather than
+    // just the first bad width.
+    test.info().annotations.push({ type: "tiles", description: report.join(" | ") });
+  });
+
+  test("every label still fits on one line at the declared floor", async ({ page }) => {
+    // The check a viewport sweep cannot make. `auto-fit` expands tracks to fill
+    // the row, so a floor a few pixels under what the label needs does not
+    // produce a visibly narrow tile everywhere — it produces a wrap in a narrow
+    // *band* of viewport widths, where the row just barely fits one more column
+    // than it should. A sweep sampled coarsely skips that band and passes on a
+    // row that still wraps. (A 164px floor against a 10-width sweep was one.)
+    //
+    // So the floor is tested directly: the row is forced to a single track of
+    // exactly the floor, and each label is asked whether it wraps there. Reading
+    // the floor and the label's width and comparing those two numbers does not
+    // work — the label's text and the tile's padding are both inside that width,
+    // and a floor derived from only the label it was shortened for wrapped five
+    // of the eleven widths below. Measuring the rendered result avoids having to
+    // know which of the two the boundary came from.
+    await openProfile(page);
+
+    const measured = await page.evaluate(() => {
+      const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+      const computed = getComputedStyle(row);
+      const floor =
+        parseFloat(computed.getPropertyValue("--tile-min")) *
+        parseFloat(getComputedStyle(document.documentElement).fontSize);
+
+      // One track, exactly the floor. The tiles then stack, which is irrelevant
+      // here — what matters is the width each one gets.
+      row.style.gridTemplateColumns = `${floor}px`;
+      const labels = [...row.querySelectorAll('[class*="statLabel"]')] as HTMLElement[];
+      const rows = labels.map((label) => {
+        const lineHeight = parseFloat(getComputedStyle(label).lineHeight);
+        return {
+          text: label.textContent ?? "",
+          lines: Math.round(label.getBoundingClientRect().height / lineHeight),
+          tileWidth: +(label.parentElement as HTMLElement).getBoundingClientRect().width.toFixed(1),
+        };
+      });
+      row.style.gridTemplateColumns = "";
+      return { floor: +floor.toFixed(1), rows };
+    });
+
+    const wrapped = measured.rows.filter((r) => r.lines > 1);
+    expect(
+      wrapped,
+      `at the declared floor of ${measured.floor}px these labels wrap: ` +
+        wrapped.map((w) => `"${w.text}" (${w.lines} lines in a ${w.tileWidth}px tile)`).join(", ") +
+        `. Raise --tile-min in Profile.module.css, or shorten the label.`,
+    ).toEqual([]);
+  });
+
+  test("the floor buys two columns on a 360px phone", async ({ page }) => {
+    // The point of #383. The two tests above only say nothing wraps; on their own
+    // they are also satisfied by a single column, which is what the 166px floor
+    // produced — legible, 485px tall, wasting half the row. A floor is a claim
+    // about density as much as about legibility, so the density gets asserted:
+    // two columns of 148px at 360px, which is what a 141px floor buys.
+    await openProfile(page);
+    await page.setViewportSize({ width: 360, height: 900 });
+
+    const measured = await page.evaluate(() => {
+      const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+      const tiles = [...row.children];
+      return {
+        perRow: new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().x))).size,
+        rowH: Math.round(row.getBoundingClientRect().height),
+      };
+    });
+
+    expect(measured.perRow, "360px should fit two columns").toBe(2);
+    expect(measured.rowH, "the row should stay one tile tall").toBeLessThanOrEqual(260);
+  });
+
+  test("the row still clears the tap target, and shows all four", async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 900 });
+    await openProfile(page);
+
+    const measured = await page.evaluate(() => {
+      const row = document.querySelector('[class*="statsRow"]') as HTMLElement;
+      return [...row.children].map((tile) => {
+        const r = tile.getBoundingClientRect();
+        return { w: +r.width.toFixed(1), h: +r.height.toFixed(1) };
+      });
+    });
+
+    expect(measured, "the tile row lost a tile").toHaveLength(4);
+    const floor = await floorPx(page);
+    // A `StatCard` is not itself a control, so this is about legibility of the
+    // hit area rather than a button: nothing here is interactive, and the audit
+    // that does care about 44px covers the cards further down this page.
+    for (const [i, t] of measured.entries()) {
+      expect(t.w, `tile ${i} is ${t.w}px wide, under the ${floor}px floor`).toBeGreaterThanOrEqual(floor - 0.5);
+      expect(t.h, `tile ${i} is ${t.h}px tall`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
+
+test.describe("Profile list alignment", () => {
+  test("both columns give every card the same height", async ({ page }) => {
+    await openLists(page);
+    for (const heading of ["My challenges", "Recent submissions"]) {
+      const heights = await column(page, heading).evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().height)),
+      );
+      expect(heights.length, `${heading} should have cards`).toBeGreaterThan(0);
+      // A tolerance rather than exact equality: sub-pixel rounding on a
+      // fractional column width is real, and `toBe` would fail on the browser's
+      // arithmetic instead of on a regression.
+      expect(
+        Math.max(...heights) - Math.min(...heights),
+        `${heading} card heights differ: ${heights.join(", ")}`,
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("the two columns' cards line up row by row", async ({ page }) => {
+    await openLists(page);
+    if (!(await sideBySide(page))) {
+      test.skip(true, "one column at this width — there is nothing to line up");
+    }
+    // The actual issue: side by side, the columns must not stair-step. Compared
+    // row by row rather than as a set, because "aligned" for two lists of
+    // possibly-unequal length means the rows they share are in the same place.
+    expect(await edges(page, "My challenges")).toEqual(await edges(page, "Recent submissions"));
+  });
+
+  test("the fixture's two columns really are different heights", async ({ page }) => {
+    // A guard on the guard. Every alignment assertion above is satisfied by two
+    // columns of *identical* content, so a fixture that accidentally equalised
+    // them would leave the whole file passing while testing nothing. Measured
+    // with the floor lifted: if the unfloored columns are the same height, the
+    // alignment tests have no defect left to find and the fixture needs fixing
+    // rather than the assertions.
+    await openLists(page);
+    const natural = await page.evaluate(() => {
+      document
+        .querySelectorAll<HTMLElement>('[class*="listCard"]')
+        .forEach((card) => {
+          card.style.minHeight = "0";
+        });
+      const tallest = (heading: string) => {
+        const section = Array.from(document.querySelectorAll("section")).find(
+          (s) => s.querySelector("h2")?.textContent === heading,
+        )!;
+        return Math.max(
+          ...Array.from(
+            section.querySelectorAll<HTMLElement>('[class*="listCard"]'),
+          ).map((card) => card.getBoundingClientRect().height),
+        );
+      };
+      return {
+        ch: Math.round(tallest("My challenges")),
+        sub: Math.round(tallest("Recent submissions")),
+      };
+    });
+    expect(
+      Math.abs(natural.ch - natural.sub),
+      `columns are the same height unfloored (${natural.ch}px each) — the alignment assertions are vacuous`,
+    ).toBeGreaterThan(0);
+  });
+
+  test("no card's controls overhang its own box", async ({ page }) => {
+    // A standing invariant rather than a caught bug: a card whose contents extend
+    // past its bottom is not aligned with anything, however uniform its
+    // neighbours are. This was checked against the pre-fix layout too and passed
+    // there as well — an earlier draft of this file credited it with catching a
+    // 9px overhang that measurement showed never happened, so the claim was
+    // withdrawn along with the CSS change made to address it. Kept because a
+    // future layout change could reintroduce it.
+    await openLists(page);
+    const overhang = await page.locator('[class*="listCard"]').evaluateAll((els) =>
+      els.flatMap((el) => {
+        const card = el.getBoundingClientRect();
+        return Array.from(el.querySelectorAll('[class*="listFoot"], [class*="listStats"], [class*="listShare"]'))
+          .map((child) => {
+            const r = child.getBoundingClientRect();
+            return Math.round(r.bottom - card.bottom);
+          })
+          .filter((over) => over > 1);
+      }),
+    );
+    expect(overhang, "controls sticking out past their card").toEqual([]);
+  });
+
+  test("the columns stay uniform when they stack into one", async ({ page }) => {
+    // Below the two-column breakpoint the cross-column assertion cannot apply, so
+    // each column is held to its own internal uniformity — and to the 44px AAA tap
+    // target, which is the one requirement a phone actually adds.
+    // Sets the viewport itself rather than relying on which project is running:
+    // as a desktop-only assertion it would silently pass on a wide screen and as
+    // an unconditional one it fails on a wide screen. Asking for the phone width
+    // makes it mean the same thing in both projects.
+    await page.setViewportSize({ width: 412, height: 915 });
+    await openLists(page);
+    expect(await sideBySide(page), "columns should be stacked at 412px").toBe(false);
+    for (const heading of ["My challenges", "Recent submissions"]) {
+      const boxes = await column(page, heading).evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { h: Math.round(r.height), w: Math.round(r.width) };
+        }),
+      );
+      expect(
+        Math.max(...boxes.map((b) => b.h)) - Math.min(...boxes.map((b) => b.h)),
+        `${heading} heights differ once stacked`,
+      ).toBeLessThanOrEqual(1);
+      expect(Math.min(...boxes.map((b) => b.w))).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("a completed row carries its test count, duration and breakdown", async ({ page }) => {
+    await openLists(page);
+    const row = submissionRow(page, "Two Sum");
+    // `exact`: the bubble's own text contains the word "Tests" ("118 of 120 tests
+    // passed"), and a substring match would make this assert against whichever of
+    // the two happened to come first in the DOM.
+    await expect(row.getByText("Tests", { exact: true })).toBeVisible();
+    await expect(row.getByText("118/120")).toBeVisible();
+    await expect(row.getByText("Duration")).toBeVisible();
+    await expect(row.getByText("4.2s")).toBeVisible();
+    // The digest the count stands in for, without a mouse in the way.
+    await row.getByText("118/120").hover();
+    await expect(page.getByRole("tooltip")).toContainText("118 of 120 tests passed");
+    await expect(page.getByRole("tooltip")).toContainText("FAILED test_duplicate_indices");
+  });
+
+  test("the breakdown is reachable and dismissible from the keyboard", async ({ page }) => {
+    // "Keyboard-accessible" here is a claim about a real tab stop, not about an
+    // aria attribute that happens to be present. `Tooltip` moves the stop onto its
+    // own wrapper because a `<dd>` cannot hold focus.
+    await openLists(page);
+    const value = page.locator('[class*="statMore"]').first();
+    // Focused on whatever actually carries the tab stop, rather than assuming
+    // the value element is it: `Tooltip` moves the stop to its wrapper because a
+    // `<dd>` cannot hold focus. Focusing the wrong node would make this test pass
+    // for the wrong reason, or fail for one.
+    await value.evaluate((el) => {
+      const stop = (el.closest("[tabindex]") ?? el) as HTMLElement;
+      stop.focus();
+    });
+    // The bubble is a *sibling* of the trigger inside the wrapper, not an
+    // ancestor, so it is asserted by role rather than by walking up from the
+    // value. The closed bubble is `visibility: hidden`, which is what makes the
+    // visible/hidden pair below a real check of the open state.
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toBeHidden();
+  });
+
+  test("the breakdown bubble does not swallow the click meant for the row", async ({ page }) => {
+    // #347's bug in a new place. Asserted by the navigation itself: a full-card
+    // overlay still lets the topmost element win, so "does the click work" is not
+    // a sufficient probe on its own.
+    await openLists(page);
+    const row = submissionRow(page, "Two Sum");
+    await row.getByText("118/120").hover();
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await row.locator('[class*="listLink"]').click({ position: { x: 40, y: 8 } });
+    await expect(page).toHaveURL(/\/submissions\//);
+  });
+
+  test("a submission row is named by its challenge, not its status", async ({ page }) => {
+    await openLists(page);
+    // The issue: a card whose only text was a status pill and a runner string,
+    // so nothing on it said which challenge the run belonged to. Every row now
+    // names it — including the in-flight one, which has no score, no test count
+    // and no duration to identify it by.
+    for (const title of ["Two Sum", "LRU Cache", "Edit Distance"]) {
+      await expect(
+        submissionRow(page, title).getByText(title, { exact: true })
+      ).toBeVisible();
+    }
+    // The link is what a keyboard or screen reader lands on, so its accessible
+    // name has to carry the challenge too — not just the score and a duration.
+    await expect(
+      column(page, "Recent submissions").getByRole("link", { name: /^Two Sum/ })
+    ).toBeVisible();
+    // The title and the runner are two *lines*, not one run-together string.
+    // They are sibling spans inside a `display: -webkit-box` with
+    // `line-clamp: 2`, and as inline children they flowed together and read
+    // "Two Sumdemo" with the block's second line left blank.
+    //
+    // Compared by *edges*, not by `y`. This assertion was `runner.y >
+    // heading.y` and it passed against that bug: on one line the 14px runner sits
+    // ~2px lower than the 16px heading (they share a baseline), so the tops
+    // differ and the test was satisfied by the very layout it was written to
+    // catch. A line is bounded by its bottom, so that is what is compared here.
+    const card = submissionRow(page, "Two Sum");
+    const [heading, runner] = await Promise.all([
+      card.locator('[class*="listHeading"]').boundingBox(),
+      card.locator('[class*="listRunner"]').boundingBox(),
+    ]);
+    expect(heading, "challenge title is rendered").not.toBeNull();
+    expect(runner, "runner line is rendered").not.toBeNull();
+    expect(runner!.y, "runner starts below the title's last line, not beside it").toBeGreaterThanOrEqual(
+      heading!.y + heading!.height,
+    );
+    // And they share a left edge, so the pair reads as one block of text rather
+    // than as a sentence the reader has to un-concatenate.
+    expect(
+      Math.abs(runner!.x - heading!.x),
+      "title and runner start at the same x",
+    ).toBeLessThan(1);
+  });
+
+  test("a submission row names its language, provider and model", async ({ page }) => {
+    await openLists(page);
+    const row = submissionRow(page, "Two Sum");
+    await expect(row.getByText("Python")).toBeVisible();
+    await expect(row.getByText("demo · demo")).toBeVisible();
+    // A row with no model shows the provider alone, not a trailing separator.
+    const failed = submissionRow(page, "LRU Cache");
+    await expect(failed.getByText("anthropic · claude-sonnet-4")).toBeVisible();
+    // An in-flight row reports progress instead: the model may not even have
+    // been chosen yet, and a stale provider next to a live timer reads as a
+    // claim about work that has not happened.
+    await expect(submissionRow(page, "Edit Distance").getByText(/^waiting /)).toBeVisible();
+  });
+
+  test("a challenge card joins its own rollup, and admits when it has none", async ({ page }) => {
+    // `c-easy-1` has a rollup entry and `c-med-1` does not, so both branches of
+    // the join are on screen at once. A fixture where every challenge has stats
+    // cannot tell a working join from a constant.
+    await openLists(page);
+    const joined = column(page, "My challenges").filter({
+      has: page.getByRole("link", { name: "Two Sum" }),
+    });
+    await expect(joined.getByText("3/4")).toBeVisible();
+    await expect(joined.getByText(/Last evaluated/)).toBeVisible();
+    await expect(joined.getByText("100%")).toBeVisible();
+
+    const unjoined = column(page, "My challenges").filter({
+      has: page.getByRole("link", { name: "LRU Cache" }),
+    });
+    await expect(unjoined.getByText("Not evaluated yet")).toBeVisible();
+    await expect(unjoined.getByText(/^Created/)).toBeVisible();
+    // Difficulty comes from the shared vocabulary, so the pill is the one #346
+    // held to contrast rather than a local mapping that could drift from it.
+    await expect(unjoined.getByText("Medium")).toBeVisible();
+  });
+
+  test("the dark theme holds the same alignment", async ({ page }) => {
+    // The floor is a fixed pixel value but the gaps around it are tokens, and
+    // tokens are per-theme, so a light run is not evidence about dark. This is
+    // the same lesson as #346's badge: the theme you happen to be looking at is
+    // not a measurement of the other one.
+    await openLists(page, "dark");
+    if (await sideBySide(page)) {
+      expect(await edges(page, "My challenges")).toEqual(
+        await edges(page, "Recent submissions"),
+      );
+    }
+    for (const heading of ["My challenges", "Recent submissions"]) {
+      const heights = await column(page, heading).evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().height)),
+      );
+      expect(
+        Math.max(...heights) - Math.min(...heights),
+        `${heading} heights differ in dark`,
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("the status badges stay readable in both themes", async ({ page }) => {
+    // Rendered, not read from the stylesheet: the processing pill is the one
+    // #346 had to fix, and it measured 3.13:1 in dark against its own tint before
+    // `--color-primary-strong` existed. Asserting the token would have passed
+    // anyway — the defect was the *pairing*, and only painting both proves it.
+    for (const theme of ["light", "dark"] as const) {
+      await openLists(page, theme);
+      for (const [title, status] of [
+        ["Two Sum", "completed"],
+        ["LRU Cache", "failed"],
+        ["Edit Distance", "processing"],
+      ] as const) {
+        await expectReadable(
+          page,
+          submissionRow(page, title).locator('[class*="badge"]').first(),
+          `${theme} ${status} badge`,
+        );
+      }
+    }
+  });
+
+  test("the em dash stands in for a value that was never measured", async ({ page }) => {
+    // The in-flight row has no result, so no score, no duration and no test count.
+    // All three must read "no value" rather than `0` — a zero score is a claim
+    // about quality, and a zero duration reads as instant.
+    await openLists(page);
+    const processing = submissionRow(page, "Edit Distance");
+    // Each dash is labelled, so a screen reader hears why the value is missing
+    // rather than announcing an em dash three times in a row.
+    await expect(processing.getByLabel("no score yet")).toHaveText("—");
+    await expect(processing.getByLabel("not measured")).toHaveText("—");
+    await expect(processing.getByLabel("no test results yet")).toHaveText("—");
+  });
+});

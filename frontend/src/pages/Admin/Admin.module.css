@@ -316,6 +316,6 @@
 }
 
 .dailyLabel {
-  font-size: var(--font-size-2xs, 0.625rem);
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout/AuthLayout.tsx";
 import Button from "../components/Button/Button.tsx";
 import GithubOAuthButton from "../components/GithubOAuthButton.tsx";
@@ -8,9 +8,26 @@ import { useAuth } from "../context/AuthContext.tsx";
 import { extractError, extractFieldErrors } from "../utils/errors.ts";
 import styles from "./Login.module.css";
 
+/**
+ * The path a signed-out visitor came from (e.g. the Demo page sends
+ * `{ from: "/demo" }` with its sign-in CTA). Only an internal path is
+ * honored; anything external, empty or a credential page itself is treated
+ * as "no return target" (the /login -> /login loop is a hang, not a
+ * feature).
+ */
+function returnTarget(state: unknown): string | null {
+  const from = (state as { from?: unknown } | null)?.from;
+  if (typeof from !== "string") return null;
+  if (!from.startsWith("/") || from.startsWith("//")) return null;
+  if (from === "/login" || from === "/register") return null;
+  return from;
+}
+
 function Login() {
   const { user, initializing, login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = returnTarget(location.state);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +43,7 @@ function Login() {
     setSubmitting(true);
     try {
       await login(identifier, password);
-      navigate("/challenges");
+      navigate(from ?? "/challenges");
     } catch (err) {
       setError(extractError(err));
       setFieldErrors(extractFieldErrors(err));
@@ -40,7 +57,7 @@ function Login() {
   }
 
   if (user) {
-    return <Navigate to="/challenges" replace />;
+    return <Navigate to={from ?? "/challenges"} replace />;
   }
 
   return (

@@ -86,6 +86,19 @@ criteria. `e2e/contrast.spec.ts` measures all of this in both themes.
 
 Both hovers are also kept clear of `--color-surface-secondary` / `--color-surface-raised`, so "hovered" and "secondary" or "raised" never read as the same state. A hover only *slightly* different from its surface is worse than a missing one: it looks broken rather than absent, so the palette invariant in `design-tokens.test.ts` enforces a 1.05:1 minimum step (GitHub's light-theme row hover is 1.07:1).
 
+#### Card surfaces
+
+`--color-surface-card` is the one surface that is **darker than the page** in the light palette, and it exists because every other candidate was lighter. The measured problem (#351): a feature card built on `--color-bg-subtle` sits on `--color-bg` at **1.05:1**, and its inner panel — `--color-bg` again — sits on the page at **1.00:1**, i.e. the same colour, so the page read as flat grey with panels drawn on it rather than as cards. `--color-surface` is `#ffffff` and separates by less, not more.
+
+| Palette | Page | Card | Step | Muted text on card |
+|---------|------|------|------|--------------------|
+| light | `#eef2f7` | `#d4deeb` | 1.21:1 | 5.57:1 |
+| dark | `#0a1020` | `#141d33` | 1.13:1 | 4.91:1 |
+
+The light step is bounded by text, not by taste: `--color-text-muted` (`#475569`) is the body copy inside these cards, so 5.57:1 leaves 1.07 of headroom over AA, and `--color-text` is 13.13:1. Every darker candidate was measured and rejected — `#cfd9e8` (1.27:1 step, 5.32:1 muted) and `#c3cfe3` (1.40:1, 4.82:1) both buy edge definition by spending legibility on the paragraph, which is the wrong thing to spend.
+
+The dark value is unchanged from what `--color-bg-subtle` already provided, so the dark palette renders identically. That is not laziness: the dark page (`#0a1020`) is already the darkest element in the layout, so the failure mode is one-sided.
+
 ### Page titles
 
 Every page `<h1>` renders through the shared `PageTitle` component
@@ -134,18 +147,44 @@ below.
 | `--color-primary` | Primary actions, links, focus accents |
 | `--color-primary-hover` | Primary button hover |
 | `--color-primary-light` | Primary-tinted surfaces |
+| `--color-primary-strong` | Primary text on a tinted background — the `processing` status pill |
 | `--color-secondary` | Reserved — secondary text uses `--color-text-secondary`; no current use |
 | `--color-success` | Positive status, pass indicators |
+| `--color-success-strong` | Success text on a tinted background |
 | `--color-success-light` | Success-tinted surfaces |
 | `--color-warning` | Warning status |
 | `--color-warning-strong` | Warning text on a tinted background |
 | `--color-warning-light` | Warning-tinted surfaces |
 | `--color-danger` | Errors, destructive actions |
+| `--color-danger-strong` | Error text on a tinted background |
 | `--color-danger-hover` | Destructive button hover |
 | `--color-danger-light` | Error-tinted surfaces |
 | `--color-accent-teal` | Second stat identity — pure identity, never meaning "good"; pair with a status token when the value is a score |
 | `--color-accent-violet` | Third stat identity — same rule as `--color-accent-teal` |
 | `--color-accent-rose` | Fourth stat identity — same rule as `--color-accent-teal` |
+
+### Score scale
+
+The four bands of the Home hero's score ring, red through green, at 0–25 / 25–50 /
+50–75 / 75–100. They are *not* a status family: the `-strong` steps above answer
+"did it pass", and these answer "where on the scale is it". Read the table in
+order — the scale's meaning is the sequence, so a reader matching it against a
+traffic light needs the order kept.
+
+| Token | Used for |
+|-------|----------|
+| `--color-score-red` | First band of the score ring's scale — a score under 25 |
+| `--color-score-orange` | Second band — 25 to under 50 |
+| `--color-score-yellow` | Third band — 50 to under 75 |
+| `--color-score-green` | Last band — 75 and up |
+
+Prefer a status token for anything that means pass or fail: a pill, a badge, a
+row tint. These four exist because the hero ring steps through them as the score
+counts, and because stepping through the `-strong` family read as dark red →
+brown → green (`--color-warning-strong` is a brown chosen for text on `#fef3c7`,
+not a yellow). Like the `-strong` steps, they are lightness-tuned to clear 3:1
+against the surface they are drawn on — `globals.css` carries the measured ratios
+for both themes and `theme-contrast.test.ts` fails if any step drops below it.
 
 ### Surfaces and text
 
@@ -158,15 +197,67 @@ below.
 | `--color-surface-secondary` | Nested surfaces |
 | `--color-surface-raised` | Raised surfaces (menus, popovers) |
 | `--color-surface-hover` | Resting state for a hoverable surface (table rows, list items) |
+| `--color-surface-card` | Marketing feature/panel cards that must read as a card on the page |
+| `--color-surface-inverse` | Dark marketing card fill (`Card variant="dark"`); aliases the ordinary surface in the dark theme |
 | `--color-divider` | Dividers and separators |
 | `--color-border` | Borders |
+| `--color-border-inverse` | Border for dark marketing cards; aliases `--color-border` in the dark theme |
 | `--color-border-hover` | Border hover states |
+| `--color-input-border` | Form-control boundary — inputs, selects, textareas, radio option boxes |
+| `--color-input-bg` | Form-control fill — inputs, selects, textareas. Dark in both themes |
+| `--color-input-text` | Form-control value text and the select chevron's hover state |
+| `--color-input-placeholder` | Form-control placeholder text and the select chevron's rest state |
 | `--color-text` | Body text, headings |
 | `--color-text-secondary` | Secondary text, labels |
-| `--color-text-muted` | Placeholders, meta text |
+| `--color-text-muted` | Meta text |
+| `--color-text-inverse` | Body text on a dark marketing card; aliases `--color-text` in the dark theme |
+| `--color-text-inverse-secondary` | Secondary text on a dark marketing card; aliases `--color-text-secondary` in the dark theme |
 | `--color-focus-ring` | Focus ring color |
 | `--color-on-accent` | Text on colored surfaces (button labels, active pagination, badges) |
 | `--color-on-solid` | Text on solid brand surfaces (primary/danger buttons, active pagination, avatars, primary gradients) |
+
+**`--color-border` is a container edge; `--color-input-border` is a control
+edge.** They are not two weights of the same thing, which is why they are
+separate tokens rather than a mistake to be tidied away. A container (a card on
+a card, a divider, a table rule) is defined by the surface it sits on, so a
+pale border is correct and `--color-border` clears 1.50:1 on white on purpose.
+A form control has no such cue: an input on a white card is white on white, so
+its border is the *only* thing that says "this is a box you can type into", and
+WCAG 1.4.11 asks 3:1 for that boundary. Reusing the container border left every
+field in the app at 1.50:1.
+
+The light value clears 3:1 against **every** surface a field can be placed on —
+`--color-surface` 3.56:1, `--color-bg` 3.16:1, `--color-surface-secondary`
+3.31:1 — because `.input` is reused on every form and no component knows which
+surface it ended up on. `--color-bg` is the one that fails first, and it fails
+invisibly: `#7d90a6` looks like the better pick next to white (3.28:1) and drops
+to 2.91:1 there. `input-contrast.test.ts` holds all three numbers, and holds the
+modules to actually painting with the token — a compliant token that
+`Input.module.css` does not reference would pass a token-level check while the
+field stayed unreadable.
+
+The dark value is deliberately equal to the dark `--color-border`, so dark mode
+renders exactly as it did before #345. That leaves it at 1.54:1 — below the bar
+the light palette now meets, and an open question rather than a settled one. The
+measurement and the reasoning are recorded beside the token in `globals.css`.
+
+**Form controls are dark in both themes (#387).** A light field on a bright
+marketing card was the hardest place in the app to read typed text, so the
+field now matches the code and prompt surfaces. `--color-input-bg`,
+`--color-input-text` and `--color-input-placeholder` are dedicated tokens, not
+the `--color-code-*` set, so an input and a code block can be retuned
+independently. The boundary still comes from `--color-input-border`, and
+`input-contrast.test.ts` still measures it against the surface the field *sits
+on* rather than its own fill — the boundary separates the box from the card
+behind it.
+
+**`Card variant="dark"`** paints the dark marketing surface. Instead of
+restyling children it re-points the ordinary tokens (`--color-surface`,
+`--color-border`, `--color-text`, `--color-text-secondary`) for its subtree to
+`--color-*-inverse`, so descendants need no dark-aware rules. In the dark theme
+each inverse token aliases the corresponding ordinary token, which makes the
+variant a no-op there. Auth and form card shells stay on the default surface
+deliberately — a dark field on a dark card would erase the control's edge.
 
 ### Code surfaces
 
@@ -183,6 +274,21 @@ Dark in both themes, for readability.
 | `--color-code-warn` | `WARN` / `WARNING` lines |
 | `--color-code-ok` | `PASS` / `ok` / `✓` lines |
 | `--color-code-gutter` | Line-number gutter rule |
+| `--color-code-comment` | Syntax: comments |
+| `--color-code-string` | Syntax: strings, chars, docstrings |
+| `--color-code-number` | Syntax: numeric literals |
+| `--color-code-keyword` | Syntax: reserved words |
+| `--color-code-type` | Syntax: type names |
+| `--color-code-fn` | Syntax: function and method calls |
+
+The syntax tokens drive the highlighter in `CodeBlock`. Like the severity
+tokens they are theme-independent (the surface is dark in both palettes) and
+every one clears 4.5:1 against both `--color-code-bg` values. The set is
+deliberately muted rather than saturated: code is dense, and a vivid palette
+turns a screen of source into stripes that cost more to read than the syntax
+distinction is worth. `--color-code-fn` is `--color-code-warn` by hue, which is
+fine because the two never appear in the same view — logs are classified by
+severity, code by token, and a block is one or the other.
 
 The severity tokens are **not** the page status tokens (`--color-danger`
 and friends). On this dark surface light-mode `--color-danger` (#dc2626) manages
@@ -237,8 +343,15 @@ values only inside tokens such as borders/shadows.
 - Components live in `src/components/<Name>/<Name>.tsx` with
   `<Name>.module.css`; styles use `@/src/styles/globals.css` tokens only.
 - Buttons: default variant for primary, `variant="danger"` for destructive.
-- Badges/status pills use the `-light` variants with the matching strong text
-  color (e.g. `--color-warning-strong` on `--color-warning-light`).
+- Badges/status pills use the `-light` variants with the matching `-strong` text
+  color (`--color-warning-strong` on `--color-warning-light`, and likewise
+  `-success`/`-danger`). The base token is the *identity* color — right as a
+  border, dot or accent, and as text on a plain surface — but it is not
+  text-safe on its own tint: `#16a34a` on `#dcfce7` is 3.00:1 and `#dc2626` on
+  `#fee2e2` is 3.95:1, both under AA. The `-strong` step keeps the hue and
+  drops the lightness until the pair clears 4.5:1 on the tint it sits on.
+  `theme-contrast.test.ts` holds each pair to its number, so retuning either
+  step cannot quietly reintroduce the failure (issue #346).
 - Focus states: use the existing transition tokens and a visible outline;
   never rely on color alone.
 

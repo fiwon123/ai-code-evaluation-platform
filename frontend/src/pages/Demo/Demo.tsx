@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
@@ -8,8 +8,10 @@ import { SelectInput } from "../../components/Input/Input.tsx";
 import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
+import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion.ts";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import Reveal from "../../components/Reveal/Reveal.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
 import type { Challenge, Submission } from "../../types.ts";
@@ -17,7 +19,8 @@ import { extractError } from "../../utils/errors.ts";
 import { formatElapsed } from "../../utils/formatting.ts";
 import {
   extensionForLanguage,
-  languageLabel,
+  LANGUAGES,
+  languageMeta,
   runnerForLanguage,
 } from "../../utils/language.ts";
 import styles from "./Demo.module.css";
@@ -50,8 +53,36 @@ const KEYWORD_CHIPS = ["two sum", "valid parentheses", "longest common prefix"];
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 60000; // ~60s cap before we give up
 
+/** How long each walkthrough step holds the rail before it advances. */
+const STEP_CYCLE_MS = 2600;
+
+/** The no-language-filtered case. Not a language: nothing is a filter state. */
+const ALL_LANGUAGES = "all";
+
+/**
+ * A language's option text, symbol first.
+ *
+ * The symbol is the identity a closed dropdown cannot show for itself, and it
+ * can only live in the text: a native `<select>` paints its own colour over the
+ * selected option and its popup is rendered by the OS. The colour goes on the
+ * control as a stripe instead, via `--lang-accent`.
+ */
+function languageOptionLabel(language: string): string {
+  const meta = languageMeta(language);
+  return `${meta.symbol} ${meta.label}`;
+}
+
+/**
+ * A challenge's option text: title first, because that is what is being chosen,
+ * with its language symbol behind it as the identity cue.
+ */
+function challengeOptionLabel(challenge: Challenge): string {
+  return `${challenge.title} — ${languageMeta(challenge.language).symbol}`;
+}
+
+
 function Demo() {
-  const { user } = useAuth();
+  const { user, initializing } = useAuth();
   const navigate = useNavigate();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -59,16 +90,107 @@ function Demo() {
   const [result, setResult] = useState<Submission | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [language, setLanguage] = useState(ALL_LANGUAGES);
   const { liveSubmission, state: socketState } = useSubmissionSocket(
     submissionId ?? undefined,
   );
 
-  // The run result belongs to the challenge selected when it was submitted.
-  const selectedChallenge = challenges.find(
-    (c) => c.id === (result?.challenge_id ?? selectedId),
+  // The walkthrough rail. Starts on the first step and only advances for a
+  // reader who has not asked for reduced motion — see the effect below.
+  const [activeStep, setActiveStep] = useState(0);
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  /**
+   * The challenges the language filter admits.
+   *
+   * Only the languages that actually have a challenge behind them are offered,
+   * so the control never presents a choice that would empty the page. `LANGUAGES`
+   * is the full 20-language catalog and most of it has no demo challenge, so
+   * listing all of it would make "All languages" the only useful option.
+   */
+  const filterableLanguages = useMemo(() => {
+    const present = new Set(challenges.map((c) => c.language));
+    return LANGUAGES.filter((lang) => present.has(lang));
+  }, [challenges]);
+
+  const visibleChallenges = useMemo(
+    () =>
+      language === ALL_LANGUAGES
+        ? challenges
+        : challenges.filter((c) => c.language === language),
+    [challenges, language],
   );
+
+  /**
+   * The challenge whose preview is on screen.
+   *
+   * A run's result outranks the picker: once something has been submitted, the
+   * report must keep describing what was actually run, even if the reader has
+   * since changed the filter. Only the picker is resolved through
+   * `visibleChallenges`, and only because of the one-frame window below.
+   */
+  const resultChallenge = challenges.find((c) => c.id === result?.challenge_id);
+
+  /**
+   * The challenge the picker and the preview both describe.
+   *
+   * Narrowing the language can leave `selectedId` pointing at a challenge that
+   * is no longer listed. Reading straight from state would then show a blank
+   * `<select>` with a `value` matching none of its options, keep the preview on
+   * the hidden challenge, and let the run button submit something the reader
+   * cannot see selected.
+   *
+   * So the *rendered* selection is derived, not read: it falls back to the first
+   * visible challenge in the same render that narrows the list. `selectedId` is
+   * then reconciled to match in an effect, so a remount does not re-open on a
+   * challenge the filter excludes.
+   *
+   * Deriving it is a one-frame improvement, not a testable one: `fireEvent`
+   * wraps in `act`, which flushes the effect before any assertion, so a unit
+   * test cannot see the intermediate frame either way (mutation-checked —
+   * resolving from the unfiltered list passes the same suite). It is here
+   * because a real browser does paint that frame, and it costs a fallback rather
+   * than a second source of truth.
+   */
+  const selectedChallenge =
+    resultChallenge ??
+    visibleChallenges.find((c) => c.id === selectedId) ??
+    visibleChallenges[0];
   const resultLanguage = selectedChallenge?.language ?? "python";
   const previewRunner = runnerForLanguage(resultLanguage);
+
+  useEffect(() => {
+    if (visibleChallenges.length === 0) {
+      return;
+    }
+    if (!visibleChallenges.some((c) => c.id === selectedId)) {
+      setSelectedId(visibleChallenges[0].id);
+    }
+  }, [selectedId, visibleChallenges]);
+
+  /**
+   * Advance the walkthrough rail, for readers who want motion.
+   *
+   * Gated on `prefers-reduced-motion` rather than neutralised in CSS, because
+   * this is a JS timer: a CSS opt-out cannot stop a `setInterval` from moving
+   * the highlight, and a highlight that keeps moving is the motion. Under
+   * reduced motion the rail holds step one, which is also the honest resting
+   * state — nothing has been run, so the first step is where a reader is.
+   */
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setActiveStep((step) => (step + 1) % STEPS.length);
+    }, STEP_CYCLE_MS);
+    return () => window.clearInterval(timer);
+  }, [prefersReducedMotion]);
+
+  // Guests get the sign-in wall instead of the runner. `initializing` bars
+  // the wall during the brief token check so it doesn't flash before the
+  // session is known.
+  const isGuestWallVisible = () => !initializing && !user;
 
   useEffect(() => {
     let cancelled = false;
@@ -98,12 +220,24 @@ function Demo() {
     );
     if (match) {
       setSelectedId(match.id);
+      // A chip is a shortcut to one specific challenge, so it has to be able to
+      // reach it. Without this, clicking "two sum" while the Go filter is on
+      // selects a Python challenge the reader cannot see, and the correction
+      // effect below then immediately drags the selection to some unrelated Go
+      // challenge — the chip would appear to do nothing. Widening to "all" is
+      // the only outcome that matches what was clicked.
+      if (language !== ALL_LANGUAGES && match.language !== language) {
+        setLanguage(ALL_LANGUAGES);
+      }
     }
   }
 
   async function handleRun() {
+    // Guests never reach this button (see the sign-in wall below), but a
+    // session can expire while this page stays open — send a returning user
+    // to login with the demo as the post-login destination, not a dead end.
     if (!user) {
-      navigate("/register");
+      navigate("/login", { state: { from: "/demo" } });
       return;
     }
     if (!selectedId) {
@@ -216,23 +350,34 @@ function Demo() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        {/* Decoration only. `aria-hidden` because it carries no information the
+            heading does not, and `pointer-events` is off in CSS so it cannot
+            take a click meant for the page. */}
+        <div className={styles.ambientBackdrop} aria-hidden="true">
+          <span className={styles.blobPrimary} />
+          <span className={styles.blobAccent} />
+        </div>
         <span className="eyebrow">Demo</span>
-        <PageTitle size="lg" className={styles.pageTitle}>See how it works</PageTitle>
-        <p className={styles.pageSubtitle}>
+        <PageTitle size="lg" className={styles.title}>See how it works</PageTitle>
+        <p className={styles.subtitle}>
           A guided walkthrough of the evaluation pipeline, plus a live demo you
           can try right now.
         </p>
       </header>
 
       <div className={styles.walkthrough}>
-        {STEPS.map((step) => (
-          <div className={styles.step} key={step.title}>
-            <div className={styles.stepIcon}>{step.icon}</div>
-            <div>
-              <h2 className={styles.stepTitle}>{step.title}</h2>
-              <p className={styles.stepText}>{step.text}</p>
+        {STEPS.map((step, index) => (
+          <Reveal key={step.title} delayMs={index * 90}>
+            <div
+              className={`${styles.step} ${index === activeStep ? styles.stepActive : ""}`}
+            >
+              <div className={styles.stepIcon} aria-hidden="true">{step.icon}</div>
+              <div>
+                <h2 className={styles.stepTitle}>{step.title}</h2>
+                <p className={styles.stepText}>{step.text}</p>
+              </div>
             </div>
-          </div>
+          </Reveal>
         ))}
       </div>
       <hr className="dividerRule" />
@@ -249,6 +394,27 @@ function Demo() {
         <div className={styles.runner}>
           {challenges.length > 0 ? (
             <>
+            {isGuestWallVisible() ? (
+              <div className={styles.guestWall}>
+                <h3 className={styles.guestWallTitle}>
+                  Sign in to run the live demo
+                </h3>
+                <p className={styles.guestWallText}>
+                  Running an evaluation creates a submission on your account —
+                  the demo provider is free and needs no API keys once
+                  you’re in.
+                </p>
+                <div className={styles.guestWallActions}>
+                  <Button to="/login" state={{ from: "/demo" }}>
+                    Sign in
+                  </Button>
+                  <Button to="/register" variant="secondary">
+                    Create account
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
               <div className={styles.chips}>
                 <span className={styles.chipsLabel}>Try a prompt:</span>
                 {KEYWORD_CHIPS.map((keyword) => (
@@ -263,28 +429,80 @@ function Demo() {
                 ))}
               </div>
 
-              <div className={styles.runnerRow}>
-                <SelectInput
-                  id="demo-challenge"
-                  name="challenge"
-                  value={selectedId}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                  aria-label="Demo challenge"
-                  className={styles.challengeSelect}
+              <div className={styles.filterRow}>
+                {/* The language filter. `--lang-accent` is always set, including
+                    `transparent` for "all", so whether the stripe is visible is
+                    decided by the stylesheet alone rather than by whether React
+                    happened to omit a `style` attribute. The accent is
+                    decoration, so it is not announced — the option text already
+                    names the language. */}
+                <span
+                  className={styles.languageFilter}
+                  style={
+                    {
+                      "--lang-accent":
+                        language === ALL_LANGUAGES
+                          ? "transparent"
+                          : languageMeta(language).color,
+                    } as React.CSSProperties
+                  }
                 >
-                  {challenges.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} ({languageLabel(c.language)})
-                    </option>
-                  ))}
-                </SelectInput>
+                  <SelectInput
+                    id="demo-language"
+                    name="language"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    aria-label="Filter by language"
+                    className={styles.languageSelect}
+                  >
+                    <option value={ALL_LANGUAGES}>All languages</option>
+                    {filterableLanguages.map((lang) => (
+                      <option key={lang} value={lang}>
+                        {languageOptionLabel(lang)}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </span>
+                <span className={styles.challengeIdentity}>
+                  <LanguageBadge language={selectedChallenge?.language ?? "python"} />
+                </span>
+              </div>
+
+              <div className={styles.runnerRow}>
+                <span
+                  className={styles.challengeFilter}
+                  style={
+                    {
+                      "--lang-accent": selectedChallenge
+                        ? languageMeta(selectedChallenge.language).color
+                        : "transparent",
+                    } as React.CSSProperties
+                  }
+                >
+                  <SelectInput
+                    id="demo-challenge"
+                    name="challenge"
+                    value={selectedId}
+                    onChange={(e) => setSelectedId(e.target.value)}
+                    aria-label="Demo challenge"
+                    className={styles.challengeSelect}
+                  >
+                    {visibleChallenges.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {challengeOptionLabel(c)}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </span>
                 <Button
                   onClick={() => void handleRun()}
-                  disabled={inProgress}
+                  disabled={inProgress || initializing || !selectedId}
                 >
                   {inProgress ? "Generating…" : "Generate & evaluate"}
                 </Button>
               </div>
+            </>
+            )}
 
               {/* Feedback sits directly under the run controls, above the
                   preview, so a run's outcome is visible without scrolling. */}
@@ -406,6 +624,10 @@ function Demo() {
                       {selectedChallenge.description}
                     </p>
                   )}
+                  {/* Prompt and test suite side by side once there is room:
+                      a program and its tests read as a pair, where two stacked
+                      full-width panels read as a wall. */}
+                  <div className={styles.previewCodeGrid}>
                   {selectedChallenge.prompt && (
                     <div className={styles.previewSection}>
                       <p className={styles.previewLabel}>Prompt</p>
@@ -439,6 +661,7 @@ function Demo() {
                       </p>
                     )}
                   </div>
+                  </div>
                   {previewRunner && (
                     <p className={styles.previewMeta}>
                       Runs with <code>{previewRunner.runner}</code> — executes{" "}
@@ -457,13 +680,6 @@ function Demo() {
             </p>
           )}
 
-          {!user && challenges.length > 0 && (
-            <p className={styles.loginNote}>
-              You'll need a free account —{" "}
-              <Link to="/register">sign up</Link> or{" "}
-              <Link to="/login">log in</Link> to run the demo.
-            </p>
-          )}
         </div>
       </section>
 

@@ -108,7 +108,7 @@ describe("Register", () => {
       register: vi.fn().mockRejectedValue(
         new ApiError(
           422,
-          "password: String should have at least 8 characters",
+          "String should have at least 8 characters",
           { password: "String should have at least 8 characters" },
         ),
       ),
@@ -126,8 +126,59 @@ describe("Register", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
-    await waitFor(() =>
-      expect(screen.getByText("String should have at least 8 characters")).toBeInTheDocument(),
+    const message = "String should have at least 8 characters";
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(message);
+    // #320: the banner must not carry the Pydantic field key.
+    expect(alert).not.toHaveTextContent("password:");
+
+    // The same message is also shown inline under the field, so a bare text
+    // query now matches both. Assert the inline copy exists by filtering the
+    // banner out — and that there is exactly one of it, so a future change that
+    // renders the error twice does not quietly pass.
+    await waitFor(() => expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true"));
+    const inline = screen.getAllByText(message).filter((el) => el !== alert);
+    expect(inline).toHaveLength(1);
+  });
+
+  // #323: this field carries a strength hint beside the input, which made
+  // `children` an array and skipped Field's aria wiring entirely. The control
+  // was marked invalid with no way to hear the reason.
+  it("announces the password error with the field, not just next to it", async () => {
+    const { ApiError } = await import("../../services/api.ts");
+    mockAuth({
+      register: vi.fn().mockRejectedValue(
+        new ApiError(422, "String should have at least 8 characters", {
+          password: "String should have at least 8 characters",
+        }),
+      ),
+    });
+    renderRegister();
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "alice@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      // Long enough to clear the control's own `minLength`, so the mocked 422
+      // is what puts the error on screen rather than native validation.
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    // Wait on the banner, the page-level signal that the rejection landed, so
+    // the aria assertions below are not racing the state update.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("String should have at least 8 characters");
+
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute("aria-invalid", "true");
+    const describedBy = password.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)).toHaveTextContent(
+      "String should have at least 8 characters",
     );
   });
 

@@ -69,6 +69,118 @@ test.describe("Challenge create form", () => {
     ).toBeVisible();
   });
 
+  test("each difficulty tag owns its own hit area, so a click selects that difficulty", async ({
+    page,
+  }) => {
+    await openCreateForm(page);
+
+    // Issue #346 renders the difficulty row as plain tags with the radios hidden
+    // behind them. That overlay is an absolutely positioned radio at `inset: 0`,
+    // which resolves against its nearest *positioned* ancestor — and the label was
+    // not one. Measured in Chromium, all three radios came out at 1280×720: the
+    // whole viewport, stacked, last one on top. Clicking "Easy" checked "Hard",
+    // and Playwright reported it as `…<input value="hard">… intercepts pointer
+    // events`.
+    //
+    // This is asserted against geometry rather than inferred from the fact that
+    // `.check()` works, because the bug's signature *is* the geometry: a
+    // `pointer-events` overlay that covers everything still lets the last element
+    // win, so a naive "click works" probe would have passed on whichever tag
+    // happened to be on top.
+    const measured = await page.evaluate(() => {
+      const labels = [...document.querySelectorAll("label")].filter((l) =>
+        l.querySelector<HTMLInputElement>('input[name="difficulty"]'),
+      );
+      return labels.map((label) => {
+        const radio = label.querySelector<HTMLInputElement>('input[name="difficulty"]')!;
+        const r = radio.getBoundingClientRect();
+        const l = label.getBoundingClientRect();
+        return {
+          value: radio.value,
+          // Does the radio stay inside its own tag, or has it escaped to the page?
+          withinOwnTag: r.top >= l.top - 1 && r.left >= l.left - 1,
+          // And is it roughly tag-sized, rather than viewport-sized?
+          notViewportSized: r.width < l.width * 2 && r.height < l.height * 2,
+        };
+      });
+    });
+
+    expect(measured).toHaveLength(3);
+    for (const m of measured) {
+      expect(m.withinOwnTag, `${m.value}'s radio escaped its own tag`).toBe(true);
+      expect(m.notViewportSized, `${m.value}'s radio covers more than its tag`).toBe(true);
+    }
+
+    // The behaviour itself, on each tag in turn — not just the checked one.
+    for (const value of ["easy", "hard", "medium"]) {
+      await page.locator(`label:has(input[name="difficulty"][value="${value}"])`).click();
+      await expect(page.getByRole("radio", { name: new RegExp(value, "i") })).toBeChecked();
+    }
+  });
+
+  test("the plain difficulty pill is a 44px target without growing the tag (#364)", async ({
+    page,
+  }) => {
+    await openCreateForm(page);
+
+    // WCAG 2.5.5 AAA, and the visual sweep's only `touch-target-small`:
+    // `.radioHidden` is an `inset: 0` overlay, so the control's activation box
+    // *is* the label box, and a label with `padding: 0` is exactly as tall as
+    // the badge inside it. At 25.2px the sweep filed 12 instances (55×25px here,
+    // 46×25px on the filter bar).
+    //
+    // Measured as the union of the radio and its label, because that is the box a
+    // click can actually land on and it is what the audit rule uses — the radio
+    // alone resolves to the label's *padding* box, 2px shorter than the border
+    // box, so asserting on the input directly would fail on a correct fix.
+    //
+    // Paired with "the tag did not grow", because the two failure modes are
+    // opposites and only asserting the first would accept padding that made
+    // every difficulty a fat 44px pill instead of a 23px tag with room to tap.
+    const pills = await page
+      .getByRole("group", { name: "Difficulty" })
+      .locator("label")
+      .evaluateAll((labels) =>
+        labels.map((label) => {
+          const radio = label.querySelector<HTMLInputElement>("input")!;
+          const badge = label.querySelector("span span")!;
+          const union = (a: DOMRect, b: DOMRect) => ({
+            width: Math.max(a.right, b.right) - Math.min(a.left, b.left),
+            height: Math.max(a.bottom, b.bottom) - Math.min(a.top, b.top),
+          });
+          const l = label.getBoundingClientRect();
+          return {
+            value: radio.value,
+            hit: union(radio.getBoundingClientRect(), l),
+            badge: {
+              width: badge.getBoundingClientRect().width,
+              height: badge.getBoundingClientRect().height,
+            },
+          };
+        }),
+      );
+
+    expect(pills).toHaveLength(3);
+    for (const p of pills) {
+      expect(p.hit.width, `${p.value}'s target is under 44px wide`).toBeGreaterThanOrEqual(44);
+      expect(p.hit.height, `${p.value}'s target is under 44px tall`).toBeGreaterThanOrEqual(44);
+      // The rendered tag is still the tag, not the 44px box.
+      expect(
+        p.badge.height,
+        `${p.value}'s tag grew to its target box — the hit area should be invisible`,
+      ).toBeLessThan(p.hit.height);
+    }
+
+    // The three tags stay side by side rather than the row wrapping to a stack,
+    // which a taller pill could have caused. Widths are unchanged by this fix, so
+    // this is the cheap way to notice if a future change alters that.
+    const tops = await page
+      .getByRole("group", { name: "Difficulty" })
+      .locator("label")
+      .evaluateAll((labels) => labels.map((l) => Math.round(l.getBoundingClientRect().top)));
+    expect(new Set(tops).size, "the difficulty pills wrapped onto separate rows").toBe(1);
+  });
+
   test("counts the prompt as it is typed and names the runner for the language", async ({
     page,
   }) => {

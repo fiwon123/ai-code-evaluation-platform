@@ -155,6 +155,10 @@ class ChallengeStatsItem(BaseModel):
 
     challenge_id: UUID
     challenge_title: str
+    #: Carried here rather than fetched per card (issue #347): the dashboard's
+    #: card grid shows a truncated description under the title, and N+1 requests
+    #: for data the aggregate query already joins to would be the wrong trade.
+    description: str = ""
     language: str
     total_runs: int
     completed_runs: int
@@ -162,6 +166,10 @@ class ChallengeStatsItem(BaseModel):
     avg_score: float | None
     best_score: float | None
     last_run_at: datetime
+    #: Wall-clock of the most recent run, for the card's duration stat (issue
+    #: #347). None when that run recorded no duration (a failed run never
+    #: produces a result row, and pre-0.14 reports have no metrics).
+    last_duration_ms: float | None = None
 
 
 class SubmissionStatsRead(BaseModel):
@@ -177,6 +185,10 @@ class SubmissionRead(BaseModel):
     comparison and admin endpoints, where per-attempt rows would multiply the
     payload for no reader. :class:`SubmissionDetailRead` adds them for the
     single-submission view.
+
+    ``challenge_title`` is required rather than nullable because ``challenge_id``
+    is a NOT NULL, cascading FK: every submission has a challenge, so a null
+    title could only ever mean a caller forgot to load the relationship.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -184,6 +196,9 @@ class SubmissionRead(BaseModel):
     id: UUID
     user_id: UUID
     challenge_id: UUID
+    #: Parent challenge's title, resolved from ``Submission.challenge``. Lets a
+    #: reader label a submission without a lookup per row.
+    challenge_title: str
     status: str
     #: Pipeline phase while processing: ``"generating"``, ``"testing"`` or
     #: ``"repairing"``; None when pending or terminal.

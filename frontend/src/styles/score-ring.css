@@ -16,7 +16,15 @@
   fill: none;
   stroke-width: 12;
   stroke-linecap: round;
-  transition: stroke-dashoffset var(--duration-base) ease;
+  /* `stroke` is here so the score scale's band change eases into the next
+     colour instead of snapping. It is the *only* transition that matters here
+     that is not the fill: the four bands differ in hue and the hop is the whole
+     point of the scale, so a 1200ms count-up that changed colour in one frame
+     would read as a flicker rather than as a dial passing a mark. The dashoffset
+     transition is unchanged and still owns the fill. */
+  transition:
+    stroke-dashoffset var(--duration-base) ease,
+    stroke var(--duration-base) ease;
 }
 
 .ringValue {
@@ -27,13 +35,76 @@
 }
 
 .ringSuccess {
-  stroke: var(--color-success);
+  /* The `-strong` step, not the base hue.
+   *
+   * An arc is a graphical object, so WCAG 1.4.11 wants 3:1 against the surface
+   * behind it. The base hues are text colours tuned against *text* surfaces:
+   * `--color-warning` measures 2.15:1 on white, under the bar. On the Home hero
+   * this arc is a 12px stroke on a large surface, and the Home sample score
+   * (66.7) sits in the warning band, so it is the one most likely to be seen.
+   * The base is still the right colour for the 1px borders and 2px underlines
+   * elsewhere — this rule is about the ring only. */
+  stroke: var(--color-success-strong);
 }
 
 .ringWarning {
-  stroke: var(--color-warning);
+  /* The `-strong` step, not the base hue.
+   *
+   * An arc is a graphical object, so WCAG 1.4.11 wants 3:1 against the surface
+   * behind it. The base hues are text colours tuned against *text* surfaces:
+   * `--color-warning` measures 2.15:1 on white, under the bar. On the Home hero
+   * this arc is a 12px stroke on a large surface, and the Home sample score
+   * (66.7) sits in the warning band, so it is the one most likely to be seen.
+   * The base is still the right colour for the 1px borders and 2px underlines
+   * elsewhere — this rule is about the ring only. */
+  stroke: var(--color-warning-strong);
 }
 
 .ringDanger {
-  stroke: var(--color-danger);
+  /* The `-strong` step, not the base hue.
+   *
+   * An arc is a graphical object, so WCAG 1.4.11 wants 3:1 against the surface
+   * behind it. The base hues are text colours tuned against *text* surfaces:
+   * `--color-warning` measures 2.15:1 on white, under the bar. On the Home hero
+   * this arc is a 12px stroke on a large surface, and the Home sample score
+   * (66.7) sits in the warning band, so it is the one most likely to be seen.
+   * The base is still the right colour for the 1px borders and 2px underlines
+   * elsewhere — this rule is about the ring only. */
+  stroke: var(--color-danger-strong);
+}
+
+/*
+ * The Home hero's four-step score scale (#389).
+ *
+ * One flat colour at a time, chosen by the score — not a gradient. An earlier
+ * version interpolated red→orange→yellow→green across the arc itself, which put
+ * three colours on a ring whose entire content is a single number: the reader
+ * had to decide which part of the ring the score referred to. Stepping the
+ * colour as the number counts instead spends the change on the thing that is
+ * already moving, and leaves the arc one colour like every other ring.
+ *
+ * These are four bands rather than the three above because the hero wants the
+ * whole red→green span visible as the count-up runs, and `--color-warning-strong`
+ * is a brown chosen for text on a tint — interpolating through it read as dark
+ * red → brown → green instead of as a scale. The `-strong` steps stay right for
+ * the flat bands above, where one colour has to mean "passed" outright.
+ *
+ * `globals.css` carries the measured contrast for both themes; every step here
+ * clears WCAG 1.4.11's 3:1 against the terminal panel it is drawn on, which
+ * `theme-contrast.test.ts` holds it to.
+ */
+.ringScoreRed {
+  stroke: var(--color-score-red);
+}
+
+.ringScoreOrange {
+  stroke: var(--color-score-orange);
+}
+
+.ringScoreYellow {
+  stroke: var(--color-score-yellow);
+}
+
+.ringScoreGreen {
+  stroke: var(--color-score-green);
 }

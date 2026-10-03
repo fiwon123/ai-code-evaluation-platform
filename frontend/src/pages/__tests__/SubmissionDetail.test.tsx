@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubmissionDetail from "../SubmissionDetail.tsx";
 import { clearToken, setToken } from "../../services/api.ts";
 import { POLL_MAX_INTERVAL_MS } from "../../constants/polling.ts";
+import { expectCodeToContain } from "../../test/code.ts";
 
 const fetchMock = vi.fn();
 
@@ -93,6 +94,27 @@ describe("SubmissionDetail", () => {
     clearToken();
   });
 
+  /** Drains microtasks so mount effects and their state updates settle. */
+  async function flush() {
+    await act(async () => {});
+  }
+
+  /**
+   * Advances the mocked clock inside act, so re-armed timers are flushed.
+   *
+   * The only way to assert "no further request" in this file. A `setTimeout`
+   * sleep observes a quiet window, which is a statement about the machine's
+   * load as much as about the code: 50ms is not a reliable window under a
+   * parallel suite, and a slow machine makes the sleep *more* likely to catch a
+   * spurious re-fetch, so the flake is biased towards false failures. Advancing
+   * a clock nobody controls has no such failure direction (#330).
+   */
+  async function tick(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
   // The fallback REST poll is the *only* live path when no WebSocket is
   // available (proxied deploys, the shared-result view), which is why the locks
   // below leave the token cleared: `useSubmissionSocket` then returns early and
@@ -114,18 +136,6 @@ describe("SubmissionDetail", () => {
         created_at: "2026-01-01T00:00:00Z",
         ...overrides,
       };
-    }
-
-    /** Drains microtasks so mount effects and their state updates settle. */
-    async function flush() {
-      await act(async () => {});
-    }
-
-    /** Advances the mocked clock inside act, so re-armed timers are flushed. */
-    async function tick(ms: number) {
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(ms);
-      });
     }
 
     /** Wall-clock gaps between successive polls, measured inside the mock. */
@@ -300,7 +310,7 @@ describe("SubmissionDetail", () => {
     // First fetch resolves to processing → auto re-fetch resolves to completed.
     expect(await screen.findByText("100%")).toBeInTheDocument();
     expect(screen.getByText("2/2")).toBeInTheDocument();
-    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expectCodeToContain(/def two_sum/);
     // The recorded execution duration is promoted to a first-class stat.
     expect(screen.getByText("Duration")).toBeInTheDocument();
     expect(screen.getByText("12ms")).toBeInTheDocument();
@@ -578,13 +588,23 @@ describe("SubmissionDetail", () => {
       created_at: "2026-01-01T00:00:00Z",
     };
 
+    // A terminal submission, so the poll loop has nothing left to re-check.
+    // Driven on a mocked clock rather than a 50ms sleep (#330): the sleep only
+    // ever observed a quiet window, so the assertion could not tell "no poll is
+    // scheduled" from "no poll fired within 50ms of this machine", and the
+    // failure mode was biased towards false failures on a loaded machine.
+    const POLL_MS = 1_000;
+    vi.useFakeTimers();
     fetchMock.mockResolvedValue(new Response(JSON.stringify(completed), { status: 200 }));
 
-    renderPage();
+    renderPage(POLL_MS);
+    await flush();
+    expect(screen.getByText("100%")).toBeInTheDocument();
 
-    expect(await screen.findByText("100%")).toBeInTheDocument();
-    // Give a small window for any spurious re-fetches.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Five poll intervals with no movement in the count. A poll that had been
+    // re-armed would fire on the first of them, so this says the loop retired
+    // rather than merely going quiet.
+    await tick(POLL_MS * 5);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -803,40 +823,52 @@ describe("SubmissionDetail", () => {
       Promise.resolve(new Response(JSON.stringify(processingSubmission), { status: 200 })),
     );
 
-    renderPage();
+    // Fake timers for the whole test, not just its last act. Installing them at
+    // the end would not adopt the real timer the poll loop had already armed,
+    // so "no further request" would have passed without ever running anything.
+    const POLL_MS = 1_000;
+    vi.useFakeTimers();
+    renderPage(POLL_MS);
 
-    const socket = await waitFor(() => {
-      expect(FakeWebSocket.instances.length).toBeGreaterThan(0);
-      return FakeWebSocket.latest();
+    // The socket is constructed in a mount effect, so it exists once the
+    // effects have been flushed — no waiting on a clock to find out.
+    await flush();
+    expect(FakeWebSocket.instances.length).toBeGreaterThan(0);
+    const socket = FakeWebSocket.latest();
+    await act(async () => {
+      socket.open();
     });
-    socket.open();
-    expect(await screen.findByText(/Running tests/i)).toBeInTheDocument();
+    expect(screen.getByText(/Running tests/i)).toBeInTheDocument();
 
-    // Baseline after the socket is open and polling has stopped.
-    await waitFor(() => {
-      const calls = fetchMock.mock.calls.length;
-      return new Promise((resolve) =>
-        setTimeout(() => resolve(calls === fetchMock.mock.calls.length), 30),
-      ).then((stable) => expect(stable).toBe(true));
-    });
+    // `socketState` is a dependency of the poll effect, so opening the socket
+    // re-runs it: exactly one more request, and then the loop retires. Draining
+    // it settles the baseline, which is what the 30ms stability window was
+    // reaching for by waiting and hoping (#330).
+    await flush();
+    await tick(POLL_MS * 5);
     const beforeRecord = fetchMock.mock.calls.length;
 
-    socket.message({
-      type: "update",
-      status: "completed",
-      phase: null,
-      submission: finishedSubmission,
+    // `findBy*` would wait on the very clock these tests now mock, so the
+    // assertions are synchronous over a flushed render instead.
+    await act(async () => {
+      socket.message({
+        type: "update",
+        status: "completed",
+        phase: null,
+        submission: finishedSubmission,
+      });
     });
 
     // Output that used to require a re-fetch is on screen.
-    expect(await screen.findByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByText("2/2")).toBeInTheDocument();
-    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expectCodeToContain(/def two_sum/);
 
-    // The socket supplied the record, so no further request was made.
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.length).toBe(beforeRecord),
-    );
+    // The socket supplied the record, so no further request was made. Asserted
+    // after another five intervals, which is stronger than the 30ms it replaces:
+    // a poll still armed would have fired, rather than merely not yet.
+    await tick(POLL_MS * 5);
+    expect(fetchMock.mock.calls.length).toBe(beforeRecord);
   });
 
   it("still re-fetches when a terminal update arrives without the record", async () => {
@@ -845,9 +877,9 @@ describe("SubmissionDetail", () => {
     // terminal status with no output.
     setToken("jwt-token");
     vi.stubGlobal("WebSocket", FakeWebSocket);
-    // Polls (which stop once the socket is open) keep returning "processing";
-    // the flag flips only when the terminal update lands, so the request the
-    // fallback makes is the one that returns the record.
+    // Polls return "processing" while the socket is still connecting; the flag
+    // flips only once the terminal update lands, so the request the fallback
+    // makes is the one that returns the record.
     let deliverFinished = false;
     fetchMock.mockImplementation(() => {
       const body = deliverFinished ? finishedSubmission : processingSubmission;
@@ -860,16 +892,55 @@ describe("SubmissionDetail", () => {
       expect(FakeWebSocket.instances.length).toBeGreaterThan(0);
       return FakeWebSocket.latest();
     });
-    socket.open();
+    // Inside `act`: `open` flips the hook to "open", which re-runs the poll
+    // effect (it is a dependency) and retires the poll timer. Left bare, that
+    // update was the other half of the `act` warning — and it left the poll loop
+    // armed, which is what quietly substituted polling for the socket path
+    // below.
+    await act(async () => {
+      socket.open();
+    });
     expect(await screen.findByText(/Running tests/i)).toBeInTheDocument();
+
+    // A snapshot first, and this is load-bearing. A status/phase-only update is
+    // a no-op against a null `liveSubmission` — `useSubmissionSocket` returns
+    // `prev` unchanged when there is nothing to patch — so with no prior
+    // snapshot the terminal update below never reaches the component and the
+    // fallback re-fetch never runs.
+    //
+    // Which is what used to happen here: the socket path was inert, the "100%"
+    // came from the still-armed poll loop, and the test passed while exercising
+    // neither its own name nor its comment. Verified by deleting the fallback
+    // re-fetch from `SubmissionDetail` — the old test still passed.
+    await act(async () => {
+      socket.message({ type: "snapshot", submission: processingSubmission });
+    });
+
     const beforeRecord = fetchMock.mock.calls.length;
 
-    // Terminal status, but no record attached.
+    // Terminal status, but no record attached. Dispatched inside `act` and
+    // asserted synchronously, like the socket test above.
+    //
+    // This used to be a bare `socket.message(...)` followed by `findByText`,
+    // which made the test a race rather than an assertion: the update landed
+    // outside `act`, so React deferred the re-render to its own scheduler
+    // instead of flushing it here, and the page had to reach "100%" through
+    // several scheduler hops inside `findBy*`'s 1s deadline. That deadline is
+    // wall-clock, so under full-suite load it could expire with the fallback
+    // still in flight — the flake, and why the run logged "An update to
+    // SubmissionDetail inside a test was not wrapped in act".
+    //
+    // `act` drains microtasks on the way out, so the effect fires, the fallback
+    // request resolves and the record lands before this line returns. Nothing
+    // waits on a timer, so the pass is not a function of the clock (#330).
     deliverFinished = true;
-    socket.message({ type: "update", status: "completed", phase: null });
+    await act(async () => {
+      socket.message({ type: "update", status: "completed", phase: null });
+    });
 
-    expect(await screen.findByText("100%")).toBeInTheDocument();
-    expect(screen.getByText(/def two_sum/)).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+    expectCodeToContain(/def two_sum/);
     expect(fetchMock.mock.calls.length).toBeGreaterThan(beforeRecord);
   });
 });

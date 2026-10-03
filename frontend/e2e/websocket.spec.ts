@@ -10,6 +10,7 @@ import {
   repairedSubmission,
   repairingMessage,
   repairingSubmission,
+  settleSocketFrames,
   snapshotMessage,
   statusMessage,
   terminalMessage,
@@ -232,7 +233,18 @@ test.describe("Evaluation WebSocket", () => {
     // land last.
     await expect(page.getByText(/Running tests/)).toBeVisible();
     socket.send(statusMessage("processing", "generating"));
-    await page.waitForTimeout(300);
+    // Settle to the page's next paint before judging the patch. The 300ms this
+    // replaces was a duration picked to outlast delivery, which is a guess that
+    // is wrong in whichever direction the machine is slow or fast; the assertions
+    // below are the same either way.
+    //
+    // What this test cannot do is prove the frame was *processed* — it asserts
+    // that nothing changed, and an unprocessed frame also produces no change. The
+    // drop itself is asserted deterministically on the hook's own state in
+    // `src/hooks/useSubmissionSocket.test.ts` ("ignores a record-less update when
+    // no snapshot has arrived yet"); what is left here is the browser-level
+    // consequence, that the real record survives the frame intact.
+    await settleSocketFrames(page);
 
     // Nothing to patch, so the hook drops the update rather than inventing a
     // two-field Submission. Without the guard that object would replace the real
@@ -305,6 +317,21 @@ test.describe("Evaluation WebSocket", () => {
 
     await page.goto(`/submissions/${SUBMISSION_ID}`);
     await socket.waitForConnections(1);
+    // `waitForConnections` resolves when the *route handler* ran, which is not the
+    // same boundary as the page having a live handler for the frame. The captured
+    // failure is that `Score 100 percent` never appears at all — with the expect
+    // timeout already raised to 15s (#385), so the frame was lost rather than
+    // late. The window is React's dev double-mount: the page opens a socket, the
+    // effect re-runs, and the first connection is replaced. Sending on
+    // `open.at(-1)` before that settles writes to a socket the page has
+    // abandoned.
+    //
+    // The other eight tests in this file close the same gap incidentally, by
+    // asserting that a frame from the socket rendered before they send anything
+    // next; this one sent immediately. The two-frame settle is the helper written
+    // for exactly this, and it also lets the remount finish so `at(-1)` is the
+    // connection the page is actually listening on.
+    await settleSocketFrames(page);
     socket.send(terminalMessage(completed()));
 
     await expect(page.getByLabel("Score 100 percent")).toBeVisible();

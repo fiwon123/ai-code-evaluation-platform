@@ -115,6 +115,13 @@ export const AUDIT_RULES = {
     criterion: "WCAG 2.5.5 — Target Size (AAA 44px, AA 24px)",
     fix: "Grow the hit area with padding or a pseudo-element; a 12px icon button is not a target",
   },
+  "field-error-announced": {
+    id: "field-error-announced",
+    severity: "minor",
+    title: "Field error not announced",
+    criterion: "an erroring control must announce its message (aria-invalid + aria-describedby)",
+    fix: "Point aria-invalid at the control and aria-describedby at the error message element",
+  },
   "text-tiny": {
     id: "text-tiny",
     severity: "minor",
@@ -257,6 +264,33 @@ function collect(options: { atRest: boolean }): RawFinding[] {
     return `${tag}${id}${label}${cls}${text ? ` "${text}"` : ""}`;
   };
 
+  /**
+   * Content hidden from sight on purpose, but not from a screen reader.
+   *
+   * The visually-hidden pattern: a 1px box clipped to nothing, holding real text
+   * for assistive tech. `ComparisonMark` uses it to say "Included" / "Not
+   * included" beside a glyph that says it visually (#333), and `text-clipped`
+   * filed all of that as a **blocker** — 22px of text needing 1px, which is
+   * precisely what the pattern is for. Four false blockers on `/pricing`, on a
+   * green run, where they were the only findings the report had.
+   *
+   * The tell is the clip, not the size: `clip: rect(0,0,0,0)` and
+   * `clip-path: inset(50%)` exist to remove content from the visual canvas while
+   * leaving it in the accessibility tree. Nothing else has a reason to set them.
+   * Keying on "small box" instead would exempt any cramped element, which is
+   * where real clipping lives.
+   *
+   * What this deliberately does not do is report the hidden text as a defect
+   * either. If someone ever applies this pattern to content that *should* be
+   * seen, the sweep goes quiet — which is the cost of any exemption, and the
+   * reason the lock below asserts the exemption in both directions rather than
+   * trusting it.
+   */
+  const visuallyHidden = (el: Element) => {
+    const s = style(el);
+    return s.clip === "rect(0px, 0px, 0px, 0px)" || s.clipPath === "inset(50%)";
+  };
+
   /** The nearest ancestor that clips, if any. */
   const clippingAncestor = (el: Element) => {
     for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
@@ -322,6 +356,9 @@ function collect(options: { atRest: boolean }): RawFinding[] {
 
   for (const el of Array.from(document.querySelectorAll<HTMLElement>("p, span, li, td, th, h1, h2, h3, h4, h5, h6, a, button, label, legend, dt, dd"))) {
     if (!visible(el)) continue;
+    // Screen-reader-only text is clipped on purpose, and saying so is the whole
+    // content of the class. Reported, it was the only thing in the report (#337).
+    if (visuallyHidden(el)) continue;
     // Only elements holding their own text; a wrapper's overflow is its text
     // children's problem and would double-report.
     const own = Array.from(el.childNodes)
@@ -453,8 +490,30 @@ function collect(options: { atRest: boolean }): RawFinding[] {
 
   for (const el of Array.from(document.querySelectorAll<HTMLElement>(INTERACTIVE))) {
     if (!visible(el)) continue;
-    const r = rect(el);
+    let r = rect(el);
     if (r.width <= 0 || r.height <= 0) continue;
+    // A labelled control's target is its whole activation region — clicking the
+    // label activates the control. A radio inside a styled chip-label measures
+    // raw as ~13x13 while the chip is the real 44px target, so measure the
+    // union of the control and its labels, exactly the box a click can land
+    // on. Unlabelled controls (and inputs whose labels live elsewhere in the
+    // page, like a text field with a label above it) are measured raw as
+    // before — the union only ever grows the box.
+    const labelled = (el as HTMLInputElement).labels;
+    if (labelled && labelled.length > 0) {
+      let top = r.top;
+      let left = r.left;
+      let bottom = r.bottom;
+      let right = r.right;
+      for (const lb of labelled) {
+        const lr = rect(lb);
+        top = Math.min(top, lr.top);
+        left = Math.min(left, lr.left);
+        bottom = Math.max(bottom, lr.bottom);
+        right = Math.max(right, lr.right);
+      }
+      r = new DOMRect(left, top, right - left, bottom - top);
+    }
     if (r.bottom < 0 || r.top > viewportHeight) continue;
     if ((el as HTMLInputElement).disabled) continue;
     // Inline links in a sentence are exempt from target size: the criterion is
@@ -480,6 +539,28 @@ function collect(options: { atRest: boolean }): RawFinding[] {
       );
     }
     if (found.filter((f) => f.rule === "touch-target-small").length >= maxPerRule) break;
+  }
+
+  // --- rule: field errors announced ---------------------------------------
+
+  // A field that reports invalidity must also announce the message. The rule
+  // is deliberately structural: `aria-invalid="true"` without
+  // `aria-describedby` means the error text (if any) is orphaned, and a
+  // describedby that points at nothing means the announcement is empty.
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>('[aria-invalid="true"]'))) {
+    if (!visible(el)) continue;
+    const references = (el.getAttribute("aria-describedby") ?? "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id))
+      .filter((n): n is HTMLElement => n !== null && n !== undefined && !n.hidden);
+    if (references.length === 0) {
+      report(
+        "field-error-announced",
+        `${describe(el)} has aria-invalid but no aria-describedby that names a visible message`,
+      );
+      if (found.filter((f) => f.rule === "field-error-announced").length >= maxPerRule) break;
+    }
   }
 
   // --- rule: tiny text -----------------------------------------------------

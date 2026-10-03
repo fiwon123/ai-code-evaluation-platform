@@ -218,6 +218,14 @@ const SUBMISSION_STATS = {
   items: CHALLENGES.map((challenge, i) => ({
     challenge_id: challenge.id,
     challenge_title: challenge.title,
+    // The API sends this for every challenge (#347), and the profile card
+    // clamps it to two lines — so a fixture without it leaves the sweep
+    // photographing a card with no description at all, which is not a card any
+    // user sees. The first challenge's is deliberately long enough to clamp.
+    description:
+      i === 0
+        ? "Given an array of integers and a target, return the indices of the two numbers that add up to the target. Each input has exactly one solution, and the same element may not be used twice."
+        : challenge.description,
     language: challenge.language,
     total_runs: [48, 31, 12][i],
     completed_runs: [45, 27, 9][i],
@@ -225,6 +233,9 @@ const SUBMISSION_STATS = {
     avg_score: [88.4, 74.1, 61.9][i],
     best_score: [100, 92.5, 78.2][i],
     last_run_at: "2026-02-01T09:00:00Z",
+    // Also part of the payload since #347. The last challenge gets `null`, so
+    // the "not measured" state is rendered rather than assumed.
+    last_duration_ms: [4210, 1180, null][i] as number | null,
   })),
 };
 
@@ -441,4 +452,13 @@ export async function openRoute(page: Page, route: SweepRoute, theme: SweepTheme
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   await expect(page.getByRole("heading", { name: route.heading, level: 1 })).toBeVisible();
   await waitForTextSettled(page);
+  // Pages whose resting state is reached by a JS timeline rather than by their
+  // content being present. `waitForTextSettled` and the settle helper both look
+  // at text and CSS animations; neither can see a `setTimeout` chain, so `/`
+  // would otherwise be photographed mid-story and filed under "at rest".
+  if (route.atRest) {
+    await expect(page.locator(route.atRest)).toBeVisible({
+      timeout: 30_000,
+    });
+  }
 }

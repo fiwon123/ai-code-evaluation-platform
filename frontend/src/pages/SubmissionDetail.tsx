@@ -174,9 +174,14 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
 
   if (loading) {
     return (
-      <div role="status" aria-label="Loading submission">
-        <Skeleton variant="text" width="40%" height="1.5rem" />
-        <Skeleton variant="rect" width="100%" height="180px" />
+      <div className={styles.page}>
+        <div className={styles.header}>
+          <PageTitle className={styles.title}>Evaluation report</PageTitle>
+        </div>
+        <div role="status" aria-label="Loading submission">
+          <Skeleton variant="text" width="40%" height="1.5rem" />
+          <Skeleton variant="rect" width="100%" height="180px" />
+        </div>
       </div>
     );
   }

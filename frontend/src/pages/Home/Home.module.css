@@ -18,20 +18,20 @@
   overflow: hidden;
 }
 
-/* Colour blobs. Sizes/offsets live here; the drift itself is the shared
-   `auroraDrift` keyframe in globals.css. Tints are mixed from tokens that
-   both palettes define, so light and dark both stay legible. */
+/* Colour blobs. Sizes/offsets/tints live here; the drift is composed from
+   `ambient.css`, which is what makes it resolve at all — see that file for the
+   scoping trap. Tints are mixed from tokens that both palettes define, so light
+   and dark both stay legible. */
 .blobPrimary,
 .blobAccent,
 .blobSuccess {
   position: absolute;
   border-radius: var(--radius-full);
   filter: blur(80px);
-  will-change: transform;
-  animation: auroraDrift var(--duration-ambient) ease-in-out infinite;
 }
 
 .blobPrimary {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 520px;
   height: 520px;
   top: -220px;
@@ -44,6 +44,7 @@
 }
 
 .blobAccent {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 420px;
   height: 420px;
   top: 18%;
@@ -58,6 +59,7 @@
 }
 
 .blobSuccess {
+  composes: ambientDrift from "../../styles/ambient.css";
   width: 460px;
   height: 460px;
   bottom: -260px;
@@ -145,39 +147,6 @@
   box-shadow: var(--shadow-elevated), 0 0 0 3px var(--color-focus-ring);
 }
 
-/* Toolchain chips. Monospace, low-contrast, and deliberately quiet — they
-   are supporting evidence for the headline, not a second headline. */
-.chipRow {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  list-style: none;
-  margin: var(--space-6) 0 0;
-  padding: 0;
-}
-
-.chip {
-  padding: 4px var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-surface) 70%, transparent);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  transition:
-    color var(--transition-fast),
-    border-color var(--transition-fast),
-    background-color var(--transition-fast);
-}
-
-.chip:hover {
-  color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
-  background: var(--color-primary-light);
-}
-
 .heroBadgeRow {
   display: flex;
   justify-content: center;
@@ -197,7 +166,22 @@
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-elevated);
   overflow: hidden;
-  transition: box-shadow var(--transition-slow) var(--ease-out-expo);
+  /* The entrance is the panel's own, not a `Reveal` wrapper's, so that
+     `TERMINAL_ENTRANCE_MS` in the component sets this fade and the story's
+     lead-in to the same number. `data-entered` is the single signal both read.
+     The fallbacks are the values the component passes, so the panel still
+     behaves if the custom properties stop arriving. */
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    box-shadow var(--transition-slow) var(--ease-out-expo),
+    opacity var(--terminal-entrance, 550ms) ease var(--terminal-entrance-delay, 320ms),
+    transform var(--terminal-entrance, 550ms) ease var(--terminal-entrance-delay, 320ms);
+}
+
+.animPanel[data-entered="true"] {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .animPanel:hover {
@@ -227,8 +211,10 @@
   opacity: 1;
 }
 
-/* A single line travelling down the panel, evoking a running test job. */
+/* A single line travelling down the panel, evoking a running test job. The
+   keyframe is composed rather than named inline — see `ambient.css`. */
 .panelScan {
+  composes: ambientScanline from "../../styles/ambient.css";
   position: absolute;
   left: 0;
   right: 0;
@@ -241,7 +227,6 @@
     transparent
   );
   pointer-events: none;
-  animation: scanline 6s var(--ease-out-expo) infinite;
 }
 
 .animHeader {
@@ -285,24 +270,99 @@
   flex: 1;
 }
 
+/*
+ * Which run this is.
+ *
+ * Plain secondary text rather than a second pill: the stage tag beside it already
+ * claims the panel's whole width of attention, and a reader needs this number to
+ * be findable — not to compete. It sits between the title and the tag because it
+ * qualifies the *report* below, so it wants to be adjacent to the score and the
+ * rows rather than to the window chrome.
+ *
+ * `font-variant-numeric: tabular-nums` is load-bearing on the "2" in "attempt 2
+ * of 3": without it the digit is proportionally spaced and the label visibly
+ * re-flows as the panel steps from 1 to 2 to 3, which in a panel that is already
+ * moving is one more thing moving.
+ */
+.animAttempt {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * The stage tag.
+ *
+ * One element, coloured by `data-stage` rather than a class per stage, so the
+ * pill's geometry is written once and only the two colours vary. The pairing is
+ * the `-strong` step on the `-light` tint — the #346 family rule. The base
+ * tokens are the identity hues and are *not* text-safe here: `--color-primary`
+ * on `--color-primary-light` measures 3.13:1 in the dark theme, which is the
+ * same failure #348 fixed on Profile's status pill and this one missed because
+ * the test only ever looked at the palette.
+ *
+ * The tag means "what is happening now", so it changes colour with the stage
+ * rather than cycling: at any instant the pill and the rows below it are
+ * describing the same beat.
+ */
 .animStatus {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--font-size-xs);
   font-weight: 600;
-  color: var(--color-primary);
-  background: var(--color-primary-light);
   border-radius: var(--radius-full);
   padding: 2px var(--space-3);
+  white-space: nowrap;
 }
 
+.animStatus[data-stage="generating"],
+.animStatus[data-stage="prompt"],
+.animStatus[data-stage="score"] {
+  color: var(--color-primary-strong);
+  background: var(--color-primary-light);
+}
+
+/* `retrying` is grouped with the two run stages rather than given its own: it is
+   the beat where the panel clears for the next attempt, so the honest colour is
+   the warning it was already showing for the suite it is about to run — not a
+   third identity the reader has to learn. */
+.animStatus[data-stage="running"],
+.animStatus[data-stage="results"],
+.animStatus[data-stage="retrying"] {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-light);
+}
+
+.animStatus[data-stage="ready"] {
+  color: var(--color-success-strong);
+  background: var(--color-success-light);
+}
+
+/*
+ * The dot pulses only while the panel is actually working.
+ *
+ * The pulse is declared once, on the bare selector, and `data-active` only
+ * decides whether it runs. Writing it as five `[data-stage="…"] .animStatusDot`
+ * rules instead looks tidier and is worse: the reduced-motion opt-out below is
+ * written for `.animStatusDot`, and `ambient-motion.test.ts` matches an opt-out
+ * to a looping animation by *exact selector*, so the compound form left five
+ * looping rules with no opt-out it could see. `paused` holds the animation at
+ * its 0% frame, which is `opacity: 1` — the resting look, not a frozen mid-pulse.
+ */
 .animStatusDot {
   width: 6px;
   height: 6px;
   border-radius: var(--radius-full);
   background: currentColor;
   animation: statusPulse 1.2s ease-in-out infinite;
+  animation-play-state: paused;
+}
+
+.animStatusDot[data-active="true"] {
+  animation-play-state: running;
 }
 
 @keyframes statusPulse {
@@ -333,7 +393,14 @@
 
 .animPromptText {
   color: var(--color-text-secondary);
-  min-height: 1.5em;
+  /* Reserve the prompt's tallest state, so the typewriter cannot grow the panel
+   * (#389). `min-height: 1.5em` held one line while the text was short; the
+   * moment it wrapped to a second line the whole hero pushed down. The sample
+   * prompt is 99 characters and wraps to at most four lines at the narrow
+   * breakpoint (three at 412px), and the inherited line-height is 1.6, so four
+   * lines is `4 × 1.6em = 6.4em`. The extra whitespace on wide screens is the
+   * price of a panel that does not move while it plays. */
+  min-height: 6.4em;
   word-break: break-word;
 }
 
@@ -367,6 +434,56 @@
   background: var(--color-surface);
 }
 
+/*
+ * The ring's slot, and the shake that opens the score.
+ *
+ * `data-scoring` is on for the whole score stage, but the animation is one-shot
+ * and shorter than that stage, so it shakes for exactly `shakeMs` and the rest
+ * of the stage is the count-up. The shake is *not* gated on reduced motion at
+ * the element level — `@media` below turns it off, and a reduced-motion reader
+ * is already at the resting stage so the attribute is never set anyway. Two
+ * independent reasons, either of which is enough.
+ */
+.scoreWrap {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.sampleReport[data-scoring="true"] .scoreWrap {
+  animation-name: scoreShake;
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/*
+ * A short lateral shudder that decays, rather than a loop: it reads as the
+ * number landing, and it hands straight over to the count-up. Transform-only so
+ * it does not trigger layout on every frame.
+ */
+@keyframes scoreShake {
+  0% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-5px);
+  }
+  30% {
+    transform: translateX(5px);
+  }
+  45% {
+    transform: translateX(-4px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
 .sampleMeta {
   flex: 1;
   min-width: 0;
@@ -383,28 +500,58 @@
   flex-direction: column;
   gap: 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   text-align: left;
+  /* Reserve all three rows before any is revealed (#389). Rows are *rendered*
+   * only once the story resolves them, so the list grows 0 → 3 during the run
+   * and drags `.sampleMeta` — and the panel — down with it. The reservation is
+   * the final geometry: three rows (each `0.5rem` padding + a `0.875rem × 1.6`
+   * line box) plus two `0.5rem` gaps is ~6.7rem, so `7rem` holds at every
+   * intermediate length and the movement cannot reappear. */
+  min-height: 7rem;
 }
 
-.sampleTestPass {
-  color: var(--color-success);
-  opacity: 0;
-  animation: rowIn 500ms ease-out forwards;
-}
-
-.sampleTestFail {
-  color: var(--color-danger);
-  opacity: 0;
-  animation: rowIn 500ms ease-out 200ms forwards;
-}
-
-.sampleTestPass,
-.sampleTestFail {
+/*
+ * One rule for the row, and the state in an attribute.
+ *
+ * The previous version had `.sampleTestPass` and `.sampleTestFail` each
+ * declaring `opacity: 0` and their own `rowIn` delay — three rows, two delays,
+ * so the failing row appeared at the same instant as the first passing one, and
+ * a reduced-motion override that missed a selector would have left a result
+ * permanently invisible. Rows are now *rendered* only once the story reveals
+ * them (see `useTerminalStory`), so there is no hidden state to leak: what is
+ * in the DOM is what is on screen.
+ */
+.sampleTestRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, currentColor 14%, transparent);
+  color: var(--color-text-secondary);
   white-space: nowrap;
+  animation: rowIn 320ms ease-out backwards;
+}
+
+/* A test that is running has no verdict yet, so it is not painted as one. */
+.sampleTestRow[data-state="running"] {
+  color: var(--color-primary-strong);
+  background: var(--color-primary-light);
+}
+
+.sampleTestPass {
+  color: var(--color-success-strong);
+  background: color-mix(in srgb, var(--color-success-strong) 14%, transparent);
+}
+
+.sampleTestFail {
+  color: var(--color-danger-strong);
+  background: color-mix(in srgb, var(--color-danger-strong) 14%, transparent);
+}
+
+.sampleTestPending {
+  color: var(--color-primary-strong);
 }
 
 .sampleMetaRow {
@@ -416,16 +563,28 @@
   color: var(--color-text-muted);
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-divider);
+  /* Reserve the tall state, not the tally's one-line "running suite…" (#389).
+   * The settled tally wraps to two lines at the narrow breakpoint, and the row
+   * sits below the ring's fixed reservation, so without this the last beat of
+   * the run — the one a reader is most likely to be watching — nudged the
+   * panel. `3.5rem` covers the two `0.75rem × 1.6` lines plus the `0.75rem` top
+   * padding, with room to spare. */
+  min-height: 3.5rem;
 }
 
 .sampleMetaLink {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 600;
 }
 
 @keyframes rowIn {
   from {
-    opacity: 0;
+    /* Not 0. The pending mark is the one thing on this row that has to be
+       legible the instant it appears — `⋯` saying "not resolved yet" is the
+       whole point of the row, and fading in from nothing spends the first third
+       of its 320ms entrance rendering that message invisible. 0.25 keeps the
+       arrival soft and the text readable from frame one. */
+    opacity: 0.25;
     transform: translateX(-6px);
   }
   to {
@@ -434,14 +593,101 @@
   }
 }
 
-/* Score ring arc fills up to the 88% — keep DOM value stable for a11y/tests */
+/*
+ * The arc fills up to the sample score, *after* the shake.
+ *
+ * The animation is gated on `data-scoring` rather than merely delayed. A
+ * wall-clock `animation-delay` looks equivalent and is not: the story is a chain
+ * of per-character re-renders that runs late under load, and a fixed delay fills
+ * the arc while the suite is still running — which the e2e suite caught at 26%
+ * with two of three tests outstanding. Keying the animation off the attribute
+ * means the arc starts because the score stage started.
+ *
+ * `--ring-delay` is therefore the 400ms shake, not the story's absolute score
+ * time, so the arc and the digits land together. That is the one number both
+ * read, and it is small enough that being slightly late is invisible.
+ *
+ * `animation-name: none` in the base rule is load-bearing: with the name set
+ * unconditionally, the fill would run on mount and the attribute rule below
+ * would only ever re-trigger it. The reduced-motion override is written against
+ * the same selector as the rule that sets the name, or the higher specificity
+ * would win and reduced-motion readers would get the animation back.
+ */
 .animPanel .sampleReport :global(.ringProgress) {
-  animation: ringFill 1.2s ease-out 900ms both;
+  /* The dashoffset *transition* is dropped here, and only the colour one kept.
+     The global `.ringProgress` transitions `stroke-dashoffset` so that a ring
+     whose score changes eases into the new arc. In this panel the score *is* the
+     animation: `--ring-arc` and `--ring-arc-from` change on the very frame
+     `data-scoring` flips, which is the frame `ringFill` takes over. So the base
+     offset changed underneath a running keyframe animation and the transition
+     animated that change too — and the two fought. Measured: the ring sat fully
+     drawn to 33% beside a 0% number for the length of the shake, then emptied,
+     then filled again, all before the count reached 33%. The colour transition
+     stays because the band hop is the point of the scale. */
+  transition: stroke var(--duration-base) ease;
+
+  /* The resting state is *the ring so far*, not empty.
+     `stroke-dasharray` is `<arc> <circumference>`, so an offset of `arc` slides
+     the whole filled segment into the gap — nothing drawn — and an offset of
+     `arc - from` leaves exactly `from` drawn. Both numbers are the ring's own,
+     published by `ScoreRing` as `--ring-arc` and `--ring-arc-from`.
+
+     Before the first score both are 0, so this is empty exactly as it should be:
+     a ring that looks finished before the suite is was the bug the empty offset
+     was there to fix, and it is still fixed — there is simply no score to hold
+     yet.
+
+     Between attempts it holds the score the last count-up drew, which is the
+     change #389 asked for. It used to empty here while the failures were pulled
+     out, so the panel went 33% → nothing → 67%: three rings rather than one
+     climbing to 100, and the second attempt's rise had nothing to climb from. */
+  stroke-dashoffset: calc(var(--ring-arc) - var(--ring-arc-from, 0px));
+  animation-name: none;
+  animation-duration: var(--ring-duration, 1.2s);
+  /* The digits ease with `1 - (1 - p)^3` in `useCountUp`, so the arc uses the
+     bezier that is that curve: `cubic-bezier(0.33, 1, 0.68, 1)`. `ease-out` is
+     close enough to pass any eye that only looks at one of the two, and visibly
+     wrong next to it — a CSS `ease-out` is asymptotic, so at the moment the
+     digits reached 98% the arc was still at 87%, and the 13% that was left
+     snapped in on the next frame when `[data-complete]` took the offset to 0.
+     One curve for both halves of the ring, so they land together. */
+  animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  animation-delay: var(--ring-delay, 0ms);
+  /* `forwards`, not `backwards`. The fill's end state has to be held: with
+     `backwards` the animation stops applying the moment it finishes and the ring
+     springs back to the last drawn arc beside a number that has moved on.
+     `forwards` is also all that is needed for the delay period, because the base
+     value *is* the state before the fill — which is what `backwards` used to be
+     covering. */
+  animation-fill-mode: forwards;
 }
 
+.animPanel .sampleReport[data-scoring="true"] :global(.ringProgress) {
+  animation-name: ringFill;
+}
+
+/* Settled: the arc stays drawn once the story is over. Same value the keyframes
+   end on, so the hand-off from `forwards` to this rule is invisible — which is
+   the point, because the score stage is over by the time this takes effect and
+   the alternative was the ring emptying at the exact moment the number stopped
+   moving.
+
+   Needed separately from the base rule because at rest there is nothing to hold
+   *from*: `--ring-arc-from` is still the previous attempt's score, and holding
+   that offset would leave the ring showing 67% beside a settled 100%. */
+.animPanel .sampleReport[data-complete="true"] :global(.ringProgress) {
+  stroke-dashoffset: 0;
+}
+
+/* From wherever the ring already is to fully drawn, in its own units. The `to`
+   end is 0 — the arc exactly where `stroke-dasharray` puts it — and the `from`
+   end is `arc - from`, which is the offset that leaves `from` drawn. So the fill
+   lands on the score and starts at the score before it: the first count sweeps
+   the whole arc from empty, and each later one extends the arc the reader is
+   already looking at. */
 @keyframes ringFill {
   from {
-    stroke-dashoffset: 300;
+    stroke-dashoffset: calc(var(--ring-arc) - var(--ring-arc-from, 0px));
   }
   to {
     stroke-dashoffset: 0;
@@ -476,14 +722,16 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-4) var(--space-2);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
   opacity: 0.8;
   transform: scale(0.98);
-  transition: opacity 0.3s ease, transform 0.3s var(--ease-out-expo),
-    box-shadow 0.3s ease, border-color 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease,
+    border-color 0.3s ease,
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+  text-align: center;
 }
 
 /* The pipeline is decorative (`aria-hidden`), so hover is the only way a
@@ -517,7 +765,7 @@
 }
 
 .pipelineIcon {
-  font-size: 1.5rem;
+  font-size: var(--font-size-2xl);
   margin-bottom: var(--space-1);
 }
 
@@ -553,93 +801,112 @@
   color: var(--color-primary);
 }
 
-/* Sequential activation: 10s loop, 2s per step */
-@keyframes pipelineActivate {
-  0%,
-  100% {
-    opacity: 0.8;
-    transform: scale(0.98);
+/* Sequential activation: one 5.5s loop, five 1.1s slices (#353/#388).
+ *
+ * The cycle is retuned to 5.5s (5 × 1.1s) to sync with the count-up sweep. Each
+ * step's animation is delayed by its own index times 1.1s, so local 0% is the
+ * moment that step's window opens. The card is lit at its own 0% and back to rest
+ * before the next step opens (local < 40% for the lit band), so exactly one step
+ * is prominent at a time. Local percentages are of 5.5s, so 20% = 1.1s. */
+@keyframes pipelineStepActive {
+  0% {
+    opacity: 0.86;
+    transform: scale(0.985);
     border-color: var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
   }
-  10% {
+  /* Rising edge: peaks early so the card looks like it lifts before it lights. */
+  5% {
+    transform: scale(1.015);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1);
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    box-shadow:
+      0 6px 18px color-mix(in srgb, var(--color-primary) 30%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+  /* Hold through the middle of the slice. */
+  20% {
     opacity: 1;
     transform: scale(1);
   }
-  20% {
-    opacity: 1;
-    transform: scale(1.02);
-    border-color: var(--color-primary);
-    background: var(--color-primary-light);
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  /* Falling edge finishes before the next step opens. */
+  26% {
+    opacity: 0.92;
   }
-  30% {
-    opacity: 0.9;
-  }
-  55% {
-    opacity: 0.8;
-    transform: scale(0.98);
+  32%,
+  100% {
+    opacity: 0.86;
+    transform: scale(0.985);
     border-color: var(--color-border);
     background: var(--color-surface);
+    box-shadow: var(--shadow-card);
   }
 }
 
+/* One delay per step (#388): cycle is 5.5s, five 1.1s slices. */
 .step0 {
-  animation: pipelineActivate 10s ease-in-out infinite;
+  animation: pipelineStepActive 5.5s ease-in-out infinite;
   animation-delay: 0s;
 }
 
 .step1 {
-  animation: pipelineActivate 10s ease-in-out infinite;
-  animation-delay: 2s;
+  animation: pipelineStepActive 5.5s ease-in-out infinite;
+  animation-delay: 1.1s;
 }
 
 .step2 {
-  animation: pipelineActivate 10s ease-in-out infinite;
-  animation-delay: 4s;
+  animation: pipelineStepActive 5.5s ease-in-out infinite;
+  animation-delay: 2.2s;
 }
 
 .step3 {
-  animation: pipelineActivate 10s ease-in-out infinite;
-  animation-delay: 6s;
+  animation: pipelineStepActive 5.5s ease-in-out infinite;
+  animation-delay: 3.3s;
 }
 
 .step4 {
-  animation: pipelineActivate 10s ease-in-out infinite;
-  animation-delay: 8s;
+  animation: pipelineStepActive 5.5s ease-in-out infinite;
+  animation-delay: 4.4s;
 }
 
-/* Connector pulses while the step before it is active */
-@keyframes connectorPulse {
+/* A connector lights when the step *after* it becomes active (#353/#388).
+ * Cycle 5.5s with 1.1s slices. */
+@keyframes connectorFlow {
   0%,
   100% {
     background-color: var(--color-divider);
   }
-  20% {
+  10% {
     background-color: var(--color-primary);
   }
-  30% {
+  26% {
     background-color: var(--color-divider);
   }
 }
 
 .pipelineConnector.arrow0 {
-  animation: connectorPulse 10s ease-in-out infinite;
-  animation-delay: 0s;
+  animation: connectorFlow 5.5s ease-in-out infinite;
+  animation-delay: 1.1s;
 }
 
 .pipelineConnector.arrow1 {
-  animation: connectorPulse 10s ease-in-out infinite;
-  animation-delay: 2s;
+  animation: connectorFlow 5.5s ease-in-out infinite;
+  animation-delay: 2.2s;
 }
 
 .pipelineConnector.arrow2 {
-  animation: connectorPulse 10s ease-in-out infinite;
-  animation-delay: 4s;
+  animation: connectorFlow 5.5s ease-in-out infinite;
+  animation-delay: 3.3s;
 }
 
 .pipelineConnector.arrow3 {
-  animation: connectorPulse 10s ease-in-out infinite;
-  animation-delay: 6s;
+  animation: connectorFlow 5.5s ease-in-out infinite;
+  animation-delay: 4.4s;
 }
 
 /* Progress bar */
@@ -653,19 +920,30 @@
 
 .progressBar {
   height: 6px;
-  width: 0%;
+  width: 4%;
   background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
   border-radius: var(--radius-full);
-  animation: progressFill 10s linear infinite;
+  animation: progressStages 5.5s ease-in-out infinite;
 }
 
-@keyframes progressFill {
-  from {
-    width: 0%;
-  }
-  to {
-    width: 100%;
-  }
+/* Five plateaus on the same 1.1s slices as the cards (#388): 5.5s cycle.
+ * Duplicate stops hold each level flat; the move to the next level is compressed
+ * around the boundary, and the loop seam is faded so no one-frame teleport. */
+@keyframes progressStages {
+  0% { width: 4%; opacity: 0; }
+  2% { opacity: 1; }
+  16.4% { width: 4%; opacity: 1; }
+  20% { width: 24%; opacity: 1; }
+  36.4% { width: 24%; opacity: 1; }
+  40% { width: 44%; opacity: 1; }
+  56.4% { width: 44%; opacity: 1; }
+  60% { width: 64%; opacity: 1; }
+  76.4% { width: 64%; opacity: 1; }
+  80% { width: 84%; opacity: 1; }
+  92.7% { width: 84%; opacity: 1; }
+  96.4% { width: 100%; opacity: 1; }
+  99% { width: 100%; opacity: 0; }
+  100% { width: 4%; opacity: 0; }
 }
 
 .pipelineCaption {
@@ -674,100 +952,65 @@
   color: var(--color-text-secondary);
 }
 
-/* ---- Stats strip ---- */
-.statsStrip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-5);
-  max-width: 900px;
-  margin: var(--space-16) auto 0;
-  padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  transition:
-    box-shadow var(--transition-slow) var(--ease-out-expo),
-    border-color var(--transition-slow) var(--ease-out-expo);
-}
-
-.statsStrip:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
-  box-shadow:
-    var(--shadow-elevated),
-    0 20px 50px -28px color-mix(in srgb, var(--color-primary) 55%, transparent);
-}
-
-.statItem {
+/* ---- Stats, inside the How-it-works cards (#354) ---- */
+/* These used to be a four-up strip under the hero with its own bordered
+   surface, captioned "Sample figures for the prototype". Folded into the step
+   that explains each number they no longer need a container — the card is the
+   surface — so what is left is the value, its accent, and the rule under it.
+   The strip's own rules are gone rather than kept as a fallback: a second
+   definition of the same stat would be one more thing to keep in step. */
+.stepStat {
   --stat-accent: var(--color-primary);
-  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-1);
-  padding: var(--space-2);
-  border-radius: var(--radius-lg);
-  transition:
-    background-color var(--transition-base),
-    transform var(--transition-base) var(--ease-out-expo);
+  margin-bottom: var(--space-3);
 }
 
-/* One identity per stat, so the strip reads as four different facts rather
-   than one number four times. Purely decorative: the value itself is never
-   tinted to imply a verdict, and the label stays on --color-text-secondary so
-   it is unaffected by the accent. */
-.statItem[data-accent="teal"] { --stat-accent: var(--color-accent-teal); }
-.statItem[data-accent="violet"] { --stat-accent: var(--color-accent-violet); }
-.statItem[data-accent="rose"] { --stat-accent: var(--color-accent-rose); }
+/* One identity per step, so the row reads as four different facts rather than
+   one number four times. Purely decorative: the value is never tinted to imply
+   a verdict, and the label stays on --color-text-secondary so it is unaffected
+   by the accent. */
+.stepStat[data-accent="teal"] { --stat-accent: var(--color-accent-teal); }
+.stepStat[data-accent="violet"] { --stat-accent: var(--color-accent-violet); }
+.stepStat[data-accent="rose"] { --stat-accent: var(--color-accent-rose); }
 
-/* A rule under the number gives each stat a colour anchor that survives at any
-   width, where a coloured background alone would fight the strip's own
-   surface. It also gives the hover something to deepen. */
-.statItem::after {
+/* A rule under the value gives each one a colour anchor that survives at any
+   width, where a tinted background would fight the card's own surface. */
+.stepStat::after {
   content: "";
   width: 28px;
   height: 2px;
   margin-top: var(--space-1);
   border-radius: var(--radius-full);
   background: var(--stat-accent);
-  opacity: 0.55;
-  transition: opacity var(--transition-base);
+  /* 0.55 read as a stray hairline rather than a rule, and not equally for all
+     four: on the dark card the blue and violet bars were the first to vanish.
+     One opacity for every accent keeps the four cards equally weighted. */
+  opacity: 0.7;
 }
 
-.statItem:hover {
-  background: color-mix(in srgb, var(--stat-accent) 10%, transparent);
-  transform: translateY(-2px);
-}
-
-.statItem:hover::after {
-  opacity: 1;
-}
-
-.statValue {
-  font-size: 2rem;
+.stepStatValue {
+  font-size: var(--font-size-3xl);
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--stat-accent);
   font-variant-numeric: tabular-nums;
 }
 
-.statLabel {
+/* Tabular figures matter more here than they did in the strip: four numbers of
+   different widths counting at once would otherwise reflow their own labels as
+   the digits change. */
+.stepStatValue[data-counting="true"] {
+  min-width: 2ch;
+}
+
+.stepStatLabel {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-/* The caption is the sample-figures disclaimer, so it has to read as a note
-   *under* the figures rather than as a fifth stat. Tracking it out and
-   muting it does that; centring it matches the strip above. */
-.statsCaption {
-  margin-top: var(--space-3);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  text-align: center;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /* ---- Sections ---- */
@@ -894,6 +1137,13 @@
 }
 
 /* How it works */
+/* The four-across row needs each card to be wide enough for its two lines of
+   copy. Below ~1200px a quarter of the row is under ~230px, every paragraph
+   re-wraps to three lines at a *different* break point per card, and the grid
+   stretches all four to the tallest — so the dead space the desktop row does
+   not have reappears on ordinary laptop widths. Stepping down to two columns
+   fixes the width instead of trimming copy to suit one viewport: at 2-up a card
+   is ~460px, so the line counts stay even by geometry rather than by luck. */
 .stepsGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -902,19 +1152,87 @@
   margin: 0 auto;
 }
 
-.stepNumber {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  color: var(--color-on-solid);
-  font-weight: 700;
-  font-size: var(--font-size-lg);
-  margin-bottom: var(--space-4);
+/* Each card is tinted with the accent of the figure it explains (#353), so the
+   four steps are told apart by hue rather than by position alone. The accent
+   comes in as `--card-accent` from `Home.tsx`, which reads it off the same
+   `STEPS` entry the figure does — one source, so a card and its number cannot
+   end up different colours. */
+.stepCard {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--card-accent) 30%, var(--color-border));
+  /* A wash from the top edge only. Tinting the whole surface instead made four
+     large fields of colour, which competed with the figure for attention; the
+     top-down fade reads as a highlight and leaves the body of the card white. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card-accent) 9%, var(--color-surface)) 0%,
+    var(--color-surface) 58%
+  );
+  transition:
+    transform 0.32s var(--ease-out-expo),
+    box-shadow 0.32s var(--ease-out-expo),
+    border-color 0.32s ease,
+    background 0.32s ease;
 }
+
+/* Pointer-only. `:hover` alone also fires on touch, where there is no cursor to
+   move and no second state to leave: the card would latch into its hovered
+   colours on tap and stay there. */
+@media (hover: hover) and (pointer: fine) {
+  .stepCard:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--card-accent) 62%, var(--color-border));
+    box-shadow:
+      var(--shadow-elevated),
+      0 14px 30px -22px
+        color-mix(in srgb, var(--card-accent) 70%, transparent);
+  }
+}
+
+/* Keyboard parity: a card that lifts on hover but cannot be reached by Tab
+   would be decoration a keyboard user never sees. */
+.stepCard:focus-within {
+  border-color: color-mix(in srgb, var(--card-accent) 62%, var(--color-border));
+}
+
+
+
+/* Entrance, staggered (#353). The cards hide themselves until the grid reports
+   `data-entered`, which is the same first-intersection gate the figure sweep
+   uses, so a number and the card explaining it arrive together.
+
+   The hiding state lives inside `no-preference` on purpose. A reduced-motion
+   reader must never be one missed selector away from four invisible cards —
+   the same reasoning as `.animPanel` in this file's reduced-motion block. */
+@media (prefers-reduced-motion: no-preference) {
+  .stepCard {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes stepCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stepsGrid[data-entered="true"] .stepCard {
+  animation: stepCardIn 0.5s var(--ease-out-expo) both;
+}
+
+/* 70ms apart: enough to read as a cascade rather than a single pop, short
+   enough that the last card is not visibly late. */
+.stepsGrid[data-entered="true"] .stepCard:nth-child(1) { animation-delay: 0ms; }
+.stepsGrid[data-entered="true"] .stepCard:nth-child(2) { animation-delay: 70ms; }
+.stepsGrid[data-entered="true"] .stepCard:nth-child(3) { animation-delay: 140ms; }
+.stepsGrid[data-entered="true"] .stepCard:nth-child(4) { animation-delay: 210ms; }
 
 .stepTitle {
   font-size: var(--font-size-lg);
@@ -924,6 +1242,12 @@
 .stepText {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+  /* The four step paragraphs are 65-75 characters, so a naive wrap leaves a
+     one- or two-word last line on most of them at most widths — a stub line
+     under each card reads as sloppier than the ragged right edge it fixes.
+     Progressive enhancement: a browser that does not know `pretty` ignores the
+     declaration and wraps as before. */
+  text-wrap: pretty;
 }
 
 /* Teaser (uses the global .sectionHighlight shell) */
@@ -944,21 +1268,193 @@
   margin: 0 auto var(--space-6);
 }
 
+/* ---- Teaser run log (#355) ----
+   The section was the last one on the page with a heading, a sentence and a
+   button and nothing else, so the page ended flat. This is the compact run log
+   that gives it something to look at.
+
+   Kept deliberately unlike the hero terminal. That one types a single submission
+   out character by character and closes on a score ring; this one summarises a
+   whole run in five rows and stays still once it has played. A second
+   character-level terminal at the foot of the page would be the same animation
+   twice, and would also mean a second JS timeline re-rendering per character
+   against the first (see the measurement in `AnimatedTerminal`).
+
+   Every rule here is a CSS keyframe rather than JS state, which is the same
+   reason the pipeline strip is (#353): a keyframe timeline can be seeked and
+   asserted at an exact time, and it costs nothing while off screen. */
+
+.teaserPanelWrap {
+  /* Matches `.animPanel`'s 560px so the page opens and closes on the same
+     measure, with the same left-aligned text inside a centred section. */
+  max-width: 560px;
+  margin: var(--space-10) auto 0;
+}
+
+.teaserPanel {
+  position: relative;
+  text-align: left;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* One soft wash at the top, the same treatment as `.panelGlow` in the hero, so
+   the two panels read as one system rather than two ideas. */
+.teaserPanel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 60%;
+  border-radius: inherit;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-primary) 7%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+/* `.teaserRow` and `.teaserScoreRow` share one rule rather than one composing
+   the other. `composes` puts both class names on the element, which means
+   `[class*="teaserRow"]` also selects the score row — the e2e count came back 7
+   for 5 rows. A comma keeps one definition of the shared declarations without
+   the two names ever landing on the same element. */
+.teaserRow,
+.teaserScoreRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  min-height: 1.5em;
+}
+
+.teaserLabel {
+  color: var(--color-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.teaserDetail {
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.teaserResults {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+/* The pass/fail chips reuse the status vocabulary the result pages already use,
+   so a reader who has seen a real report recognises these without a legend. */
+.teaserPass,
+.teaserFail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.teaserPass {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 28%, transparent);
+}
+
+.teaserFail {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 28%, transparent);
+}
+
+/* The score row is set apart from the log above it: it is the number the
+   section exists to show, and burying it in the same weight as an HTTP verb
+   would make it the fourth line rather than the point. */
+.teaserScoreRow {
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-base);
+}
+
+.teaserScoreRow .teaserLabel {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.teaserScoreRow .teaserDetail {
+  color: var(--color-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.teaserPanelCaption {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* The entrance. One keyframe, staggered per row by `--teaser-delay`, which the
+   component sets from `TEASER_STAGGER_MS` so the number has one definition.
+
+   Note what is *not* here: a resting `opacity: 0`. The hidden state lives in the
+   keyframe's `from`, reached through `animation-fill-mode: both`, and the
+   animation is only attached once `data-entered="true"`. So if the observer
+   never fires, or the attribute never arrives, the rows are simply visible — the
+   safe failure direction, and the same one `#353` settled on for the step
+   cards. A CSS-only reveal also means the animation cannot be orphaned by a
+   re-render: there is no state to lose. */
+/* Plain `ease`, and deliberately not `--ease-out-expo`.
+
+   `--ease-out-expo` is the scanline's easing (see `ambient.css`), which suits a
+   line travelling across a panel and is wrong for a stagger: it front-loads so
+   hard that it covers 96% of its range in the first 38% of its duration. On five
+   rows 260ms apart that produced something measured as five separate pops — each
+   row spent only ~67ms inside the visible band, less than the stagger, so no two
+   were ever fading at once. The timings said "cascade" and the pixels said
+   "five blinks", which is the #353 progress-bar defect wearing a different hat.
+
+   `ease` is what `Reveal` — this page's other entrance — already uses, so the
+   section also now matches the motion language around it rather than
+   importing a token from a different one. Under `ease` a row is inside the
+   visible band for ~320ms, comfortably more than the 260ms stagger, so the
+   cascade overlaps the way a cascade is supposed to. */
+@keyframes teaserRowIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.teaserPanelWrap[data-entered="true"] .teaserRow,
+.teaserPanelWrap[data-entered="true"] .teaserScoreRow {
+  animation: teaserRowIn 420ms ease both;
+  animation-delay: var(--teaser-delay, 0ms);
+}
+
 /* CTA banner */
 .cta {
   text-align: center;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  /* Was `--space-8`, on the reasoning that this band is inset and can take more
-   * air. But it is still a section in a page, and the app has one gutter — so it
-   * is now `--space-6`. Worth noting how it survived: `Home` has no `.page`
-   * shell, and the rhythm lock only read the padding of a `.page` rule, so this
-   * was the one gutter in the app that nothing was checking. */
   padding: var(--space-16) var(--space-6);
   max-width: var(--max-width);
   margin: 0 auto var(--space-20);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-elevated);
   position: relative;
   overflow: hidden;
   transition: box-shadow var(--transition-slow) var(--ease-out-expo),
@@ -992,6 +1488,21 @@
   opacity: 1;
 }
 
+/* Slides the 300%-wide gradient along the 4px bar.
+   Declared here rather than composed, because `composes` applies to a class and
+   this rule is a pseudo-element. It was previously `animation: gradientShift`
+   against a `@keyframes gradientShift` that existed in no file at all, so the
+   bar has been sitting perfectly still. */
+@keyframes gradientShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
 .cta::before {
   content: "";
   position: absolute;
@@ -1008,6 +1519,112 @@
   animation: gradientShift 8s ease-in-out infinite;
 }
 
+/* ---- The closing motif (#355) ----
+   The banner already had a sliding gradient bar and a hover light spill, and
+   both only ever moved on hover. This section is the last thing on the page and
+   it sat completely still, so the page ended flat.
+
+   The ring is the point, and it is a callback rather than decoration: the page
+   opens on the hero terminal's score ring filling, and it closes on a very
+   faint one sweeping around the banner. Same shape, same dashed treatment, at
+   the opposite end of the page — so the last thing the reader sees rhymes with
+   the first. The hero ring is the product's actual output; this one is clearly
+   an ornament, which is why it sits at a few percent opacity and behind
+   everything.
+
+   64s is deliberately slower than anything else on the page. The pipeline runs
+   at 10s and the terminal story at roughly 6s; something in that range down here
+   would compete with the copy it sits behind. At 64s the ring is close to
+   stationary unless you are already looking for it, which is the point of a
+   closing gesture. */
+@keyframes ctaRingSweep {
+  from {
+    transform: rotate(-24deg);
+  }
+  to {
+    transform: rotate(336deg);
+  }
+}
+
+.ctaRing {
+  position: absolute;
+  /* Bigger than the banner in both axes so only the arc's crown and shoulders
+     are inside `overflow: hidden`. A ring the same height as the box reads as a
+     rectangle outline, not a circle. */
+  top: -62%;
+  left: 50%;
+  width: 132%;
+  aspect-ratio: 1 / 1;
+  translate: -50% 0;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 26%, transparent);
+  /* A second, tighter arc at a different opacity breaks the evenness of the
+     dashes, which is otherwise the tell that it is a border and not a dial. */
+  box-shadow:
+    inset 0 0 0 14px color-mix(in srgb, var(--color-primary) 5%, transparent),
+    inset 0 0 0 15px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  pointer-events: none;
+  animation: ctaRingSweep 64s linear infinite;
+}
+
+/* Two soft tinted blooms, drifting on the shared ambient keyframe.
+   `composes` rather than `animation: auroraDrift` by name, which is the whole
+   reason `ambient.css` exists: Vite's CSS-modules pass rewrites a keyframe name
+   found in an `animation` value but leaves the `@keyframes` declaration alone,
+   so naming the global one from a module builds cleanly and animates nothing at
+   all. Composing puts both in one compilation, so they are renamed with the same
+   suffix and resolve.
+
+   It also carries the reduced-motion opt-out with it, so this layer cannot
+   reintroduce #366 by forgetting one. Re-timing with `animation-duration` and
+   never with the `animation` shorthand, for the same reason `AuthLayout` does
+   it that way — a local shorthand would outrank the shared opt-out. */
+.ctaAura {
+  composes: ambientDrift from "../../styles/ambient.css";
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 150%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 32% 40% at 22% 28%,
+      color-mix(in srgb, var(--color-primary) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 30% 38% at 78% 68%,
+      color-mix(in srgb, var(--color-success) 12%, transparent),
+      transparent 70%
+    );
+  animation-duration: 22s;
+  /* Offset so the page's second ambient layer is not at the same point in its
+     cycle as the hero's blobs a few screens up — the two drift in step
+     otherwise, and the repetition is obvious on a slow scroll. */
+  animation-delay: -11s;
+}
+
+/* The bloom and the ring both sit behind the copy. `position: relative` plus a
+   z-index on the direct children, because the layers are absolutely positioned
+   siblings and would otherwise paint over the text: `.cta::after` is `inset: 0`
+   and opaque enough to wash out the heading once it is lit. */
+.cta > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* The two layers opt back out of the rule above, and `position` has to be named
+   here as well as `z-index`. `.cta > *` and `.ctaRing` have the same specificity,
+   so the later rule wins outright: without this the layers came back as
+   `position: relative`, which put them back *in flow* as empty inline boxes —
+   two pixels wide, stealing a line of the banner's height — while still carrying
+   the sweep animation. The animation ran, the unit contracts on the stylesheet
+   text passed, and the decoration was still not on screen. */
+.cta > .ctaRing,
+.cta > .ctaAura {
+  position: absolute;
+  z-index: 0;
+}
+
 .ctaTitle {
   font-size: var(--font-size-3xl);
   margin-bottom: var(--space-4);
@@ -1019,9 +1636,16 @@
   margin: 0 auto var(--space-8);
 }
 
+@media (max-width: 1200px) {
+  /* Two up, not four squeezed. See the note on .stepsGrid. */
+  .stepsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .heroTitle {
-    font-size: 2.25rem;
+    font-size: var(--font-size-4xl);
   }
 
   /* Floating fragments overlap the copy on a narrow column, and the blobs
@@ -1062,36 +1686,57 @@
     grid-template-columns: 1fr;
   }
 
-  .statsStrip {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .section {
     padding: var(--space-12) var(--space-4);
   }
 
+  /* The connectors used to stay in the group's row on a stacked layout, which
+   * put a 2px bar hard against the right border of the card above it: measured
+   * at x=390 in a track ending at x=396, so 7px from the card and 4px from the
+   * container edge, with nothing in the middle of the gap it was supposed to
+   * join. It read as a stray tick at the screen edge — the video review's
+   * first guess was a scrollbar fragment — because that is what a hairline in
+   * the gutter beside a full-bleed card looks like. Turning the group into a
+   * column centres each bar in the gap it actually connects, which is the only
+   * place a connector can read as one. */
   .pipelineTrack {
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 0;
     align-items: stretch;
   }
 
+  /* The base `.pipelineGroup` is `align-items: center`, which is right for the
+     desktop row (it centres the connector against the card) and wrong here: on
+     a column it content-sizes the cards horizontally and the pipeline becomes a
+     ragged staircase of differently-wide cards. Stretch keeps the cards full
+     width; the connector opts out on its own with `align-self: center`. */
   .pipelineGroup {
-    flex-direction: row;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .pipelineConnector {
     width: 2px;
-    height: var(--space-5);
+    height: var(--space-4);
+    /* The space between two stacked cards is now built here rather than by the
+     * track's gap, because the bar has to sit in the middle of it: equal margin
+     * either side, and the track's own gap removed so the gap is not counted
+     * twice. `align-self` rather than `align-items: center` on the group, because
+     * centring the group also sizes the cards to their text and the pipeline
+     * turns into a ragged staircase of differently-wide cards. */
+    align-self: center;
+    margin: var(--space-2) 0;
   }
 
   .pipelineConnector::after {
     content: "↓";
     right: auto;
-    top: auto;
-    bottom: -2px;
+    /* Below the bar, not overlapping the margin below it, so the glyph and the
+     * bar read as one mark. */
+    top: 100%;
+    bottom: auto;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -2px);
   }
 
   .sampleReport {
@@ -1110,20 +1755,57 @@
      would fight the component for the same element. */
 
   .animStatusDot,
-  .animCaret {
+  .animCaret,
+  .sampleTestRow {
     animation: none;
   }
 
-  .sampleTestPass,
-  .sampleTestFail {
-    animation: none;
+  /* The panel's own entrance. It is the one place on this panel that hides
+     itself with `opacity: 0` and relies on a state change to undo it, so it
+     needs the reset spelled out for the same reason the rows used to: if the
+     selector were missed, or `data-entered` never arrived, the whole terminal
+     would be invisible rather than one row. The hook also reports "on screen"
+     immediately when motion is reduced, so the state change is not the only
+     thing standing between a reduced-motion reader and the content. */
+  .animPanel {
     opacity: 1;
+    transform: none;
+    transition: none;
   }
 
-  .animPanel .sampleReport :global(.ringProgress) {
+  /* The shake and the arc both. Note there is no `opacity: 1` reset alongside
+     the row opt-out any more: the rows no longer hide themselves, so there is
+     no hidden state for a missed selector to strand.
+     The arc needs both selectors: the `data-scoring` one is more specific than
+     the base rule, so opting out only the base would leave the fill running for
+     anyone who somehow reached the score stage with motion reduced.
+     And it needs `stroke-dashoffset: 0` as well, because opting the animation
+     out is not the same as asking for a filled ring: the base rule now starts
+     the arc *empty* on purpose, so a reduced-motion reader who skipped the
+     animation would otherwise get an empty track beside a 67% number — the same
+     disagreement the empty arc was introduced to remove, just relocated. */
+  /* The step cards hide themselves inside `prefers-reduced-motion: no-preference`
+     so that a reduced-motion reader is never one missed selector away from four
+     invisible cards. That scoping is what makes this opt-out safe: outside the
+     block, opacity and transform are already the resting values. The animation
+     itself still has to be named here, or a card that somehow reached
+     `data-entered` would replay the cascade the reader asked not to see. */
+  .stepsGrid[data-entered="true"] .stepCard {
     animation: none;
   }
 
+  .sampleReport[data-scoring="true"] .scoreWrap,
+  .animPanel .sampleReport :global(.ringProgress),
+  .animPanel .sampleReport[data-scoring="true"] :global(.ringProgress) {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  /* The whole pipeline timeline: five cards, four connectors, one bar. None of
+     these can be caught by the generic rule below, because each one names its
+     own keyframe via a per-index class — a new keyframe name in `pipelineStepActive`
+     or `connectorFlow` has to be opted out here by hand, which is why the
+     classes are listed rather than matched by prefix (#353). */
   .step0,
   .step1,
   .step2,
@@ -1135,10 +1817,25 @@
   .pipelineConnector.arrow3,
   .progressBar,
   .cta::before,
+  /* #355's closing motif. `.ctaAura` composes `ambientDrift`, which carries its
+     own opt-out, so only the locally-declared ring needs listing here — naming
+     both keeps the list honest if that composes ever goes away. */
+  .ctaRing,
+  .ctaAura,
   .panelScan,
   .blobPrimary,
   .blobAccent,
   .blobSuccess {
+    animation: none;
+  }
+
+  /* #355's teaser run log. The rows' resting opacity is 1 and the hidden state
+     lives in the keyframe's `from` via `fill-mode: both`, so `animation: none`
+     leaves the finished state showing rather than the hidden one — the failure
+     direction to get wrong is a section of invisible content at the foot of the
+     page, so this has to be the *only* thing that keeps them visible. */
+  .teaserPanelWrap[data-entered="true"] .teaserRow,
+  .teaserPanelWrap[data-entered="true"] .teaserScoreRow {
     animation: none;
   }
 }

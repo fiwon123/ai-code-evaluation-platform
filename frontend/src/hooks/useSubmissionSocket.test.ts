@@ -358,6 +358,30 @@ it("merges status updates into the live submission", () => {
     expect(result.current.liveSubmission?.phase).toBe("generating");
   });
 
+  it("ignores a record-less update when no snapshot has arrived yet", () => {
+    // The mirror image of the "older server" case above: with no connect-time
+    // snapshot there is no record to patch, so the status/phase pair is dropped
+    // instead of inventing a two-field Submission. That invented object is what
+    // left the page rendering a report with no id, no code and no timestamps.
+    //
+    // Asserted here, on the hook's own state, because the browser test that also
+    // covers this can only observe it as an absence — it has no way to prove the
+    // frame was processed before concluding that nothing changed, which is why
+    // that test used to wait out a fixed sleep before checking.
+    const { result } = renderHook(() => useSubmissionSocket("s1"));
+
+    act(() => FakeWebSocket.latest().open());
+    act(() =>
+      FakeWebSocket.latest().message({
+        type: "update",
+        status: "processing",
+        phase: "generating",
+      }),
+    );
+
+    expect(result.current.liveSubmission).toBeNull();
+  });
+
   it("reconnects with capped exponential backoff after an unexpected close", () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useSubmissionSocket("s1"));

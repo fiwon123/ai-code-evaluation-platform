@@ -409,6 +409,44 @@ async def test_list_submissions_shows_own_only(db_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_submissions_carries_challenge_title(db_client: AsyncClient) -> None:
+    """Each row names its challenge, so the dashboard needs no second lookup.
+
+    #361: the list schema resolves the title from the eager-loaded challenge
+    relationship. Asserted per-row rather than on a whole payload so a second
+    submission cannot mask a wrong title.
+    """
+    token, _ = await register_user(db_client)
+    two_sum = await create_challenge(db_client, token, title="Two Sum")
+    reverse = await create_challenge(db_client, token, title="Reverse Words")
+    await create_submission(db_client, token, two_sum["id"])
+    await create_submission(db_client, token, reverse["id"])
+
+    response = await db_client.get(SUBMISSIONS_URL, headers=auth(token))
+    assert response.status_code == 200
+    titles = {item["challenge_id"]: item["challenge_title"] for item in response.json()["items"]}
+    assert titles == {two_sum["id"]: "Two Sum", reverse["id"]: "Reverse Words"}
+
+
+@pytest.mark.asyncio
+async def test_list_submissions_title_present_without_result(db_client: AsyncClient) -> None:
+    """A row with no evaluation result still names its challenge.
+
+    The in-flight row is the one a user cannot otherwise recognise: it has no
+    score and no test counts, so the title is the only text that identifies it.
+    """
+    token, _ = await register_user(db_client)
+    challenge = await create_challenge(db_client, token, title="Pending Challenge")
+    await create_submission(db_client, token, challenge["id"])
+
+    response = await db_client.get(SUBMISSIONS_URL, headers=auth(token))
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["challenge_title"] == "Pending Challenge"
+    assert item["evaluation_result"] is None
+
+
+@pytest.mark.asyncio
 async def test_list_submissions_pagination(db_client: AsyncClient) -> None:
     token, _ = await register_user(db_client)
     challenge = await create_challenge(db_client, token)
@@ -915,6 +953,116 @@ async def test_submission_stats_aggregates_per_challenge(
     assert item["failed_runs"] == 1
     assert item["avg_score"] == 75.0
     assert item["best_score"] == 100.0
+    # Issue #347: the card grid needs a description and a duration, and the
+    # aggregate query already joins to both tables, so neither costs a round trip.
+    assert item["description"] == challenge["description"]
+    # Both completed runs took 100ms, so recency is not what proves this one.
+    assert item["last_duration_ms"] == 100.0
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_duration_is_the_latest_run_not_the_slowest(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    """`max(duration_ms)` would be the wrong answer, and a passing test with
+    equal durations would not notice."""
+    token, user = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+    uid = uuid.UUID(user["id"])
+    cid = uuid.UUID(challenge["id"])
+
+    # Slow first, fast last. The card must report the *latest* run (1200ms),
+    # not the slowest (9000ms) and not the average.
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        cid,
+        provider="demo",
+        score=50.0,
+        passed=1,
+        total=2,
+        duration_ms=9000,
+        created_at="2026-01-01T00:00:00",
+    )
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        cid,
+        provider="demo",
+        score=100.0,
+        passed=2,
+        total=2,
+        duration_ms=1200,
+        created_at="2026-02-01T00:00:00",
+    )
+
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats", headers=auth(token))
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["last_duration_ms"] == 1200.0
+    assert item["last_run_at"].startswith("2026-02-01")
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_duration_is_null_without_a_measured_run(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    """A run that never produced a result row has no duration, and the card has
+    to be able to say "—" rather than print a zero that looks like "instant"."""
+    token, _user = await register_user(db_client)
+    challenge = await create_challenge(db_client, token)
+
+    submission = await create_submission(db_client, token, challenge["id"])
+    await db_client.patch(
+        f"{SUBMISSIONS_URL}/{submission['id']}",
+        json={"status": "failed"},
+        headers=auth(token),
+    )
+
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats", headers=auth(token))
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["total_runs"] == 1
+    assert item["last_duration_ms"] is None
+
+
+@pytest.mark.asyncio
+async def test_submission_stats_keeps_each_challenge_duration_to_its_own_owner(
+    db_client: AsyncClient, db_sessionmaker
+) -> None:
+    """The duration map is keyed by challenge, so a second challenge must not
+    inherit the first one's number."""
+    token, user = await register_user(db_client)
+    first = await create_challenge(db_client, token)
+    second = await create_challenge(db_client, token, title="Three Sum")
+    uid = uuid.UUID(user["id"])
+
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        uuid.UUID(first["id"]),
+        provider="demo",
+        score=100.0,
+        passed=2,
+        total=2,
+        duration_ms=111,
+    )
+    await _insert_completed_run(
+        db_sessionmaker,
+        uid,
+        uuid.UUID(second["id"]),
+        provider="demo",
+        score=100.0,
+        passed=2,
+        total=2,
+        duration_ms=222,
+    )
+
+    response = await db_client.get(f"{SUBMISSIONS_URL}/stats", headers=auth(token))
+    assert response.status_code == 200
+    by_title = {item["challenge_title"]: item for item in response.json()["items"]}
+    assert by_title["Two Sum"]["last_duration_ms"] == 111.0
+    assert by_title["Three Sum"]["last_duration_ms"] == 222.0
 
 
 @pytest.mark.asyncio

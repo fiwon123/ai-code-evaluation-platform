@@ -166,7 +166,7 @@ function AdminUsers() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <PageTitle size="sm" className={styles.title}>Users</PageTitle>
+        <PageTitle size="md" className={styles.title}>Users</PageTitle>
         <p className={styles.subtitle}>
           Manage accounts: promote admins, deactivate or restore, and delete
           users.
@@ -236,7 +236,7 @@ function AdminUsers() {
                         </Button>
                         {user.is_active ? (
                           <Button
-                            variant="danger"
+                            variant="secondary"
                             size="sm"
                             disabled={own || updatingId === user.id}
                             onClick={() => void deactivate(user)}
@@ -254,7 +254,7 @@ function AdminUsers() {
                           </Button>
                         )}
                         <Button
-                          variant="ghost"
+                          variant="danger"
                           size="sm"
                           disabled={own || updatingId === user.id}
                           onClick={() => setPendingDelete(user)}

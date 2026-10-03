@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import css from "./About.module.css?raw";
 
-/** The body of a top-level rule (`.tagline { ... }`), brace-balanced. */
+/** The body of a top-level rule (`.subtitle { ... }`), brace-balanced. */
 function ruleBody(stylesheet: string, selector: string): string {
   const start = stylesheet.indexOf(selector);
   expect(start, `selector ${selector} not found`).toBeGreaterThan(-1);
@@ -28,7 +28,7 @@ function ruleBody(stylesheet: string, selector: string): string {
   throw new Error(`unbalanced braces after ${selector}`);
 }
 
-const tagline = ruleBody(css, ".tagline");
+const tagline = ruleBody(css, ".subtitle");
 const header = ruleBody(css, ".header");
 
 describe("About hero subtitle centering", () => {
@@ -42,7 +42,7 @@ describe("About hero subtitle centering", () => {
     const longhand = /margin-(left|right|inline-start|inline-end):\s*auto\b/.test(tagline);
     expect(
       shorthand || longhand,
-      "`.tagline` is capped at 600px inside a wider centered container, so it needs " +
+      "`.subtitle` is capped at 600px inside a wider centered container, so it needs " +
         "`margin: 0 auto` (or auto side margins) — `text-align: center` alone leaves the " +
         "text block flush to the left (#231).",
     ).toBe(true);

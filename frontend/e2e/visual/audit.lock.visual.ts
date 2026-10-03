@@ -91,6 +91,11 @@ test.describe("each rule fires on the defect it exists to catch", () => {
       expect: "#pin",
     },
     {
+      rule: "field-error-announced",
+      body: `<label for="email">Email</label><input id="email" type="text" style="height: 44px" aria-invalid="true" />`,
+      expect: "#email",
+    },
+    {
       rule: "text-tiny",
       body: `<p style="font-size: 9px">nine pixels</p>`,
       expect: "9px",
@@ -111,6 +116,67 @@ test.describe("each rule fires on the defect it exists to catch", () => {
   }
 });
 
+test.describe("visually-hidden text is not clipped text (#337)", () => {
+  // A false *blocker* is worse than a missed finding, because the cure is for a
+  // reader to learn to dismiss blockers, and that habit outlives the reason. The
+  // exemption therefore gets the same treatment as a rule: a fixture that must
+  // stay quiet, and a control that must still speak.
+  const HIDDEN = [
+    {
+      label: "the 1px box with clip",
+      style: "position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0)",
+    },
+    {
+      // The modern equivalent. The `clip` fixture alone would leave this path
+      // untested, and it is the one a rewrite to `clip-path` would land on.
+      label: "the 1px box with clip-path",
+      style: "position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)",
+    },
+  ];
+
+  for (const { label, style } of HIDDEN) {
+    test(`stays quiet on ${label}`, async ({ page }) => {
+      // Real text, longer than four characters so the `own.length` guard cannot
+      // be what is keeping it quiet.
+      await page.setContent(
+        page_(
+          `<div class="box" style="position: relative">
+             <span id="sr" style="${style}">Not included in the free tier</span>
+             <p>Visible copy that wraps onto several lines within its box.</p>
+           </div>`,
+        ),
+      );
+      const findings = await auditFrame(page, CTX);
+      const clipped = findings.filter((f) => f.rule === "text-clipped");
+      expect(
+        clipped.map((f) => f.detail),
+        `${label} was reported as clipped text`,
+      ).toEqual([]);
+    });
+  }
+
+  test("still reports a real clip on the same page", async ({ page }) => {
+    // The control. The two fixtures above pass just as well if the rule were
+    // switched off wholesale, which is the failure mode of an exemption: a
+    // quieter report and no one notices for months. So a genuinely clipped
+    // sentence, in the same document as a visually-hidden span, must still fire.
+    await page.setContent(
+      page_(
+        `<div class="box" style="position: relative">
+           <span id="sr" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0)">Not included in the free tier</span>
+           <p id="real" style="height: 20px; overflow: hidden">A sentence long enough to need three lines of vertical room in a box with room for one</p>
+         </div>`,
+      ),
+    );
+    const findings = await auditFrame(page, CTX);
+    const finding = findings.find((f) => f.rule === "text-clipped");
+    expect(findings.map((f) => f.rule), "text-clipped stopped firing entirely").toContain(
+      "text-clipped",
+    );
+    expect(finding?.detail, "fired for the wrong element").toContain("#real");
+  });
+});
+
 test.describe("a correct page produces no findings at all", () => {
   // The false-positive lock, and the one that matters most: a rule set that
   // reports a defect on a correct page gets ignored on an incorrect one.
@@ -128,12 +194,29 @@ test.describe("a correct page produces no findings at all", () => {
           <label for="bio">Bio</label>
           <textarea id="bio" style="width: 320px; height: 88px"></textarea>
           <button type="button" style="height: 44px; padding: 0 16px">Save</button>
+          <label for="userId">User id</label>
+          <input id="userId" type="text" style="height: 44px" aria-invalid="true" aria-describedby="userId-error" />
+          <span id="userId-error">Required</span>
         </form>
         <a href="/challenges" style="display: inline-block; padding: 12px 20px">A padded link</a>
       `),
     );
     const findings = await auditFrame(page, CTX);
     expect(findings.map((f) => `${f.rule}: ${f.detail}`)).toEqual([]);
+  });
+
+  test("a labelled radio is measured by its chip, not the raw input", async ({ page }) => {
+    // A radio inside a styled chip-label measures raw as ~13x13; clicking the
+    // label activates it, so the target is the chip. The rule measures the
+    // union of the control and its labels — this fixture must audit clean.
+    await page.setContent(
+      page_(`<h1>Pick one</h1>
+        <label style="display: inline-flex; align-items: center; min-height: 44px; gap: 8px; padding: 0 16px; border: 1px solid #888; border-radius: 8px">
+          <input id="difficulty" type="radio" name="difficulty" value="easy" /> Easy
+        </label>`),
+    );
+    const findings = await auditFrame(page, CTX);
+    expect(findings.map((f) => f.rule)).not.toContain("touch-target-small");
   });
 
   test("a screen-reader-only block is not a defect", async ({ page }) => {
@@ -211,6 +294,13 @@ test.describe("a correct page produces no findings at all", () => {
     // not the rule.
     const atRest = await auditFrame(page, { ...CTX, page: "/" });
     expect(atRest.map((f) => f.rule)).toContain("content-invisible");
+    // The exemption is the *prefix*, not the frame type. A burst recorded as
+    // `webm:` reads as resting content to the audit, which is how the journeys'
+    // `anim-*.jpg` frames used to be reported as "content painted as nothing"
+    // mid-transition (#342) — they now declare `motion:` like the sweep's
+    // filmstrips, and this line makes the rename visible if that ever slips.
+    const staleBurst = await auditFrame(page, { ...CTX, page: "webm:theme-crossfade" });
+    expect(staleBurst.map((f) => f.rule)).toContain("content-invisible");
   });
 
   test("a region that scrolls on purpose is not an overflow", async ({ page }) => {

@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Reveal from "../../components/Reveal/Reveal.tsx";
-import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useCountUp } from "../../hooks/useCountUp.ts";
+import { useInView } from "../../hooks/useInView.ts";
+import AnimatedTerminal from "./AnimatedTerminal";
 import styles from "./Home.module.css";
 
 const FEATURES = [
@@ -27,66 +28,182 @@ const FEATURES = [
   },
 ];
 
+/**
+ * The four steps, each carrying the one number that supports it.
+ *
+ * The stats used to live in their own strip below the hero, captioned "Sample
+ * figures for the prototype" — a caption that undercut the page and, worse, was
+ * the only thing marking two of the four as illustrative. Folded into the step
+ * that explains them, a number has to earn its place in the sentence beside it.
+ *
+ * That is also what makes the caption safe to delete (#354): all four are read
+ * off the code rather than eyeballed, and each one is a property of the step it
+ * sits in, so nothing is left claiming a figure the backend would not produce.
+ *
+ *   13  `EXECUTABLE_LANGUAGES`, `app/services/languages.py`
+ *    6  `_PROVIDERS`, `app/services/llm.py`
+ *    3  `evaluation_max_attempts`, `app/config.py` — total generate-and-test
+ *       attempts, so attempt 1 plus two repairs. The old strip said "repair
+ *       attempts: 3", which overstated the repair loop by one.
+ *   64  `docker_max_output_bytes` / 1024, `app/config.py` — the cap on captured
+ *       logs, which is what "review results" is bounded by.
+ *
+ * The accents keep the original left-to-right order (primary, teal, violet,
+ * rose) even though the numbers moved, so the page's colour rhythm is unchanged.
+ */
 const STEPS = [
   {
     title: "Create a challenge",
     text: "Write a prompt for the AI and a test suite that defines correctness.",
+    stat: {
+      value: 13,
+      suffix: "",
+      label: "languages supported",
+      accent: "primary",
+    },
   },
   {
     title: "Pick a provider",
-    text: "Choose OpenAI, Anthropic, Gemini, Groq, a local Ollama server, or the free demo model to generate the solution.",
+    // Two lines, like its three neighbours. This was the only card running to
+    // three, which left the other three with a line of dead space once the grid
+    // stretched them all to match — and re-listing all six providers is now
+    // redundant anyway, since the figure above it says how many there are.
+    text: "Choose OpenAI, Anthropic, Gemini, Groq, Ollama, or the free demo model.",
+    stat: { value: 6, suffix: "", label: "LLM providers", accent: "teal" },
   },
   {
     title: "Generate & evaluate",
     text: "The platform generates code and runs your tests against it automatically.",
+    stat: {
+      value: 3,
+      suffix: "",
+      label: "attempts per submission",
+      accent: "violet",
+    },
   },
   {
     title: "Review results",
     text: "Inspect generated code, test outcomes, logs, and scores in a clean report.",
+    stat: {
+      value: 64,
+      suffix: " KB",
+      label: "of logs captured",
+      accent: "rose",
+    },
   },
 ];
 
+/**
+ * The count-up sweep.
+ *
+ * The four values used to all start at the same 200ms delay, so they grew
+ * together and the section had no direction — four numbers reaching their
+ * targets at once reads as a flicker, not an animation. A sweep that finishes
+ * left to right gives the eye something to follow and an unambiguous end.
+ *
+ * `STAT_DURATION + STAT_GAP` is the stride between one value's start and the
+ * next's, and the gap is a real gap: the next value must not begin before the
+ * previous has settled, or the two overlap and the sweep is just a stagger with
+ * extra steps. The last value therefore settles at
+ * `START + 3 * (DURATION + GAP) + DURATION`.
+ *
+ * These three numbers are asserted in `landing.test.tsx`, because the failure
+ * this replaces is invisible in a screenshot — four numbers that all reach the
+ * right value look identical whether they arrived together or one at a time.
+ */
+const STAT_DURATION_MS = 900;
+const STAT_GAP_MS = 200;
+const STAT_START_MS = 150;
+
+/** When the value in position `index` starts, given the sweep constants. */
+function statStartMs(index: number): number {
+  return STAT_START_MS + index * (STAT_DURATION_MS + STAT_GAP_MS);
+}
+
+/**
+ * The five pipeline steps, phrased alike on purpose (#353).
+ *
+ * The previous set mixed an imperative with descriptions — "Write challenge",
+ * "AI generates code", "Get score" — so the labels ranged from 9 to 17
+ * characters and wrapped to different line counts. The cards are equal-height
+ * only if their content is, and the fifth card came out 27px taller than the
+ * first four purely because of its wording. Every label is now a verb and its
+ * object, 12-16 characters, which is what makes one cadence fit all five.
+ */
 const PIPELINE = [
-  { icon: "📝", label: "Write challenge", desc: "Prompt + tests" },
-  { icon: "🤖", label: "Pick provider", desc: "6 providers · demo is free" },
-  { icon: "⚙️", label: "AI generates code", desc: "Sandboxed" },
-  { icon: "🧪", label: "Tests run", desc: "Your suite, isolated" },
-  { icon: "📊", label: "Get score", desc: "Pass/fail + metrics" },
+  { icon: "📝", label: "Write a challenge", desc: "Prompt + tests" },
+  { icon: "🤖", label: "Pick a provider", desc: "6 providers · demo is free" },
+  { icon: "⚙️", label: "Generate code", desc: "Sandboxed execution" },
+  { icon: "🧪", label: "Run your tests", desc: "Your suite, isolated" },
+  { icon: "📊", label: "Get a score", desc: "Pass/fail + metrics" },
 ];
 
 /** Typed into the demo terminal, then "evaluated". */
-const TYPED_PROMPT =
-  "Write a function two_sum(nums, target) that returns the indices of two numbers summing to the target.";
 
-const STATUS_SEQUENCE = [
-  "Generating code…",
-  "Running tests…",
-  "Scoring…",
-  "Report ready",
+/**
+ * The compact "here is what your first evaluation looks like" log (#355).
+ *
+ * Every line is read off the backend rather than written for effect, because
+ * this is the same trap #352 walked into: the hero terminal once claimed a score
+ * of 88 next to a visible failing test, when `services/evaluation.py` computes
+ * `round((passed / total) * 100, 1)` and would have printed 66.7. A landing page
+ * that shows a figure its own backend would not produce is lying about the
+ * product, so each line here cites the thing it came from:
+ *
+ *   POST /api/challenges      `app/api/challenges.py` — `@router.post("")`
+ *   POST /api/submissions     `app/api/submissions.py` — `@router.post("")`
+ *   demo                      `_PROVIDERS` in `app/services/llm.py`: the free,
+ *                             network-independent provider. Named as the provider
+ *                             *key*, which is what an API caller passes.
+ *   python                    one of `EXECUTABLE_LANGUAGES`,
+ *                             `app/services/languages.py`
+ *   66.7 · 142ms              the same sample run `AnimatedTerminal` plays, and
+ *                             the same arithmetic: two of three tests pass, so
+ *                             `round(2 / 3 * 100, 1)` is 66.7. Reusing the hero's
+ *                             figures also means the page cannot contradict
+ *                             itself two screens apart.
+ *
+ * Deliberately *not* a shell session. There is no CLI — `backend/pyproject.toml`
+ * declares no `[project.scripts]` and nothing in `docs/` documents one — so a
+ * `$ platform generate` prompt would be inventing a product surface. Framed as
+ * the API calls the platform actually exposes, every line is a thing a reader
+ * could check.
+ *
+ * The granularity is also the point: the hero types out one submission beat by
+ * beat, and this summarises the whole run in five rows. A second character-level
+ * terminal at the foot of the page would be the same animation twice.
+ */
+const TEASER_RUN: readonly {
+  label?: string;
+  detail?: string;
+  /** Test outcomes, rendered as chips on their own row. */
+  results?: readonly { name: string; passed: boolean }[];
+  /** The row that carries the score, set apart from the log above it. */
+  score?: boolean;
+}[] = [
+  { label: "POST /api/challenges", detail: "challenge#4821 · python · 3 tests" },
+  { label: "POST /api/submissions", detail: "queued · provider demo" },
+  { label: "evaluating", detail: "pytest · 3 tests" },
+  {
+    results: [
+      { name: "two_sum_basic", passed: true },
+      { name: "two_sum_unsorted", passed: false },
+    ],
+  },
+  { label: "score", detail: "66.7 · 142ms", score: true },
 ];
 
-const SAMPLE_TESTS = [
-  { name: "two_sum_basic", passed: true },
-  { name: "two_sum_duplicates", passed: true },
-  { name: "two_sum_unsorted", passed: false },
-];
-
-/** Illustrative platform figures — labeled as sample data. */
-const STATS: Array<{
-  value: number;
-  suffix: string;
-  label: string;
-  decimals?: number;
-  /** Which identity hue this stat wears. See `accentClass` below. */
-  accent: "primary" | "teal" | "violet" | "rose";
-}> = [
-  // The two counts are read off the registries rather than eyeballed:
-  // services/languages.py EXECUTABLE_LANGUAGES and services/llm.py _PROVIDERS.
-  { value: 13, suffix: "", label: "Languages supported", accent: "primary" },
-  { value: 3, suffix: "s", label: "Avg. evaluation time", decimals: 0, accent: "teal" },
-  { value: 3, suffix: "", label: "Repair attempts", accent: "violet" },
-  { value: 6, suffix: "", label: "LLM providers", accent: "rose" },
-];
+/**
+ * Milliseconds between one teaser row's entrance and the next.
+ *
+ * Supplied to the CSS as `--teaser-delay` rather than written into the
+ * `animation-delay` calc there, so the stagger has one definition. The
+ * `calc(var(--teaser-i) * 260ms)` shape would have worked, but then the number
+ * lives in two files with nothing holding them together — and the two are the
+ * kind of value that has to agree (see `TERMINAL_ENTRANCE_MS`, where a CSS/JS
+ * disagreement cost a whole entrance).
+ */
+const TEASER_STAGGER_MS = 260;
 
 /**
  * Decorative code fragments drifting behind the hero.
@@ -108,63 +225,32 @@ const CODE_FRAGMENTS = [
   { text: "eval#4207 · streaming", top: "8%", right: "18%", delay: "-5s" },
 ];
 
-/** Toolchain chips — reinforce what the platform actually talks to. */
-const STACK_CHIPS = [
-  "OpenAI",
-  "Anthropic",
-  "pytest",
-  "node --test",
-  "JUnit",
-  "go test",
-];
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
+/**
+ * Card accent per step, keyed by the figure's own accent (#353).
+ *
+ * `Card` already takes a `--card-accent` custom property (#347), so the four
+ * cards can be tinted from the single accent each step already declares rather
+ * than a second list that could drift from `STEPS`. The values are `var(...)`
+ * strings on purpose: the hue stays defined in tokens, so a theme swap does not
+ * need this map touched.
+ */
+const STEP_ACCENTS: Record<(typeof STEPS)[number]["stat"]["accent"], string> = {
+  primary: "var(--color-primary)",
+  teal: "var(--color-accent-teal)",
+  violet: "var(--color-accent-violet)",
+  rose: "var(--color-accent-rose)",
+};
 
 function Home() {
   const { user } = useAuth();
-  const [typed, setTyped] = useState(prefersReducedMotion() ? TYPED_PROMPT : "");
-  const [statusIndex, setStatusIndex] = useState(
-    prefersReducedMotion() ? STATUS_SEQUENCE.length - 1 : 0,
-  );
-
-  // Typewriter: reveal the prompt char-by-char, then cycle status chips.
-  useEffect(() => {
-    if (prefersReducedMotion()) {
-      setTyped(TYPED_PROMPT);
-      setStatusIndex(STATUS_SEQUENCE.length - 1);
-      return;
-    }
-    let char = 0;
-    const typeTimer = window.setInterval(() => {
-      char += 1;
-      setTyped(TYPED_PROMPT.slice(0, char));
-      if (char >= TYPED_PROMPT.length) {
-        window.clearInterval(typeTimer);
-      }
-    }, 24);
-
-    const statusTimer = window.setTimeout(() => {
-      const statusId = window.setInterval(() => {
-        setStatusIndex((index) =>
-          index >= STATUS_SEQUENCE.length - 1 ? 0 : index + 1,
-        );
-      }, 1200);
-      // Status cycling is a demo flourish; tie its lifetime to the component.
-      window.setTimeout(() => window.clearInterval(statusId), 30000);
-    }, TYPED_PROMPT.length * 24 + 400);
-
-    return () => {
-      window.clearInterval(typeTimer);
-      window.clearTimeout(statusTimer);
-    };
-  }, []);
-
+  // One observer for the whole grid rather than one per card: the four values
+  // must start on the same turn of the sweep anyway, so a shared gate is both
+  // cheaper and the only way their stagger stays meaningful.
+  const { ref: stepsRef, inView: stepsInView } = useInView<HTMLDivElement>({ threshold: 0.15 });
+  // The teaser run log at the foot of the page (#355). Separate from the sweep
+  // above because they are separate sections that arrive at separate times, and
+  // one observer cannot gate two elements at different depths in the document.
+  const { ref: teaserRef, inView: teaserInView } = useInView<HTMLDivElement>({ threshold: 0.2 });
   return (
     <div>
       <section className={styles.hero}>
@@ -233,88 +319,85 @@ function Home() {
             </div>
           </Reveal>
 
-          {/* Toolchain chips — says what the platform actually talks to, which
-              is the fastest way to make the offer concrete above the fold. */}
-          <Reveal delayMs={300}>
-            {/* Named as examples, not an exhaustive list: six chips standing in
-                for thirteen languages and six providers. The chips are real
-                information rather than decoration, so unlike the code fragments
-                above they stay in the accessibility tree. */}
-            <ul className={styles.chipRow} aria-label="Example integrations and test runners">
-              {STACK_CHIPS.map((chip) => (
-                <li key={chip} className={styles.chip}>
-                  {chip}
-                </li>
-              ))}
-            </ul>
-          </Reveal>
+          {/* The terminal story lives in its own component: it re-renders once
+              per typed character, and at ~18ms a frame that is only affordable
+              if the rest of the page is not re-rendering with it. See
+              AnimatedTerminal for the measurement that forced the split.
 
-          {/* Animated terminal — the matrix-style input → process → result cycle */}
-          <Reveal delayMs={320}>
-            <div className={styles.animPanel}>
-              <span className={styles.panelGlow} aria-hidden="true" />
-              <span className={styles.panelScan} aria-hidden="true" />
-              <div className={styles.animHeader} aria-hidden="true">
-                <span className={styles.animDots}>
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <span className={styles.animTitle}>evaluation · two_sum</span>
-                <span className={styles.animStatus}>
-                  <span className={styles.animStatusDot} />
-                  {STATUS_SEQUENCE[statusIndex]}
-                </span>
-              </div>
+              Not wrapped in `Reveal`: the panel fades in itself, because it also
+              has to know when the fade finished so the story can wait for it.
+              See `TERMINAL_ENTRANCE_MS` in AnimatedTerminal. Same 320ms stagger
+              and 550ms fade, so the hero still arrives as one piece. */}
+          <AnimatedTerminal />
+        </div>
+      </section>
 
-              <div className={styles.animPrompt} aria-hidden="true">
-                <span className={styles.animPromptLabel}>$</span>
-                <span className={styles.animPromptText}>
-                  {typed}
-                  <span className={styles.animCaret} />
-                </span>
-              </div>
-
-              {/* Sample report — the evaluation outcome at a glance */}
-              <div
-                className={styles.sampleReport}
-                aria-label="Sample evaluation report"
+      {/* How it works — directly under the terminal it explains (#354). The
+          page used to read terminal → pipeline → stats → how-it-works, which
+          put the section that narrates the flow two screens away from the
+          animation that performs it. */}
+      <section className={styles.section}>
+        <div className="scrollReveal">
+          <SectionHead
+            eyebrow="How it works"
+            title="From challenge to score in four steps"
+            subtitle="A guided flow that takes you from idea to evaluation result."
+          />
+        </div>
+        <Reveal>
+          {/* `data-entered` drives the per-card entrance below. It is the same
+              gate the stat sweep uses (#354), so the figures and the cards that
+              explain them arrive together rather than one leading the other. */}
+          <div
+            className={styles.stepsGrid}
+            ref={stepsRef}
+            data-entered={stepsInView ? "true" : "false"}
+          >
+            {STEPS.map((step, index) => (
+              <Card
+                key={step.title}
+                padding="compact"
+                className={styles.stepCard}
+                // A CSSProperties cast rather than a typed record: `--card-accent`
+                // is a custom property, which TypeScript cannot express in
+                // CSSProperties without listing every name.
+                style={{ "--card-accent": STEP_ACCENTS[step.stat.accent] } as CSSProperties}
               >
-                <ScoreRing value={88} label="Sample score" animate />
-                <div className={styles.sampleMeta}>
-                  <ul className={styles.sampleTests}>
-                    {SAMPLE_TESTS.map((test) => (
-                      <li
-                        key={test.name}
-                        className={
-                          test.passed ? styles.sampleTestPass : styles.sampleTestFail
-                        }
-                      >
-                        {test.passed ? "✓" : "✗"} {test.name}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className={styles.sampleMetaRow}>
-                    <span>3 tests · 142 ms · pytest</span>
-                    <span className={styles.sampleMetaLink}>View report →</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Reveal>
+                <StatValue stat={step.stat} index={index} active={stepsInView} />
+                <h3 className={styles.stepTitle}>{step.title}</h3>
+                <p className={styles.stepText}>{step.text}</p>
+              </Card>
+            ))}
+          </div>
+        </Reveal>
+      </section>
+
+      <section className={`${styles.section} ${styles.sectionAlt}`}>
+        <div className="scrollReveal">
+          <SectionHead
+            eyebrow="The pipeline"
+            title="Everything you need to evaluate code"
+            subtitle="A complete pipeline from challenge to scored result, built for AI coding assistants."
+          />
         </div>
 
-        {/* Animated pipeline */}
+        {/* The animated 5-step strip, which used to sit inside the hero between
+            the terminal and the stats. It describes this section rather than
+            the hero, and the hero read better ending on the terminal. */}
         <div className={`${styles.heroInner} ${styles.pipeline}`} aria-hidden="true">
           <div className={styles.pipelineTrack}>
             {PIPELINE.map((step, index) => (
               <div key={step.label} className={styles.pipelineGroup}>
-                <div className={`${styles.pipelineStep} ${styles[`step${index}`]}`}>
+                <Card
+                  variant="dark"
+                  padding="default"
+                  className={`${styles.pipelineStep} ${styles[`step${index}`]}`}
+                >
                   <span className={styles.pipelineNum}>{index + 1}</span>
                   <span className={styles.pipelineIcon}>{step.icon}</span>
                   <span className={styles.pipelineLabel}>{step.label}</span>
                   <span className={styles.pipelineDesc}>{step.desc}</span>
-                </div>
+                </Card>
                 {index < PIPELINE.length - 1 && (
                   <span
                     className={`${styles.pipelineConnector} ${styles[`arrow${index}`]}`}
@@ -332,25 +415,6 @@ function Home() {
           </p>
         </div>
 
-        {/* Trust / stats strip — clearly labeled sample figures */}
-        <div className={`${styles.heroInner} ${styles.statsStrip}`}>
-          {STATS.map((stat) => (
-            <StatItem key={stat.label} stat={stat} />
-          ))}
-        </div>
-        <p className={`${styles.heroInner} ${styles.statsCaption}`}>
-          Sample figures for the prototype
-        </p>
-      </section>
-
-      <section className={`${styles.section} ${styles.sectionAlt}`}>
-        <div className="scrollReveal">
-          <SectionHead
-            eyebrow="The pipeline"
-            title="Everything you need to evaluate code"
-            subtitle="A complete pipeline from challenge to scored result, built for AI coding assistants."
-          />
-        </div>
         <Reveal>
           <div className={styles.featuresGrid}>
             {FEATURES.map((feature) => (
@@ -366,28 +430,18 @@ function Home() {
         </Reveal>
       </section>
 
-      <section className={styles.section}>
-        <div className="scrollReveal">
-          <SectionHead
-            eyebrow="How it works"
-            title="From challenge to score in four steps"
-            subtitle="A guided flow that takes you from idea to evaluation result."
-          />
-        </div>
-        <Reveal>
-          <div className={styles.stepsGrid}>
-            {STEPS.map((step, index) => (
-              <Card key={step.title} padding="compact">
-                <div className={styles.stepNumber}>{index + 1}</div>
-                <h3 className={styles.stepTitle}>{step.title}</h3>
-                <p className={styles.stepText}>{step.text}</p>
-              </Card>
-            ))}
-          </div>
-        </Reveal>
-      </section>
+      {/* Guest teaser — routes guests to the live demo, members to their first
+          run. #355 gave it the compact run log below: the section used to be
+          the only one on the page with a heading, a sentence and a button and
+          nothing else, so the page went flat for its last two screens.
 
-      {/* Guest teaser — routes guests to the live demo, members to their first run */}
+          `data-entered` gates the rows the same way the step cards' entrance is
+          gated (#353) and for the same reason: the reveal runs once, when the
+          section arrives, rather than on mount — an animation at the foot of the
+          page that finishes before anyone scrolls to it is one nobody watched.
+          `useInView` reports visible immediately under reduced motion and
+          without IntersectionObserver, so the rows are never withheld from
+          someone who will not see the animation anyway. */}
       <section className={styles.section}>
         <Reveal>
           <div className="sectionHighlight teaser">
@@ -406,13 +460,66 @@ function Home() {
                 <Button to="/demo" size="lg">Try the live demo</Button>
               )}
             </div>
+
+            {/* `aria-hidden`: it restates the sentence above in a form the
+                button already leads to, and a screen reader announcing a fake
+                log line by line is worse than not announcing it. */}
+            <div
+              className={styles.teaserPanelWrap}
+              ref={teaserRef}
+              data-entered={teaserInView ? "true" : "false"}
+              aria-hidden="true"
+            >
+              <Card variant="dark" padding="default" className={styles.teaserPanel}>
+                {TEASER_RUN.map((row, index) => (
+                  <div
+                    key={row.label ?? `row-${index}`}
+                    className={row.score ? styles.teaserScoreRow : styles.teaserRow}
+                    style={
+                      {
+                        "--teaser-delay": `${index * TEASER_STAGGER_MS}ms`,
+                      } as CSSProperties
+                    }
+                  >
+                    {row.results ? (
+                      <span className={styles.teaserResults}>
+                        {row.results.map((result) => (
+                          <span
+                            key={result.name}
+                            className={result.passed ? styles.teaserPass : styles.teaserFail}
+                          >
+                            <span aria-hidden="true">{result.passed ? "✓" : "✗"}</span>
+                            {result.name}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <>
+                        {row.label && <span className={styles.teaserLabel}>{row.label}</span>}
+                        {row.detail && <span className={styles.teaserDetail}>{row.detail}</span>}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </Card>
+              <p className={styles.teaserPanelCaption}>
+                Sample run on the free demo provider — your own challenge, tests
+                and score
+              </p>
+            </div>
           </div>
         </Reveal>
       </section>
 
       <section className={`${styles.section} ${styles.sectionAlt}`}>
         <Reveal>
-          <div className={styles.cta}>
+          <Card variant="dark" padding="default" className={styles.cta}>
+            {/* The page's closing motif (#355): a faint ring sweeping once
+                around the banner, echoing the score ring in the hero terminal
+                that the reader met at the top. Decorative and pointer-inert, so
+                it never affects layout or hit-testing. */}
+            <span className={styles.ctaRing} aria-hidden="true" />
+            <span className={styles.ctaAura} aria-hidden="true" />
             <h2 className={styles.ctaTitle}>Ready to try it?</h2>
             <p className={styles.ctaText}>
               Create an account, write your first challenge, and watch the
@@ -428,7 +535,7 @@ function Home() {
                 Explore features
               </Button>
             </div>
-          </div>
+          </Card>
         </Reveal>
       </section>
     </div>
@@ -463,19 +570,44 @@ function SectionHead({
   );
 }
 
-function StatItem({ stat }: { stat: (typeof STATS)[number] }) {
-  const display = useCountUp(stat.value, 900, 200);
-  const shown = stat.decimals ? display.toFixed(stat.decimals) : String(display);
+/**
+ * One step's number, counting up on its own turn of the sweep.
+ *
+ * `index` is the only new input, and it is what turns four simultaneous count-ups
+ * into a left-to-right sweep. `useCountUp` takes a start delay rather than a
+ * start time, so the delay is derived from the stride — see `statStartMs`.
+ */
+function StatValue({
+  stat,
+  index,
+  active,
+}: {
+  stat: (typeof STEPS)[number]["stat"];
+  index: number;
+  active: boolean;
+}) {
+  // `null` while the section is off-screen: the sweep waits for the viewport
+  // instead of counting up where nobody can see it.
+  const display = useCountUp(
+    stat.value,
+    STAT_DURATION_MS,
+    active ? statStartMs(index) : null,
+  );
   return (
     // The accent is carried by a custom property rather than a class per hue,
-    // so `.statItem`'s hover/tint rules are written once. The data attribute
-    // also means the colour survives if this is ever server-rendered.
-    <div className={styles.statItem} data-accent={stat.accent}>
-      <span className={styles.statValue}>
-        {shown}
+    // so `.stepStat`'s rules are written once. The data attribute also means the
+    // colour survives if this is ever server-rendered.
+    //
+    // `data-counting` is what the sweep test and the CSS read: it is the only
+    // place that says "this value is still moving", and it flips off exactly
+    // when `useCountUp` settles, so a static screenshot can tell a finished
+    // sweep from an unfinished one.
+    <div className={styles.stepStat} data-accent={stat.accent}>
+      <span className={styles.stepStatValue} data-counting={stat.value === display ? "false" : "true"}>
+        {display}
         {stat.suffix}
       </span>
-      <span className={styles.statLabel}>{stat.label}</span>
+      <span className={styles.stepStatLabel}>{stat.label}</span>
     </div>
   );
 }

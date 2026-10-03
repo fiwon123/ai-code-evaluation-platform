@@ -15,10 +15,10 @@ import { COMPARE_POLL_MS, nextPollDelay } from "../constants/polling.ts";
 import { useNow } from "../hooks/useNow.ts";
 import type {
   Challenge,
-  ChallengeDifficulty,
   ModelInfo,
   ProviderComparisonEntry,
 } from "../types.ts";
+import { DIFFICULTY_VARIANT, difficultyLabel } from "../utils/difficulty.ts";
 import { extractError } from "../utils/errors.ts";
 import { extensionForLanguage } from "../utils/language.ts";
 import {
@@ -71,15 +71,6 @@ const PROVIDERS = [
     requiresKey: false,
   },
 ];
-
-const DIFFICULTY_VARIANT: Record<
-  ChallengeDifficulty,
-  "success" | "warning" | "danger"
-> = {
-  easy: "success",
-  medium: "warning",
-  hard: "danger",
-};
 
 function ChallengeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -405,7 +396,7 @@ function ChallengeDetail() {
         <div className={styles.headerBadges}>
           <LanguageBadge language={challenge.language} />
           <Badge variant={DIFFICULTY_VARIANT[challenge.difficulty]}>
-            {challenge.difficulty}
+            {difficultyLabel(challenge.difficulty)}
           </Badge>
         </div>
       </div>

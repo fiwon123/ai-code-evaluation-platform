@@ -6,6 +6,8 @@ import Demo from "./Demo.tsx";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { challengesApi, submissionsApi } from "../../services/api.ts";
+import { expectCodeToContain } from "../../test/code.ts";
+import { languageMeta } from "../../utils/language.ts";
 
 vi.mock("../../context/AuthContext.tsx", () => ({
   useAuth: vi.fn(),
@@ -160,10 +162,9 @@ afterEach(() => {
     ).toBeInTheDocument();
     expect(screen.getByText("Write a function two_sum(nums, target).")).toBeInTheDocument();
 
-    // The actual test suite, with its inputs and expected outputs.
-    expect(
-      screen.getByText(/assert two_sum\(\[2, 7, 11, 15\], 9\) == \[0, 1\]/),
-    ).toBeInTheDocument();
+    // The actual test suite, with its inputs and expected outputs. Matched on
+    // the code surface's assembled text — the test suite is tokenized (#356).
+    expectCodeToContain(/assert two_sum\(\[2, 7, 11, 15\], 9\) == \[0, 1\]/);
 
     // Runner metadata mirrors the backend sandbox configuration. The meta
     // line is split across <code> children, so match each leaf separately.
@@ -171,13 +172,40 @@ afterEach(() => {
     expect(screen.getAllByText("test_solution.py").length).toBeGreaterThan(0);
     expect(screen.getByText("solution.py")).toBeInTheDocument();
 
-    // The login wall is still there for actually running.
+    // Guests get the sign-in wall instead of the runner controls — the
+    // honest replacement for the old silent bounce to /register.
     expect(
-      screen.getByText(/You'll need a free account/, { exact: false }),
+      screen.getByRole("heading", { name: "Sign in to run the live demo" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Generate & evaluate/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Sign in" }),
+    ).toHaveAttribute("href", "/login");
+  });
+
+  it("does not flash the sign-in wall while the session is initializing", async () => {
+    mockUseAuth.mockReturnValue({
+      ...loggedInAuth(),
+      user: null,
+      initializing: true,
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    // Auth is unresolved, so the runner controls are shown (button disabled)
+    // rather than a wall that would vanish a moment later.
+    expect(
+      screen.queryByRole("heading", { name: "Sign in to run the live demo" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Generate & evaluate/ }),
+    ).toBeDisabled();
   });
 
   it("updates the preview when a different language is selected", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
     renderPage();
     await screen.findByRole("heading", { name: "What will run" });
 
@@ -195,6 +223,7 @@ afterEach(() => {
   });
 
   it("moves the preview when a keyword chip is clicked", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
     renderPage();
     await screen.findByRole("heading", { name: "What will run" });
 
@@ -208,18 +237,16 @@ afterEach(() => {
     expect(screen.queryByText("pytest")).not.toBeInTheDocument();
   });
 
-  it("routes logged-out visitors to sign up when they try to run", async () => {
+  it("sends guests to the demo page after they sign in from the wall", async () => {
     renderPage();
     const heading = await screen.findByRole("heading", {
-      name: "What will run",
+      name: "Sign in to run the live demo",
     });
     expect(heading).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+    fireEvent.click(screen.getByRole("link", { name: "Sign in" }));
 
-    expect(
-      await screen.findByText("Register page"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Login page")).toBeInTheDocument();
   });
 
   it("tells a logged-in user how long the run takes while generating", async () => {
@@ -414,5 +441,315 @@ afterEach(() => {
     expect(screen.getByText("test_two_sum_basic")).toBeInTheDocument();
     expect(screen.getByText("test_two_sum_unsorted")).toBeInTheDocument();
     expect(screen.getByText(/runs with/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * A `matchMedia` stub that answers the one query the reduced-motion path asks
+ * and ignores the rest. jsdom's own `matchMedia` always reports `matches: false`
+ * and never fires `change`, so without this the "reader asked for reduced
+ * motion" path is untestable rather than merely unexercised.
+ */
+function stubReducedMotion(reduce: boolean) {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes("prefers-reduced-motion") ? reduce : false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as unknown as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = original;
+  };
+}
+
+describe("Demo page language filter", () => {
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
+    mockUseSubmissionSocket.mockReturnValue({
+      liveSubmission: null,
+      state: "closed",
+    });
+    mockList.mockResolvedValue({
+      items: [pythonChallenge, goChallenge, jsChallenge],
+      total: 3,
+      page: 1,
+      page_size: 50,
+      pages: 1,
+    } as never);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  const languageFilter = () => screen.getByLabelText(/Filter by language/i);
+  const challengeSelect = () => screen.getByLabelText(/Demo challenge/i);
+  const optionValues = (select: HTMLElement) =>
+    Array.from(select.querySelectorAll("option")).map((o) => o.value);
+
+  it("offers 'All languages' first, then one symbol-led option per language that has a challenge", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    const select = languageFilter() as HTMLSelectElement;
+    // Catalog order, not arrival order: the fixture hands over py/go/js but
+    // LANGUAGES is the deliberate order, so the control reads Py, JS, Go.
+    expect(optionValues(select)).toEqual(["all", "python", "javascript", "go"]);
+    expect(select.options[0].textContent).toBe("All languages");
+
+    // Symbol first, so the option carries its own identity — a native
+    // `<select>` cannot colour its own text, and the symbol is the only part
+    // of the option the OS leaves alone.
+    expect(select.options[1].textContent).toBe("Py Python");
+    expect(select.options[3].textContent).toBe("Go Go");
+  });
+
+  it("does not offer a language that has no challenge behind it", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    // The catalog is ~20 languages and the fixture has three challenges.
+    // Offering the rest would make 'All languages' the only useful option,
+    // so the control is built from the challenges, not from the catalog.
+    const select = languageFilter() as HTMLSelectElement;
+    expect(optionValues(select)).not.toContain("rust");
+    expect(optionValues(select)).not.toContain("cobol");
+  });
+
+  it("starts unfiltered and lists every challenge", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    expect((languageFilter() as HTMLSelectElement).value).toBe("all");
+    expect(optionValues(challengeSelect())).toEqual(["py1", "go1", "js1"]);
+  });
+
+  it("narrows the challenge list to the chosen language", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.change(languageFilter(), { target: { value: "go" } });
+
+    expect(await screen.findByText(/Return the longest common prefix/)).toBeInTheDocument();
+    expect(optionValues(challengeSelect())).toEqual(["go1"]);
+  });
+
+  it("moves the selection out of a language the filter just hid", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    // Selecting a Go challenge, then filtering to Python, must not leave the
+    // `<select>` pointing at an option that is no longer listed: the control
+    // would show a blank first option and the preview would keep rendering a
+    // challenge the reader cannot see selected.
+    fireEvent.change(challengeSelect(), { target: { value: "go1" } });
+    fireEvent.change(languageFilter(), { target: { value: "javascript" } });
+
+    // Selection falls back to the only visible challenge, and the preview
+    // agrees with it in the same frame.
+    expect(await screen.findByText(/Check that brackets in a string are balanced/)).toBeInTheDocument();
+    expect((challengeSelect() as HTMLSelectElement).value).toBe("js1");
+  });
+
+  it("previews a visible challenge after the filter narrows, never a hidden one", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.change(challengeSelect(), { target: { value: "go1" } });
+    expect(screen.getByText(/Return the longest common prefix/)).toBeInTheDocument();
+
+    fireEvent.change(languageFilter(), { target: { value: "javascript" } });
+
+    expect(
+      screen.queryByText(/Return the longest common prefix/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Check that brackets in a string are balanced/),
+    ).toBeInTheDocument();
+    expect((challengeSelect() as HTMLSelectElement).value).toBe("js1");
+  });
+
+  it("keeps describing the run that was submitted, even after the filter moves", async () => {
+    mockUseAuth.mockReturnValue(loggedInAuth());
+    mockCreate.mockResolvedValue({
+      id: "s1",
+      challenge_id: "go1",
+      status: "pending",
+      provider: "demo",
+      code: null,
+      score: null,
+      evaluation_result: null,
+      created_at: "2026-01-01T00:00:00Z",
+    } as never);
+
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.change(challengeSelect(), { target: { value: "go1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate & evaluate/ }));
+    await screen.findByText(/Running|Generating|score/i);
+
+    // A run's result outranks the picker: the report has to keep describing
+    // what was actually evaluated, so narrowing the filter afterwards must not
+    // relabel a Go report as a JavaScript one.
+    fireEvent.change(languageFilter(), { target: { value: "javascript" } });
+
+    expect(
+      screen.queryByText(/Check that brackets in a string are balanced/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("names each challenge option with its language symbol", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    const select = challengeSelect() as HTMLSelectElement;
+    // Title first — that is what is being chosen — with the language symbol
+    // behind it as the identity cue.
+    expect(select.options[0].textContent).toBe("Two Sum — Py");
+    expect(select.options[1].textContent).toBe("Longest Common Prefix — Go");
+  });
+
+  it("keeps the stripe accent in step with the selection", async () => {
+    const { container } = renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    // The accent is decoration (the option text already names the language),
+    // so it is not announced — it is checked here as a style, because a
+    // missing `--lang-accent` silently means "no stripe" rather than an error.
+    const accent = () =>
+      container.querySelector<HTMLElement>("[style*='--lang-accent']");
+    // Unfiltered is deliberately transparent, not absent: whether a stripe is
+    // visible is the stylesheet's call, not React's.
+    expect(accent()?.style.getPropertyValue("--lang-accent")).toBe("transparent");
+
+    fireEvent.change(languageFilter(), { target: { value: "go" } });
+    expect(accent()?.style.getPropertyValue("--lang-accent")).toBe(
+      languageMeta("go").color,
+    );
+  });
+
+  it("lets a keyword chip reach a challenge the language filter was hiding", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.change(languageFilter(), { target: { value: "go" } });
+    expect(await screen.findByText(/Return the longest common prefix/)).toBeInTheDocument();
+
+    // A chip is a shortcut to one specific challenge, so it has to be able to
+    // reach it. Narrowing the correction to the visible set would instead drag
+    // the selection back to the Go challenge and the chip would do nothing.
+    fireEvent.click(screen.getByRole("button", { name: /valid parentheses/i }));
+
+    expect(await screen.findByText(/Check that brackets in a string are balanced/)).toBeInTheDocument();
+    expect((languageFilter() as HTMLSelectElement).value).toBe("all");
+    expect((challengeSelect() as HTMLSelectElement).value).toBe("js1");
+  });
+});
+
+describe("Demo page walkthrough motion", () => {
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({
+      user: null,
+      token: null,
+      initializing: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      loginWithOAuth: vi.fn(),
+    });
+    mockUseSubmissionSocket.mockReturnValue({
+      liveSubmission: null,
+      state: "closed",
+    });
+    mockList.mockResolvedValue({
+      items: [pythonChallenge, goChallenge, jsChallenge],
+      total: 3,
+      page: 1,
+      page_size: 50,
+      pages: 1,
+    } as never);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  /** The rail's state, read off the DOM: exactly one step is current. */
+  const currentStep = (container: HTMLElement) =>
+    Array.from(
+      container.querySelectorAll<HTMLElement>("[class*='stepActive']"),
+    ).map((n) => n.querySelector("h2")?.textContent);
+
+  it("cycles the highlighted step for a reader who wants motion", async () => {
+    // `shouldAdvanceTime` because Testing Library's `waitFor` schedules its own
+    // timers: a fully frozen clock deadlocks the initial `findByRole` before the
+    // cycle is ever reached.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    const { container } = { container: document.body };
+    expect(currentStep(container)).toEqual(["Create a challenge"]);
+
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(currentStep(container)).toEqual(["Submit for evaluation"]);
+
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(currentStep(container)).toEqual(["Code is generated & tested"]);
+
+    // Four steps, so a full lap returns to the first.
+    act(() => {
+      vi.advanceTimersByTime(2600 * 2);
+    });
+    expect(currentStep(container)).toEqual(["Create a challenge"]);
+  });
+
+  it("holds the first step for a reader who asked for reduced motion", async () => {
+    // The gate has to be in JS, not CSS. A CSS opt-out cannot stop a
+    // `setInterval` from moving the highlight, and a highlight that keeps
+    // moving is the motion the reader opted out of.
+    const restore = stubReducedMotion(true);
+    try {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      renderPage();
+      await screen.findByRole("heading", { name: "What will run" });
+
+      act(() => {
+        vi.advanceTimersByTime(2600 * 8);
+      });
+
+      expect(currentStep(document.body)).toEqual(["Create a challenge"]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps every step's text in the DOM, since the cycle only emphasises", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    // Highlighting one step must not hide the other three: a reader who
+    // arrives mid-cycle, or one who cannot see the animation, still needs the
+    // whole walkthrough.
+    for (const title of [
+      "Create a challenge",
+      "Submit for evaluation",
+      "Code is generated & tested",
+      "Review the report",
+    ]) {
+      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    }
   });
 });

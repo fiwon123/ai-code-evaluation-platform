@@ -17,7 +17,12 @@
  */
 import { describe, expect, it } from "vitest";
 
+import AnimatedTerminalSource from "../pages/Home/AnimatedTerminal.tsx?raw";
+import homeSource from "../pages/Home/Home.tsx?raw";
 import globalsCss from "./globals.css?raw";
+import scoreRingCss from "./score-ring.css?raw";
+import ambientCss from "./ambient.css?raw";
+import enterCss from "./enter.css?raw";
 
 const HOME_CSS = import.meta.glob("../pages/Home/Home.module.css", {
   query: "?raw",
@@ -69,6 +74,17 @@ function motionWelcomeBlock(css: string): string {
   return end === -1 ? rest : rest.slice(0, end + 1);
 }
 
+/** Everything inside the narrow-viewport block, which is where the stacked
+ *  pipeline lives. Same shape as the two helpers above: good enough for a file
+ *  this size, and it returns "" loudly rather than matching the wrong block. */
+function narrowBlock(css: string): string {
+  const start = css.indexOf("@media (max-width: 768px)");
+  if (start === -1) return "";
+  const rest = css.slice(start);
+  const end = rest.slice(1).search(/^\}/m);
+  return end === -1 ? rest : rest.slice(0, end + 1);
+}
+
 /** Infinite or scroll-driven ambient animations, and the colour blobs and
  *  scanline declared in the Home module. */
 const AMBIENT_SELECTORS = [".codeGrid", ".codeFragment"] as const;
@@ -78,12 +94,19 @@ const AMBIENT_SELECTORS = [".codeGrid", ".codeFragment"] as const;
  *  guarantee than an `animation: none` override, so both are accepted. */
 const CONFINED_SELECTORS = [".scrollReveal"] as const;
 
+/** Keyframes that belong to *this* file, because the rules using them are
+ *  written here too.
+ *
+ *  `auroraDrift`, `scanline` and `fadeInUp` used to be on this list and were the
+ *  whole defect (issue #366): a module cannot name a keyframe declared in an
+ *  unscoped sheet, because the build rewrites the reference and not the
+ *  definition, so every element that asked for one got an animation-name that
+ *  matched nothing and rendered perfectly still. They live in `ambient.css` and
+ *  `enter.css` now, and are reached with `composes`. */
 const AMBIENT_KEYFRAMES = [
-  "auroraDrift",
   "gridPan",
   "floatCode",
   "sheenSweep",
-  "scanline",
   "viewReveal",
 ] as const;
 
@@ -97,7 +120,7 @@ describe("ambient motion layer", () => {
     const layer = ambientLayer(globalsCss);
     for (const marker of [
       ":root {",
-      "@keyframes auroraDrift",
+      "@keyframes gridPan",
       ".ambientLayer {",
       ".codeGrid {",
       ".codeFragment {",
@@ -203,8 +226,12 @@ describe("Home hero decoration", () => {
   const homeCss = Object.values(HOME_CSS)[0] ?? "";
 
   it("stops the hero blobs and scanline under reduced motion", () => {
-    // These are declared in the Home module rather than globals, so they need
-    // their own opt-out — the globals block cannot reach them.
+    // Belt and braces. The opt-out that actually stops them now ships with the
+    // composed class in `ambient.css` — these declarations cannot, on their own,
+    // be what makes the drift stop, and they are kept for the same reason the
+    // audit below accepts them: a module that later re-declares `animation`
+    // locally would otherwise reintroduce motion for a reader who asked for
+    // none. The composed opt-out is asserted in `shared motion sources` below.
     const block = reducedMotionBlock(homeCss);
     expect(block, "Home.module.css has no reduced-motion block").not.toBe("");
     for (const selector of [".blobPrimary", ".blobAccent", ".blobSuccess", ".panelScan"]) {
@@ -214,6 +241,182 @@ describe("Home hero decoration", () => {
 
   it("keeps the hero backdrop from intercepting clicks", () => {
     expect(homeCss).toMatch(/\.heroBackdrop\s*\{[^}]*pointer-events:\s*none/);
+  });
+});
+
+/**
+ * The score ring's fill, and the empty state it has to have.
+ *
+ * This pair of rules exists because the arc used to be wrong in a way no test
+ * could see. `ScoreRing` is handed the final score, because the number has to
+ * count up *to* something, so `stroke-dasharray` is the score's arc from the
+ * first frame. The fill was then animated with a keyframe whose `from` was a
+ * hardcoded `stroke-dashoffset: 300` — a number copied from one radius — which
+ * meant the arc was already two-thirds drawn for the whole run, sitting beside
+ * digits reading 0%, and then snapped empty to refill when scoring began. The
+ * screenshots showed it; the DOM assertions, which only asked whether an
+ * animation was *named*, all passed.
+ */
+describe("Home score ring fill", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+
+  it("holds the arc at the score so far, in the ring's own units", () => {
+    // The resting offset is `arc - from`, which leaves exactly `from` drawn and
+    // hides everything beyond it. Both halves are the ring's own measurements —
+    // a literal number here is the bug being guarded, not a style preference.
+    //
+    // This used to be `var(--ring-arc)`, which holds *nothing*: a ring that
+    // emptied between attempts and refilled from zero, so the panel showed three
+    // separate runs rather than one climbing to 100 (#389).
+    const base = homeCss.match(
+      /\.animPanel \.sampleReport :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(base, "no base rule for the panel's ring arc").not.toBeNull();
+    expect(base![1]).toMatch(
+      /stroke-dashoffset:\s*calc\(var\(--ring-arc\)\s*-\s*var\(--ring-arc-from,\s*0px\)\)/,
+    );
+    expect(base![1]).not.toMatch(/stroke-dashoffset:\s*\d/);
+    // And the two halves have to be the ring's own variables: a hardcoded
+    // `--ring-arc-from` fallback *without* the `0px` unit would make `calc`
+    // invalid and drop the declaration, leaving the ring on the previous rule.
+    expect(base![1]).toMatch(/--ring-arc-from,\s*0px/);
+  });
+
+  it("fills from the score already drawn rather than from a number copied off another radius", () => {
+    const keyframes = homeCss.match(/@keyframes ringFill\s*\{([\s\S]*?)\n\}/);
+    expect(keyframes, "no ringFill keyframes").not.toBeNull();
+    // The `from` end is the same expression as the resting offset, so a fill
+    // continues from the arc the reader is looking at rather than emptying it
+    // first. Identical strings on purpose: two ways of saying "where it is now"
+    // would be two things to keep in step.
+    expect(keyframes![1]).toMatch(
+      /from\s*\{[^}]*stroke-dashoffset:\s*calc\(var\(--ring-arc\)\s*-\s*var\(--ring-arc-from,\s*0px\)\)/,
+    );
+    expect(keyframes![1]).toMatch(/to\s*\{[^}]*stroke-dashoffset:\s*0/);
+    // The specific defect: a literal offset in the `from` end.
+    expect(keyframes![1]).not.toMatch(/from\s*\{[^}]*stroke-dashoffset:\s*\d/);
+  });
+
+  it("settles the arc on the full score, not on the last score it passed through", () => {
+    // At rest the base rule would hold `arc - from`, and `from` is still the
+    // *previous* attempt's score — so a finished story would come to rest showing
+    // 67% beside a settled 100%. `data-complete` is what closes that gap.
+    const complete = homeCss.match(
+      /\.animPanel \.sampleReport\[data-complete="true"\] :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(complete, "no settled rule for the panel's ring arc").not.toBeNull();
+    expect(complete![1]).toMatch(/stroke-dashoffset:\s*0/);
+    // And it has to come after the base rule, since both are one attribute deep
+    // and the later declaration wins.
+    expect(homeCss.indexOf('[data-complete="true"]')).toBeGreaterThan(
+      homeCss.indexOf(".animPanel .sampleReport :global(.ringProgress)"),
+    );
+  });
+
+  it("fills the arc for a reader who asked for no motion", () => {
+    // Reduced motion removes the animation, which is not the same as asking for
+    // a filled ring — the base rule now starts it empty on purpose. Without this
+    // the same disagreement reappears beside a 67% number, just for the readers
+    // who opted out.
+    const block = reducedMotionBlock(Object.values(HOME_CSS)[0] ?? "");
+    expect(block, "Home.module.css has no reduced-motion block").not.toBe("");
+    const arc = block.match(
+      /[^{}]*:global\(\.ringProgress\)[^{}]*\{([^}]*)\}/,
+    );
+    expect(arc, "the reduced-motion block does not reach the ring arc").not.toBeNull();
+    expect(arc![1], "the arc is not animated off under reduced motion").toMatch(
+      /animation:\s*none/,
+    );
+    expect(arc![1], "a reduced-motion reader gets an empty ring beside the score").toMatch(
+      /stroke-dashoffset:\s*0/,
+    );
+  });
+
+  it("eases the score scale between bands instead of snapping", () => {
+    // #389 steps the arc's colour through four bands as the number counts. The
+    // step is the point, so it has to read as the dial passing a mark rather
+    // than as a flicker: `stroke` is transitioned on `.ringProgress` for exactly
+    // that. Without it the arc changes colour in one frame, up to three times
+    // inside a 1200ms count-up.
+    //
+    // Locked here rather than in the component test because it is a stylesheet
+    // declaration, and because jsdom resolves no custom properties at all — a
+    // `stroke` transition asserted from a component test would pass whether or
+    // not the rule existed.
+    const progress = stripComments(scoreRingCss).match(/\.ringProgress\s*\{([^}]*)\}/);
+    expect(progress, "no .ringProgress rule").not.toBeNull();
+    const transition = progress![1]!.match(/transition:\s*([^;]+);/);
+    expect(transition, ".ringProgress declares no transition").not.toBeNull();
+    expect(
+      transition![1],
+      "the arc's colour change must ease; only the dashoffset transition was found",
+    ).toMatch(/[\s,]stroke\s/);
+    // And the fill must not have been dropped in the process — this rule is
+    // shared with the Demo, the admin dashboard and the report, so a shorter
+    // list here would quietly change how the arc draws for all of them.
+    expect(transition![1], "the dashoffset transition was lost").toMatch(
+      /stroke-dashoffset/,
+    );
+  });
+
+  it("keeps the arc drawn once the score is out", () => {
+    // The trigger and the settled state are two attributes, and conflating them
+    // leaves the ring blank at rest: the score stage ends, `data-scoring` goes
+    // false, the rule naming the fill stops matching, and the arc snaps back to
+    // the empty base while the digits keep the 67% the count-up left them.
+    const settled = homeCss.match(
+      /\.animPanel \.sampleReport\[data-complete="true"\] :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(settled, "no settled state for the ring arc").not.toBeNull();
+    expect(settled![1], "the settled arc is not drawn").toMatch(
+      /stroke-dashoffset:\s*0/,
+    );
+  });
+
+  it("holds the fill's end state rather than springing back to empty", () => {
+    // `backwards` was fine while the base *was* the end state. The base is now
+    // empty on purpose, so the fill has to be held with `forwards` — otherwise
+    // the ring empties the moment the animation finishes.
+    const base = homeCss.match(
+      /\.animPanel \.sampleReport :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(base![1], "the fill is not held after it finishes").toMatch(
+      /animation-fill-mode:\s*forwards/,
+    );
+  });
+
+  it("publishes the arc lengths the keyframes read, in px", () => {
+    // The CSS is inert without this: `--ring-arc` is only set here, so a rename
+    // on either side silently yields an invalid offset and a ring that never
+    // fills — which looks like a timing bug, not a wiring one.
+    //
+    // The unit is asserted because it is the whole reason the ring fills at all.
+    // Every consumer writes `calc(var(--ring-arc) - var(--ring-arc-from, 0px))`,
+    // and `calc(83.69 - 0)` is a unitless number: not a valid `stroke-dashoffset`,
+    // so the declaration is dropped and the property falls back to `0`. The
+    // `ringFill` keyframes went the same way, which left the arc pinned at its
+    // target while `getAnimations()` reported the animation running on schedule
+    // for the full 800ms (#389). Nothing about that reads as a missing unit.
+    //
+    // Read through the same `import.meta.glob` the rest of this file uses rather
+    // than `readFileSync(new URL(..., import.meta.url))`: under vitest
+    // `import.meta.url` is not a file URL, and `fileURLToPath` throws on it.
+    const sources = import.meta.glob("../components/ScoreRing/ScoreRing.tsx", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>;
+    const ring = stripComments(Object.values(sources)[0] ?? "");
+    expect(ring, "ScoreRing.tsx was not read").not.toBe("");
+    for (const [name, value] of [
+      ["--ring-arc", "visibleArc"],
+      ["--ring-arc-from", "fromArc"],
+      ["--ring-circumference", "circumference"],
+    ] as const) {
+      expect(ring, `${name} is not published in px`).toContain(
+        `"${name}": `+"`${"+value+"}px`,",
+      );
+    }
   });
 });
 
@@ -342,6 +545,708 @@ describe("looping motion across modules", () => {
     expect(exempt.length, "unexpectedly large exemption list").toBeLessThanOrEqual(2);
     for (const [selector, reason] of Object.entries(FUNCTIONAL_FEEDBACK)) {
       expect(reason.length, `${selector} has no reason recorded`).toBeGreaterThan(20);
+    }
+  });
+});
+
+/**
+ * The scoping trap, stated as an invariant (issue #366).
+ *
+ * The audits above had a hole that let four families of animation die without a
+ * single test noticing. `loopingSelectors` only counts a loop when the keyframe
+ * is declared *in the same file*, which sounds like a feature and is the exact
+ * reason the bug survived: the four dead references named a keyframe from
+ * `globals.css`, so this scan skipped every one of them, and the
+ * "every ambient keyframe is defined" list only ever checked `globals.css` —
+ * where the definitions were, so it was satisfied. Both checks were green, the
+ * build was clean, and the hero did not move.
+ *
+ * The rule is therefore not "is this keyframe defined somewhere" but "can this
+ * file resolve this name": declared here, or reached through a `composes ... from`
+ * pointing at a file that declares it. Anything else is a reference to nothing.
+ *
+ * This is a source-level check and cannot see the rename the build performs, so
+ * it is a complement to `e2e/ambient-motion.spec.ts` rather than a replacement:
+ * that spec is what proves the engine actually started something, and this is
+ * what keeps a dead reference from being committed in the first place.
+ */
+describe("every animation a module names can be resolved", () => {
+  /** This file's own directory, which the glob keys below are relative to. */
+  const THIS_DIR = "src/styles";
+
+  /** A glob key re-expressed as a path from `src/`. */
+  function anchorToSrc(key: string): string {
+    let ups = 0;
+    let rest = key;
+    while (rest.startsWith("../")) {
+      ups += 1;
+      rest = rest.slice(3);
+    }
+    if (rest.startsWith("./")) rest = rest.slice(2);
+    const parts = THIS_DIR.split("/");
+    for (let i = 0; i < ups; i += 1) parts.pop();
+    return [...parts, rest].join("/");
+  }
+
+  /**
+   * Every stylesheet in `src`, keyed by a path that is comparable across files.
+   *
+   * `import.meta.glob` keys are relative to *this* file's directory, which
+   * makes them useless for comparing across the tree: `ambient.css` comes back
+   * as `./ambient.css` and a page module as `../pages/Home/Home.module.css`.
+   * Anchoring them all to `src/` is what lets a `composes` target in one file be
+   * matched against a file the glob found in another.
+   */
+  const ALL_CSS = new Map<string, string>(
+    Object.entries(
+      import.meta.glob("../**/*.css", {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>,
+    ).map(([key, css]) => [anchorToSrc(key), css]),
+  );
+
+  /** Resolve a `composes ... from` target against the importing file. */
+  function resolve(from: string, target: string): string {
+    const parts = from.split("/").slice(0, -1);
+    for (const step of target.split("/")) {
+      if (step === "." || step === "") continue;
+      if (step === "..") parts.pop();
+      else parts.push(step);
+    }
+    return parts.join("/");
+  }
+
+  /**
+   * The `animation` shorthand keywords, which are never keyframe names.
+   *
+   * An explicit list rather than a shape like "all lowercase", because keyframe
+   * names are arbitrary idents and a shape-based filter silently drops the
+   * lowercase ones — `scanline` was skipped by a `[a-z-]+` catch-all, which is
+   * the exact kind of gap this test exists to close. The list is the set the
+   * shorthand grammar defines, so it does not need growing in step with CSS.
+   */
+  const NOT_A_NAME =
+    /^(none|normal|reverse|alternate|alternate-reverse|forwards|backwards|both|infinite|running|paused|ease|linear|ease-in|ease-out|ease-in-out|step-start|step-end|inherit|initial|unset|revert.*|var\(.+\)|[a-z-]*\(.+\)|[0-9.]+m?s)$/;
+
+  /** `animation`/`animation-name` values, one per declaration. */
+  function animationValues(css: string): string[] {
+    return [
+      ...css.matchAll(/animation(?:-name)?\s*:\s*([^;}]+)/g),
+    ].map(([, value]) => value);
+  }
+
+  /** Keyframe names a shorthand actually refers to. */
+  function referencedNames(value: string): string[] {
+    return value
+      .split(",")
+      .flatMap((part) => part.trim().split(/\s+/))
+      // A bare `linear`/`infinite`/`both` is a keyword, and `var(--x)` is a
+      // timing token. The regex drops both by shape: keywords are lower-case
+      // words, tokens are wrapped in `var(`, durations end in `s`/`ms`.
+      .filter((token) => token && !NOT_A_NAME.test(token));
+  }
+
+  /** `@keyframes` a file declares. */
+  function declares(css: string): Set<string> {
+    return new Set(
+      [...css.matchAll(/@keyframes\s+([A-Za-z0-9_-]+)/g)].map(([, name]) => name),
+    );
+  }
+
+  /** Files a file composes from, as `src`-anchored paths. */
+  function composesFrom(file: string, css: string): string[] {
+    return [
+      ...css.matchAll(/composes:[^;]*?from\s+["']([^"']+)["']/g),
+    ].map(([, target]) => resolve(file, target));
+  }
+
+  /** Names `file` can resolve, directly or through a composed class. */
+  function resolvable(file: string, seen = new Set<string>()): Set<string> {
+    if (seen.has(file)) return new Set();
+    seen.add(file);
+    const css = stripComments(ALL_CSS.get(file) ?? "");
+    const out = declares(css);
+    for (const target of composesFrom(file, css)) {
+      for (const name of resolvable(target, seen)) out.add(name);
+    }
+    return out;
+  }
+
+  /** Every unresolvable `animation` name, per file. */
+  function dangling(): Array<{ file: string; name: string }> {
+    const findings: Array<{ file: string; name: string }> = [];
+    for (const [file, raw] of ALL_CSS) {
+      const resolvableHere = resolvable(file);
+      for (const value of animationValues(stripComments(raw))) {
+        for (const name of referencedNames(value)) {
+          if (!resolvableHere.has(name)) findings.push({ file, name });
+        }
+      }
+    }
+    return findings;
+  }
+
+  it("has keyframes to check in the first place", () => {
+    // Guard on the guard. `resolvable` walks a graph and returns an empty set on
+    // a bad path lookup, which would make the assertion below pass while
+    // checking nothing — the failure mode this file has already been bitten by
+    // twice, so it is worth one test of its own.
+    const homeKey = [...ALL_CSS.keys()].find((f) => f.endsWith("Home.module.css"));
+    expect(homeKey, "Home.module.css was not picked up by the glob").toBeDefined();
+    // A file that composes from another file must see through it.
+    expect(
+      [...resolvable(homeKey!)],
+      "Home cannot resolve the shared keyframes it composes",
+    ).toEqual(expect.arrayContaining(["auroraDrift", "scanline"]));
+    // ...and one that does not compose must not.
+    expect([...resolvable("src/styles/globals.css")]).not.toContain("auroraDrift");
+  });
+
+  it("resolves every animation name to a keyframes rule", () => {
+    expect(
+      dangling(),
+      "animation name(s) that match no @keyframes in the same compilation — " +
+        "a CSS module cannot reference a keyframe from an unscoped stylesheet, " +
+        "because the build scopes the reference and not the definition",
+    ).toEqual([]);
+  });
+
+  it("keeps the keyframes a module composes in the file it composes from", () => {
+    // The inverse direction, and the one that actually catches the regression
+    // this issue is about. Without it, moving `auroraDrift` back into
+    // `globals.css` would leave `ambient.css` defining a copy that nothing
+    // composes, and the modules would go back to naming the global one — which
+    // resolves for nobody.
+    const sources = ["src/styles/ambient.css", "src/styles/enter.css"];
+    const shared = sources.flatMap((f) => [
+      ...declares(stripComments(ALL_CSS.get(f) ?? "")),
+    ]);
+    expect(shared.sort(), "the shared motion sources define nothing").toEqual(
+      expect.arrayContaining(["auroraDrift", "scanline", "fadeInUp"]),
+    );
+
+    const composedInto = new Set<string>();
+    for (const [file, raw] of ALL_CSS) {
+      for (const target of composesFrom(file, stripComments(raw))) composedInto.add(target);
+    }
+    for (const source of sources) {
+      expect(
+        composedInto.has(source),
+        `${source} defines shared keyframes that no module composes`,
+      ).toBe(true);
+    }
+  });
+});
+
+/**
+ * The shared motion sources are now where the ambient layer's rules live, so
+ * they cannot be an unguarded gap in the audit above: a new loop added there
+ * with no opt-out has to fail, exactly as one added to a module would.
+ */
+describe("shared motion sources", () => {
+  const ambient = stripComments(ambientCss);
+  const enter = stripComments(enterCss);
+
+  it("opts every shared loop out of reduced motion", () => {
+    const block = reducedMotionBlock(ambient);
+    expect(block, "ambient.css has no reduced-motion block").not.toBe("");
+    for (const selector of [".ambientDrift", ".ambientScanline"]) {
+      expect(block, `${selector} has no reduced-motion opt-out`).toContain(selector);
+      // The selector may head a comma-separated list, as both of these do, so
+      // the same allowance the globals check makes is needed here.
+      const neutralised = new RegExp(
+        `${selector.replace(".", "\\.")}\\s*(,[^{]*)?\\{[^}]*animation:\\s*none`,
+      );
+      expect(
+        neutralised.test(block),
+        `${selector} is not set to animation: none under reduced motion`,
+      ).toBe(true);
+    }
+  });
+
+  it("gates the looping rules on the opt-out, not the other way round", () => {
+    // The opt-out has to be able to win. A module composing `.ambientDrift` may
+    // re-declare `animation` itself, so the guarantee only holds if the
+    // `prefers-reduced-motion` block is not outranked by a plain declaration —
+    // which is the case whenever the animation and its opt-out live in the same
+    // file and the opt-out is written last. Asserting the order here documents
+    // the requirement, since the browser cannot see it.
+    expect(ambient.lastIndexOf("prefers-reduced-motion")).toBeGreaterThan(
+      ambient.indexOf("animation:"),
+    );
+  });
+
+  it("keeps the one-shot entrance out of the looping audit", () => {
+    // `enter.css` holds `fadeInUp`, which finishes after 0.6s. It must not be
+    // swept into the looping-motion rule: an entrance that is gated on
+    // `prefers-reduced-motion` would leave a reduced-motion reader with a page
+    // that never appears, and no way to tell whether it had loaded.
+    expect(enter).toContain("@keyframes fadeInUp");
+    expect(enter).not.toContain("infinite");
+    expect(enter).not.toContain("prefers-reduced-motion");
+  });
+});
+
+describe("Home terminal entrance", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+  const source = stripComments(AnimatedTerminalSource);
+
+  /**
+   * The panel fades itself in and the story waits that fade out, so the opening
+   * `generating` beat is watchable instead of being spent at `opacity: 0`. The
+   * two numbers live in different files — a CSS duration and a JS lead-in — so
+   * this is the one place that can notice them disagreeing. A plain snapshot
+   * cannot: nothing throws, the story still completes, and the only symptom is
+   * a frame captured at 700ms showing correct content at 10% opacity.
+   */
+  function entranceMs() {
+    const match = source.match(/TERMINAL_ENTRANCE_MS = (\d+)/);
+    expect(match, "no TERMINAL_ENTRANCE_MS in AnimatedTerminal").not.toBeNull();
+    return Number(match![1]);
+  }
+
+  it("starts the panel hidden and reveals it on data-entered", () => {
+    const base = homeCss.match(/\.animPanel\s*\{([^}]*)\}/);
+    expect(base, "no base rule for the panel").not.toBeNull();
+    expect(base![1]).toMatch(/opacity:\s*0/);
+
+    const shown = homeCss.match(/\.animPanel\[data-entered="true"\]\s*\{([^}]*)\}/);
+    expect(shown, "no [data-entered=true] rule").not.toBeNull();
+    expect(shown![1]).toMatch(/opacity:\s*1/);
+    expect(shown![1]).toMatch(/transform:\s*translateY\(0\)/);
+  });
+
+  it("keeps the CSS fallback in step with the lead-in it stands in for", () => {
+    // The fallbacks only matter if the inline custom properties stop arriving,
+    // and they are only right if they match the numbers the component sends. A
+    // stale fallback would fade in over a different time than the story waits
+    // for, reintroducing the overlap silently.
+    const fallbacks = homeCss.match(/--terminal-entrance,\s*(\d+)ms/g) ?? [];
+    expect(
+      fallbacks.length,
+      "the entrance duration has no numeric CSS fallback",
+    ).toBeGreaterThan(0);
+    for (const fallback of fallbacks) {
+      expect(fallback).toContain(`${entranceMs()}ms`);
+    }
+  });
+
+  it("waits out the whole entrance before the first frame", () => {
+    // The first timeline frame is `generatingMs` long, so the lead-in only has
+    // to outlast the *fade* for the opening beat to be fully visible. If the
+    // lead-in were shorter the panel would still be translucent at t=0, and if
+    // it were absent the beat would be lost entirely.
+    const lead = source.match(/leadInMs: onScreen \? TERMINAL_ENTRANCE_MS : null/);
+    expect(lead, "the story is not gated on the entrance").not.toBeNull();
+    expect(entranceMs()).toBeGreaterThan(0);
+  });
+
+  it("never leaves the panel hidden from a reduced-motion reader", () => {
+    // The one place on this panel that hides itself and relies on a state
+    // change to appear, so the reset has to be declared explicitly. Under
+    // reduced motion the hook also reports "on screen" immediately, and either
+    // mechanism alone being wrong would be a blank terminal.
+    const block = reducedMotionBlock(homeCss);
+    expect(block, "Home.module.css has no reduced-motion block").not.toBe("");
+    const reset = block.match(/\.animPanel\s*\{([^}]*)\}/);
+    expect(reset, "the panel has no reduced-motion reset").not.toBeNull();
+    expect(reset![1]).toMatch(/opacity:\s*1/);
+    expect(reset![1]).toMatch(/transform:\s*none/);
+  });
+});
+
+/**
+ * The Home pipeline timeline (#353).
+ *
+ * This is the assertion that would have caught the defect #353 fixed. Five
+ * cards shared one keyframe, each delayed by its own 1.1s slice (5.5s cycle) —
+ * and the lit state sat at 20-30% of *local* time, which is the *next* slice's
+ * opening. So the sweep began a step late and each card was bright while a
+ * neighbouring card was brighter. It looked fine: motion was present, the order
+ * was roughly right, and nothing was ever counted.
+ *
+ * A screenshot cannot see this (a highlighted card is a highlighted card) and a
+ * value assertion cannot see it (the page has no values). Only the agreement
+ * between the keyframe's percentages, the animation duration and the delays can.
+ */
+describe("the Home pipeline timeline is self-consistent (#353)", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+
+  /** `@keyframes name { ... }` body, or `""` when absent. */
+  function keyframeBody(name: string): string {
+    return homeCss.match(new RegExp(`@keyframes\\s+${name}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+  }
+
+  /** The percentage stops in a keyframe body, as `[percent, declarations]`. */
+  function stops(body: string): [number, string][] {
+    return [...body.matchAll(/([\d.]+)%\s*,\s*([\d.]+)%\s*\{([^}]*)\}|([\d.]+)%\s*\{([^}]*)\}/g)].map(
+      (m) =>
+        m[1] !== undefined
+          ? ([Number(m[1]), `${m[2]}% {${m[3]}}`] as [number, string])
+          : ([Number(m[4]), `${m[4]}% {${m[5]}}`] as [number, string]),
+    );
+  }
+
+  it("gives every step the same cycle and one slice of it", () => {
+    // Five classes, hand-written because a CSS module cannot loop. These are the
+    // numbers the keyframe percentages below are relative to, so they are read
+    // rather than restated.
+    const delays: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const block = homeCss.match(new RegExp(`\\.step${i}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+      // Only the delay. An earlier version read the `animation` shorthand first,
+      // which captured the *duration* (`10s`) for all five classes and then
+      // compared five identical values against five different expectations.
+      delays[i] = /animation-delay:\s*([\d.]+s)/.exec(block)?.[1] ?? "";
+      expect(block, `.step${i} not found`).not.toBe("");
+      expect(block, `.step${i} must animate on the shared keyframe`).toContain(
+        "pipelineStepActive",
+      );
+      expect(block, `.step${i} must run on the same 5.5s cycle`).toContain(
+        "pipelineStepActive 5.5s",
+      );
+    }
+    // One 1.1s slice each, in order.
+    expect(delays).toEqual([
+      "0s",
+      "1.1s",
+      "2.2s",
+      "3.3s",
+      "4.4s",
+    ]);
+  });
+
+  it("lights each step inside its own slice, not the next one", () => {
+    const body = keyframeBody("pipelineStepActive");
+    expect(body, "pipelineStepActive was not found").not.toBe("");
+
+    // The lit declaration is the one that paints the accent. Where it sits in
+    // local time is the whole claim.
+    const lit = stops(body).filter(([, decls]) =>
+      decls.includes("border-color: var(--color-primary)"),
+    );
+    expect(lit.length, "the lit keyframe no longer paints the accent").toBeGreaterThan(0);
+    const [litAt] = lit[0]!;
+
+    // 20% of a 10s cycle is the *next* step's opening — the old bug.
+    expect(
+      litAt,
+      `the card lights at ${litAt}% of local time, which is step ${
+        (litAt / 20) | 0
+      }'s slice rather than its own`,
+    ).toBeLessThanOrEqual(20);
+
+    // And it must be back to rest before the next step opens, or two cards are
+    // lit at once and the sequence stops being readable.
+    const litMax = Math.max(...lit.map(([pct]) => pct));
+    expect(
+      litMax,
+      `the card is still lit at ${litMax}%, past the next step's opening`,
+    ).toBeLessThan(40);
+  });
+
+  it("runs each connector in the slice of the step it leads into", () => {
+    // The delays used to match the step on the connector's *left*, so every
+    // arrow lit while the step behind it was still running and the flow read
+    // backwards. `arrowN` now leads into step N+1.
+    for (let i = 0; i < 4; i += 1) {
+      const block =
+        homeCss.match(new RegExp(`\\.pipelineConnector\\.arrow${i}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+      expect(block, `.arrow${i} not found`).not.toBe("");
+      expect(block).toContain("connectorFlow");
+      const actual = /animation-delay:\s*([\d.]+s)/.exec(block)?.[1] ?? "";
+      const expected = ((i + 1) * 1.1).toString();
+      // Handle floating point precision for 3.3
+      if (expected.startsWith("3.300000")) {
+        expect(actual).toMatch(/^3\.3/);
+      } else {
+        expect(actual).toBe(`${expected}s`);
+      }
+    }
+    // Nothing lights in the first slice: there is no flow to show before step one.
+    expect(homeCss).not.toMatch(/\.pipelineConnector\.arrow0\s*\{[^}]*animation-delay:\s*0s/);
+  });
+
+  it("holds each progress bar level instead of ramping through it", () => {
+    const body = keyframeBody("progressStages");
+    expect(body, "progressStages was not found").not.toBe("");
+
+    const declared = stops(body).map(([pct, decls]) => [
+      pct,
+      /width:\s*([\d.]+%)/.exec(decls)?.[1] ?? null,
+      /opacity:\s*([\d.]+)/.exec(decls)?.[1] ?? null,
+    ]);
+
+    // A single linear ramp ignored the cards entirely: the bar was halfway while
+    // step one was still lit. The ladder itself is the first half of the fix.
+    const levels = [...new Set(declared.map(([, w]) => w).filter(Boolean))];
+    expect(levels).toEqual(["4%", "24%", "44%", "64%", "84%", "100%"]);
+
+    // And this is the half that is invisible in a screenshot. One stop per level
+    // is *not* a plateau: it is a ramp that merely decelerates at each level,
+    // because `ease-in-out` flattens the slope at a keyframe it is passing
+    // through. Measured over a cycle, that ramp never once reached zero slope —
+    // every 0.5s window gained 23 to 80px, with the slow windows drifting just
+    // after each boundary rather than standing still — so the bar was still
+    // creeping while the step it was waiting for finished. A plateau needs the
+    // level declared at two different percentages.
+    for (const level of levels) {
+      const at = declared.filter(([, w]) => w === level).map(([pct]) => pct);
+      expect(
+        at.length,
+        `${level} is declared only at ${at.join("/")}%, so the bar ramps past it ` +
+          `instead of resting there`,
+      ).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("hides the progress bar's reset across the loop seam", () => {
+    // A looping `width` animation has to jump back to its start, and this one
+    // did it in a single frame while fully opaque: 1060px to 42px between two
+    // consecutive samples, with card five still fading out. A filmstrip sampled
+    // at 0.5s intervals steps straight over a 17ms discontinuity, so nothing
+    // short of a per-frame measurement catches this.
+    const body = keyframeBody("progressStages");
+    expect(body, "progressStages was not found").not.toBe("");
+    const declAt = (pct: number) => stops(body).find(([p]) => p === pct)?.[1] ?? "";
+    const width = (d: string) => /width:\s*([\d.]+%)/.exec(d)?.[1] ?? "";
+    const opacity = (d: string) => Number(/opacity:\s*([\d.]+)/.exec(d)?.[1] ?? "1");
+
+    // First: the wrap point is not a discontinuity, which is the only reason a
+    // fade is needed at all. If these drift apart there is a snap to hide.
+    expect(
+      width(declAt(100)),
+      "the bar's last frame and its first frame disagree on width, so the loop " +
+        "point is a jump whatever the opacity does",
+    ).toBe(width(declAt(0)));
+
+    // Second: the reset has to happen in the dark, on both sides of the wrap.
+    expect(opacity(declAt(100)), "the bar is still visible as it resets").toBe(0);
+    expect(opacity(declAt(0)), "the bar pops back in rather than fading").toBe(0);
+
+    // Third: something has to bring it back, or this is just a disappearing bar.
+    const fadesBack = stops(body).some(
+      ([pct, d]) => pct > 0 && pct < 20 && Number(/opacity:\s*([\d.]+)/.exec(d)?.[1] ?? "0") === 1,
+    );
+    expect(fadesBack, "nothing fades the bar back in after the seam").toBe(true);
+  });
+
+  it("centres the stacked pipeline's connectors in the gaps they join", () => {
+    const narrow = narrowBlock(homeCss);
+    expect(narrow, "no max-width: 768px block found in Home.module.css").not.toBe("");
+    const rule = (selector: string) =>
+      new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(narrow)?.[1] ?? "";
+
+    // The connectors used to stay in the group's row, which on a stacked layout
+    // put a 2px bar hard against the right border of the card: x=390 in a track
+    // ending at x=396, so 7px from the card and 4px from the container edge,
+    // with nothing at all in the middle of the gap. Measured on screen it read
+    // as a stray hairline at the screen edge — the first guess was a scrollbar
+    // fragment — because that is what a tick beside a full-bleed card looks
+    // like. Centring it in the gap is the only place a connector reads as one.
+    expect(rule(".pipelineGroup"), ".pipelineGroup is not stacked on mobile").toContain(
+      "flex-direction: column",
+    );
+    expect(rule(".pipelineConnector"), ".pipelineConnector does not centre itself").toMatch(
+      /align-self:\s*center/,
+    );
+
+    // `align-self: center` is not enough on its own: the group's base
+    // `align-items: center` also content-sizes the cards horizontally, which
+    // turned the pipeline into a ragged staircase of 117-150px-wide cards. The
+    // mobile rule has to put the cards back to full width.
+    expect(
+      rule(".pipelineGroup"),
+      "the mobile group re-centres the cards as well as the connectors",
+    ).toMatch(/align-items:\s*stretch/);
+
+    // The gap between two stacked cards is built from the connector's own
+    // margins now, so the track's gap has to go or the gap is counted twice.
+    expect(rule(".pipelineTrack"), ".pipelineTrack still adds its own gap").toMatch(
+      /gap:\s*0/,
+    );
+    expect(rule(".pipelineConnector"), ".pipelineConnector has no symmetric margin").toMatch(
+      /margin:\s*var\(--space-2\)\s+0/,
+    );
+  });
+
+  it("opts every named timeline out for a reduced-motion reader", () => {
+    // All nine per-index classes plus the bar, and the cards' entrance. A new
+    // keyframe name has to be listed by hand here, which is the point: the
+    // generic loop rule in this file cannot match them, because each names its
+    // own keyframe.
+    const reduce = reducedMotionBlock(homeCss);
+    expect(reduce, "no reduced-motion block found in Home.module.css").not.toBe("");
+    for (const selector of [
+      ".step0",
+      ".step1",
+      ".step2",
+      ".step3",
+      ".step4",
+      ".pipelineConnector.arrow0",
+      ".pipelineConnector.arrow1",
+      ".pipelineConnector.arrow2",
+      ".pipelineConnector.arrow3",
+      ".progressBar",
+    ]) {
+      expect(
+        new RegExp(`${selector.replace(/\./g, "\\.")}\\s*(,|\\{)`).test(reduce),
+        `${selector} animates forever and is not opted out for reduced motion`,
+      ).toBe(true);
+    }
+  });
+
+  it("hides the step cards only when motion is welcome", () => {
+    // The entrance hides the cards with `opacity: 0`, and the state is undone by
+    // `data-entered` rather than by the animation's own end. If that hiding rule
+    // escaped the `no-preference` block, a reduced-motion reader would be one
+    // missed selector away from four invisible cards — the same trap `.animPanel`
+    // documents in this file's reduced-motion block.
+    expect(homeCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{\s*\.stepCard\s*\{[^}]*opacity:\s*0/,
+    );
+    expect(homeCss).toMatch(
+      /\.stepsGrid\[data-entered="true"\]\s+\.stepCard\s*\{\s*animation:\s*stepCardIn/,
+    );
+    // ...and the reduced-motion block has to name that cascade too, or it replays
+    // for anyone who reached `data-entered` with motion reduced.
+    expect(reducedMotionBlock(homeCss)).toMatch(
+      /\.stepsGrid\[data-entered="true"\]\s+\.stepCard\s*\{\s*animation:\s*none/,
+    );
+  });
+});
+
+describe("Home closing sections (#355)", () => {
+  const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
+
+  /**
+   * The two sections that used to end the page flat: the teaser and the CTA.
+   *
+   * Both are new motion, and both are places where the obvious implementation is
+   * wrong in a way only a test catches. The teaser rows would be invisible if
+   * their hidden state were declared on the rule rather than in the keyframe,
+   * and the CTA's decoration would paint over its own copy if the stacking were
+   * left to source order.
+   */
+
+  it("hides the teaser rows from their own keyframe, not from a resting opacity", () => {
+    // The failure direction matters more than usual here. The teaser is the last
+    // section on the page, so "invisible until observed" that never un-observes
+    // is a section of blank space at the foot of the page rather than a card
+    // glitch in the middle. Resting opacity must be 1 — or unset — with the
+    // hidden state reached through the keyframe and `fill-mode: both`.
+    expect(homeCss).not.toMatch(/\.teaserRow\s*\{[^}]*opacity:\s*0/);
+    expect(homeCss).not.toMatch(/\.teaserScoreRow\s*\{[^}]*opacity:\s*0/);
+    expect(homeCss).toMatch(/@keyframes\s+teaserRowIn\s*\{\s*from\s*\{[^}]*opacity:\s*0/);
+  });
+
+  it("starts the teaser rows on the section arriving, not on mount", () => {
+    // An animation at the foot of the page that plays before anyone scrolls to
+    // it is one nobody watched — the same reason the step cards and the stat
+    // sweep are gated (`useInView`, #353/#354). Gating it in CSS means the
+    // reveal cannot be orphaned by a re-render: there is no state to lose.
+    expect(homeCss).toMatch(
+      /\.teaserPanelWrap\[data-entered="true"\]\s+\.teaserRow[\s\S]*?animation:\s*teaserRowIn/,
+    );
+    expect(homeCss).not.toMatch(
+      /^\.teaserRow\s*\{[^}]*animation:/m,
+    );
+  });
+
+  it("takes the teaser stagger from the component's one number", () => {
+    // `TEASER_STAGGER_MS` in Home.tsx. A `calc(var(--i) * 260ms)` written here
+    // would also work, and then the number would live in two files with nothing
+    // holding them together — the `TERMINAL_ENTRANCE_MS` disagreement this file
+    // already documents, where the CSS and the JS each set half of one entrance.
+    expect(homeCss).toMatch(/animation-delay:\s*var\(--teaser-delay/);
+    expect(homeCss).not.toMatch(/animation-delay:[^;]*260ms/);
+    expect(homeSource).toMatch(/TEASER_STAGGER_MS/);
+  });
+
+  it("leaves the teaser rows visible when the animation is taken away", () => {
+    // `animation: none` under reduced motion has to be the *only* thing keeping
+    // them visible, which is only true because of the test above.
+    expect(reducedMotionBlock(homeCss)).toMatch(
+      /\.teaserPanelWrap\[data-entered="true"\]\s+\.teaserRow[\s\S]*?animation:\s*none/,
+    );
+  });
+
+  it("keeps the CTA decoration behind the copy", () => {
+    // `.cta::after` is an `inset: 0` light spill that goes to `opacity: 1` on
+    // hover. The new layers are absolutely positioned siblings, so without an
+    // explicit stacking order they paint over the heading and the buttons — and
+    // a hover that washes out the CTA text is worse than no animation.
+    expect(homeCss).toMatch(/\.cta\s*>\s*\*\s*\{[^}]*position:\s*relative[^}]*z-index:\s*1/);
+    expect(homeCss).toMatch(/\.cta\s*>\s*\.ctaRing[\s\S]*?z-index:\s*0/);
+  });
+
+  it("keeps the CTA decoration out of the way of pointer events", () => {
+    // `.cta` clips with `overflow: hidden`, so the ring's overhang is already
+    // cropped — but the layers still cover the whole banner, and a decoration
+    // that eats a click on "Create free account" is a broken CTA.
+    expect(homeCss).toMatch(/\.ctaRing\s*\{[^}]*pointer-events:\s*none/);
+    expect(homeCss).toMatch(/\.ctaAura\s*\{[^}]*pointer-events:\s*none/);
+  });
+
+  it("drifts the CTA bloom on the shared ambient keyframe rather than naming it", () => {
+    // Issue #366 in its purest form: naming a keyframe from a CSS module builds
+    // cleanly and animates nothing, because the build rewrites the reference and
+    // not the definition. `composes` keeps both in one compilation — and carries
+    // the reduced-motion opt-out with it, so this layer cannot reintroduce the
+    // bug by forgetting one.
+    expect(homeCss).toMatch(
+      /\.ctaAura\s*\{\s*composes:\s*ambientDrift from "\.\.\/\.\.\/styles\/ambient\.css"/,
+    );
+    expect(homeCss).not.toMatch(/animation:\s*auroraDrift/);
+    // Re-timed with the longhand, never the shorthand: a local `animation`
+    // shorthand would outrank the shared class's own `animation: none`.
+    expect(homeCss).toMatch(/\.ctaAura\s*\{[^}]*animation-duration:/);
+    expect(homeCss).not.toMatch(/\.ctaAura\s*\{[^}]*animation:\s*auroraDrift/);
+  });
+
+  it("sweeps the CTA ring slowly enough not to compete with the copy", () => {
+    // Everything else on this page moves in 6-22s. The closing ring is on a 64s
+    // loop: a reader looking at it sees it move, a reader reading the CTA does
+    // not notice it at all. Asserted rather than left to taste, because "slow
+    // enough" is exactly the number that gets halved by a later edit.
+    const ring = homeCss.match(/\.ctaRing\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(ring).toMatch(/animation:\s*ctaRingSweep\s+(\d+)s/);
+    const seconds = Number(ring.match(/animation:\s*ctaRingSweep\s+(\d+)s/)?.[1]);
+    expect(seconds).toBeGreaterThanOrEqual(48);
+
+    // And it must actually rotate: a ring that only fades or scales is a
+    // different ornament than the one described.
+    const keyframe = homeCss.match(/@keyframes\s+ctaRingSweep\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+    expect(keyframe).toMatch(/rotate\(/);
+  });
+
+  it("keeps the CTA decoration out of flow", () => {
+    // The regression this exists for: `.cta > *` raises the banner's children to
+    // `z-index: 1` so the copy paints above the decoration, and it also set
+    // `position: relative` on them. That rule and `.ctaRing` have equal
+    // specificity, so the later one won and the two layers came back *in flow* —
+    // empty inline boxes two pixels wide, still carrying the sweep animation.
+    // The animation ran, this file's other contracts held, and the ring was
+    // never on screen. So the opt-out rule has to restore `position` as well as
+    // `z-index`, and this asserts the pair rather than either alone.
+    const optOut =
+      homeCss.match(/\.cta\s*>\s*\.ctaRing\s*,\s*\.cta\s*>\s*\.ctaAura\s*\{[\s\S]*?\n\}/)?.[0] ??
+      "";
+    expect(optOut, "no `.cta > .ctaRing, .cta > .ctaAura` opt-out rule found").not.toBe("");
+    expect(optOut).toMatch(/position:\s*absolute/);
+    expect(optOut).toMatch(/z-index:\s*0/);
+  });
+
+  it("opts the CTA ring out for a reader who asked for no motion", () => {
+    const reduce = reducedMotionBlock(homeCss);
+    expect(reduce, "no reduced-motion block found in Home.module.css").not.toBe("");
+    for (const selector of [".ctaRing", ".ctaAura"]) {
+      expect(
+        new RegExp(`${selector.replace(/\./g, "\\.")}\\s*(,|\\{)`).test(reduce),
+        `${selector} animates and is not opted out for reduced motion`,
+      ).toBe(true);
     }
   });
 });

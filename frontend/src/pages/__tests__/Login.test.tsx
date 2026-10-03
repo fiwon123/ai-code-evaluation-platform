@@ -23,12 +23,13 @@ function mockAuth(overrides: Record<string, unknown> = {}) {
   });
 }
 
-function renderLogin() {
+function renderLogin(entry: { pathname: string; state?: unknown } = { pathname: "/login" }) {
   return render(
-    <MemoryRouter initialEntries={["/login"]}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/challenges" element={<div>Challenges page</div>} />
+        <Route path="/demo" element={<div>Demo page</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -75,10 +76,84 @@ describe("Login", () => {
     );
   });
 
+  // Regression guard for #320: a 422 used to render the Pydantic `loc` key in
+  // the banner, so the login page showed "identifier: String should have at
+  // least 3 characters" under a field labelled "Email or username".
+  it("never shows the internal field key in the error banner", async () => {
+    const { ApiError } = await import("../../services/api.ts");
+    mockAuth({
+      login: vi.fn().mockRejectedValue(
+        new ApiError(
+          422,
+          "String should have at least 3 characters",
+          { identifier: "String should have at least 3 characters" },
+        ),
+      ),
+    });
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "ab" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "whatever" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("String should have at least 3 characters");
+    expect(alert).not.toHaveTextContent("identifier");
+  });
+
   it("redirects to challenges when already logged in", () => {
     mockAuth({ user: { id: "u1" } });
     renderLogin();
     expect(screen.getByText("Challenges page")).toBeInTheDocument();
+  });
+
+  it("returns to the page the visitor came from after login", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+    mockAuth({ login });
+    renderLogin({ pathname: "/login", state: { from: "/demo" } });
+
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Demo page")).toBeInTheDocument(),
+    );
+  });
+
+  it("redirects an already-authed visitor to the return target", () => {
+    mockAuth({ user: { id: "u1" } });
+    renderLogin({ pathname: "/login", state: { from: "/demo" } });
+    expect(screen.getByText("Demo page")).toBeInTheDocument();
+  });
+
+  it("ignores a non-internal return target", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+    mockAuth({ login });
+    renderLogin({
+      pathname: "/login",
+      state: { from: "https://evil.example/path" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Challenges page")).toBeInTheDocument(),
+    );
   });
 
   it("links to the register page", () => {

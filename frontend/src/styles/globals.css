@@ -7,15 +7,84 @@
   --color-primary: #1d4ed8;
   --color-primary-hover: #1e40af;
   --color-primary-light: #dbeafe;
+  /* The fourth `-strong` step, and the one the other three were missing
+   * (#348). `--color-primary` is the right blue for a *fill* and the wrong one
+   * for small text on the blue tint: in the dark theme it measured 3.13:1 as
+   * text, which is exactly the "processing" status pill on Profile — the one
+   * status the `--strong` fix had never covered, because the test listed only
+   * success/warning/danger. Same rule as the rest of the family: hold the hue,
+   * move the lightness until the pair clears 4.5:1 on the tint it sits on. */
+  --color-primary-strong: #1e40af;
   --color-secondary: #475569;
   --color-success: #16a34a;
   --color-success-light: #dcfce7;
+  /* Text-on-tint variants (issue #346).
+   *
+   * `--color-success` and `--color-danger` are the *identity* colours: they
+   * work as borders, dots and accents, and as text on a white surface. They
+   * are not text-safe on their own pale tints, which is where the difficulty
+   * pills (and the status pills on Profile / SubmissionDetail) put them:
+   *
+   *     #16a34a on #dcfce7  3.00:1   ** fails AA
+   *     #dc2626 on #fee2e2  3.95:1   ** fails AA
+   *     #b45309 on #fef3c7  4.51:1   passes, but only just
+   *
+   * So the three gain a `-strong` step, exactly as `--color-warning-strong`
+   * already had one, holding the hue and dropping the lightness until the pair
+   * clears 4.5:1 on the tint it is meant to sit on:
+   *
+   *     #15803d on #dcfce7  4.57:1   and 5.02:1 on --color-surface
+   *     #b91c1c on #fee2e2  5.30:1   and 6.47:1 on --color-surface
+   *     #92400e on #fef3c7  6.37:1   and 7.09:1 on --color-surface
+   *
+   * The base tokens are deliberately left alone. They are still the right
+   * value everywhere else they are used, and retuning them would recolour
+   * buttons, timeline marks and pass/fail accents as a side effect of fixing a
+   * pill. `theme-contrast.test.ts` holds the pill pairs to these numbers, so a
+   * future retune of either step cannot quietly reintroduce the failure. */
+  --color-success-strong: #15803d;
   --color-warning: #f59e0b;
-  --color-warning-strong: #b45309;
+  --color-warning-strong: #92400e;
   --color-warning-light: #fef3c7;
   --color-danger: #dc2626;
+  --color-danger-strong: #b91c1c;
   --color-danger-hover: #b91c1c;
   --color-danger-light: #fee2e2;
+  /* The score scale (issue #389) — the four bands of red -> orange -> yellow ->
+   * green that the Home hero's ring steps through as the score counts.
+   *
+   * Its own four tokens rather than the `-strong` family above, because that
+   * family is built for *text on a tint* and this scale has to be read as a
+   * spectrum. Two of the differences are not cosmetic:
+   *
+   *   1. `--color-warning-strong` is #92400e here — a brown. It is the right
+   *      value for a 12px pill on #fef3c7 (6.37:1) and the wrong one for the
+   *      third band of a red-to-green scale, where the reader is matching hue
+   *      against a traffic light. Stepping through brown read as
+   *      "dark red -> brown -> green", not as a score scale.
+   *   2. WCAG 1.4.11 still applies (each band is a 12px graphical stroke, 3:1
+   *      against the surface behind it), so the middle bands cannot be the
+   *      vivid hues a dial wants: #f59e0b measures 2.15:1 on white and #eab308
+   *      1.89:1. These are the -700 family instead, which keeps the hue and
+   *      drops the lightness until every step clears the bar with room:
+   *
+   *      #b91c1c on --color-surface-raised  6.47:1
+   *      #c2410c on --color-surface-raised  5.18:1
+   *      #a16207 on --color-surface-raised  4.92:1
+   *      #15803d on --color-surface-raised  5.02:1
+   *
+   *      (`--color-surface-raised` is #ffffff in this theme, and it is the one
+   *      that matters: the ring sits on the terminal panel, not on the page.)
+   *
+   * The bands are close to one another on purpose (1.02:1 between yellow and
+   * green), because a scale with gaps in it reads as four verdicts instead of as
+   * one scale with four marks. 1.4.11 is measured band-against-surface, and the
+   * score itself is text in the middle of the ring, held to 4.5:1 by its own
+   * rule. `theme-contrast.test` holds all four to the 3:1 bar in both themes. */
+  --color-score-red: #b91c1c;
+  --color-score-orange: #c2410c;
+  --color-score-yellow: #a16207;
+  --color-score-green: #15803d;
 
   /* Neutrals */
   --color-bg: #eef2f7;
@@ -30,9 +99,47 @@
      surface) while staying calm, and distinct from --color-surface-secondary
      so "hovered" and "secondary" never read as the same surface. */
   --color-surface-hover: #e3eaf7;
+  /* The panel a marketing feature card sits on, and the one surface in this
+     palette that is DARKER than the page behind it (#351). The alternative
+     candidates are all lighter — --color-surface is #ffffff — which is why a
+     card built from them separated from --color-bg by 1.05:1 and read as flat
+     grey rather than as a panel. The step is bounded from below by text, not
+     by taste: --color-text-muted (#475569) is 5.57:1 here, so there is still
+     1.07 of headroom over AA for 16px body copy, and --color-text (#0f172a)
+     is 13.13:1. Darker than this and the muted paragraph is the first thing
+     to go; lighter and the card stops reading as a card. */
+  --color-surface-card: #d4deeb;
   --color-divider: #d8e1ec;
   --color-border: #c9d4e0;
   --color-border-hover: #94a3b8;
+  /* Form-control boundary (issue #345). Deliberately NOT --color-border.
+   *
+   * --color-border is a *container* edge — a card on a card, a divider, a
+   * table rule — and 1.50:1 against #ffffff is the right weight for that,
+   * because a container is defined by the surface it sits on rather than by
+   * its own outline. A form control has no such cue: an input on a white card
+   * is white on white, so its border is the only thing that says "this is a
+   * box you can type into". At 1.50:1 that edge is close to invisible, which
+   * is the readability problem this token fixes — WCAG 1.4.11 asks 3:1 for a
+   * control boundary and #c9d4e0 was not close.
+   *
+   * Chosen to clear 3:1 against *every* surface a field can land on, not just
+   * the white card, because a token that only passes where it was measured is
+   * a token one layout change away from failing:
+   *     #ffffff  3.56:1   (--color-surface: card, panel, dialog)
+   *     #eef2f7  3.16:1   (--color-bg: a field on the page itself)
+   *     #f4f7fb  3.31:1   (--color-surface-secondary: nested surfaces)
+   * The lightest of those binds, so #ffffff is the number to quote; the other
+   * two are listed because they are the ones that regress silently. A
+   * near-miss worth recording: #7d90a6 measures 3.28:1 on white and looks
+   * better, but falls to 2.91:1 on --color-bg and would fail there.
+   *
+   * Two steps down the existing slate ramp, so it stays in the palette's
+   * family. It is darker than --color-border-hover (#94a3b8), which is the
+   * correct order: a control you are meant to interact with reads stronger
+   * than a panel that is merely hoverable. `input-contrast.test.ts` holds all
+   * three numbers, and holds the modules to actually using the token. */
+  --color-input-border: #768a9f;
   --color-text: #0f172a;
   --color-text-secondary: #3b4a5f;
   --color-text-muted: #475569;
@@ -84,6 +191,33 @@
   --color-code-border: #334155;
   --color-code-text: #e2e8f0;
 
+  /* Inverse marketing surfaces (#387).
+   *
+   * The light palette's marketing and informational cards adopt the code
+   * surface so the product speaks one dark-panel language instead of placing
+   * pale panels on a pale page. `Card variant="dark"` scopes these over the
+   * ordinary tokens for its subtree, so descendants keep reading
+   * `--color-text` and friends and need no dark-aware rules of their own. The
+   * dark palette aliases each back to the corresponding ordinary token, so the
+   * variant is a no-op there — which is why they are declared per-theme rather
+   * than once. */
+  --color-surface-inverse: #0f172a;
+  --color-border-inverse: #334155;
+  --color-text-inverse: #e2e8f0;
+  --color-text-inverse-secondary: #94a3b8;
+
+  /* Form controls are dark in BOTH themes, like the code and prompt surfaces
+   * (#387). A light field on a bright marketing card was the hardest place in
+   * the app to read typed text. These are dedicated tokens rather than the
+   * code-surface set so an input and a code block can be retuned
+   * independently. Measured on the light fill: value #e2e8f0 = 13.86:1,
+   * placeholder #94a3b8 = 6.35:1 (both need 4.5:1). The boundary stays on
+   * `--color-input-border`, which is checked against the surface the field
+   * sits on, not against its own fill. */
+  --color-input-bg: #0f172a;
+  --color-input-text: #e2e8f0;
+  --color-input-placeholder: #94a3b8;
+
   color-scheme: light;
 }
 
@@ -92,15 +226,54 @@
   --color-primary: #3b82f6;
   --color-primary-hover: #60a5fa;
   --color-primary-light: #1e3a5f;
+  /* The dark half of #348's primary pill token. Same inversion the rest of the
+   * family does below: the tint is the dark one here, so "strong" moves *up*
+   * the ramp. `#3b82f6` on `#1e3a5f` is 3.13:1 — under the 3.0 large-text floor
+   * of nothing, and well under AA's 4.5:1 for the 12px pill text. `#93c5fd`
+   * measures 6.38:1. */
+  --color-primary-strong: #93c5fd;
   --color-secondary: #94a3b8;
   --color-success: #22c55e;
   --color-success-light: #14532d;
+  /* The dark half of the #346 pill tokens. Here the tint is the dark one, so
+     "strong" moves *up* the ramp instead of down — the text has to get lighter
+     to clear the tint, not darker. Measured against each token's own tint:
+   *     #4ade80 on #14532d  5.23:1   (base #22c55e is 4.00:1 — fails AA)
+   *     #fca5a5 on #7f1d1d  5.28:1   (base #f87171 is 3.62:1 — fails AA)
+   *     #fbbf24 on #78350f  5.43:1   unchanged, and deliberately so: the
+   *                                   warning pill already pointed at the strong
+   *                                   step, so it already cleared AA. It is
+   *                                 listed for symmetry — all three pills are now
+   *                                 one set. (Its *base*, #f59e0b, is 4.22:1 and
+   *                                 does fail; nothing renders it as text on the
+   *                                 tint, which is the same base/strong split
+   *                                 the other two now have.) */
+  --color-success-strong: #4ade80;
   --color-warning: #f59e0b;
   --color-warning-strong: #fbbf24;
   --color-warning-light: #78350f;
   --color-danger: #f87171;
+  --color-danger-strong: #fca5a5;
   --color-danger-hover: #fca5a5;
   --color-danger-light: #7f1d1d;
+  /* The dark half of the score scale (#389). Same 700->400 move as the light
+   * half, because the surface is dark here and the steps have to get *lighter*
+   * to clear the same bar. Measured against --color-surface-raised (#1a2540),
+   * which is what the terminal panel is painted in this theme:
+   *
+   *     #f87171 on #1a2540  5.49:1
+   *     #fb923c on #1a2540  6.71:1
+   *     #fbbf24 on #1a2540  9.10:1
+   *     #4ade80 on #1a2540  8.72:1
+   *
+   * The red is #f87171, not the `-strong` family's #fca5a5 — that is a pale pink
+   * chosen to be legible as small text on #7f1d1d, and as the bottom of this
+   * scale it reads pink rather than red, which is the one thing the scale has to
+   * get right at a glance. */
+  --color-score-red: #f87171;
+  --color-score-orange: #fb923c;
+  --color-score-yellow: #fbbf24;
+  --color-score-green: #4ade80;
 
   /* Neutrals */
   --color-bg: #0a1020;
@@ -120,9 +293,39 @@
      contrast to 5.43:1 while hovered. Also 1.22:1 away from
      --color-surface-raised, so "hovered row" never looks like a raised card. */
   --color-surface-hover: #0d1322;
+  /* Deliberately the value --color-bg-subtle already had, so the dark palette
+     renders exactly as it did before #351. The fix for a card that disappears
+     into the page is a *light-mode* one: there the page is #eef2f7 and every
+     available surface was lighter, so no existing token could separate. Here
+     the page is already the darkest thing in the layout and #141d33 reads as a
+     panel against it. Darkening further would spend the 0.41 of headroom
+     --color-text-muted (#7c8ca6) has over AA on this surface. */
+  --color-surface-card: #141d33;
   --color-divider: #24334f;
   --color-border: #2c3d5c;
   --color-border-hover: #46618c;
+  /* Form-control boundary — dark (issue #345).
+   *
+   * Set to the current --color-border, so the dark palette renders EXACTLY as
+   * it did before #345. That is a deliberate scope decision, not an oversight,
+   * and it is recorded here so the next reader does not "fix" it by accident:
+   * #345 scoped the work to light mode ("dark mode remains unchanged") and the
+   * dark value is the one part of that change with a real number attached.
+   *
+   * The number: this border is 1.54:1 against --color-surface (#131d33) and
+   * 1.74:1 against --color-bg, so it does not meet the same WCAG 1.4.11 3:1
+   * that the light token now clears. The dark field is still legible — value
+   * text is 14.02:1 and the placeholder 4.92:1 — and a 1px edge on a dark
+   * surface is a long-established convention, but it is below the bar the light
+   * palette now meets, and that asymmetry is a real open question rather than a
+   * settled one. Lifting it is a one-line change here plus a visual pass over
+   * every form in both themes; it was left out only because #345 asked for it.
+   *
+   * `input-contrast.test.ts` pins this equality deliberately, so the dark
+   * palette cannot drift away from --color-border unnoticed. If the dark border
+   * is ever retuned, that assertion is the thing to update — and the comment
+   * above with it. */
+  --color-input-border: #2c3d5c;
   --color-text: #e6ebf3;
   --color-text-secondary: #a9b8cf;
   --color-text-muted: #7c8ca6;
@@ -158,6 +361,20 @@
   --color-code-border: #24324a;
   --color-code-text: #e2e8f0;
 
+  /* The dark palette's ordinary surfaces, so `Card variant="dark"` renders
+   * exactly like a default card here (#387). Declared as distinct tokens
+   * because the light palette points them at the code surface instead of the
+   * normal card surface. */
+  --color-surface-inverse: #131d33;
+  --color-border-inverse: #2c3d5c;
+  --color-text-inverse: #e6ebf3;
+  --color-text-inverse-secondary: #a9b8cf;
+
+  /* Dark form controls (#387) — the code surface, retuned with it. */
+  --color-input-bg: #0b1220;
+  --color-input-text: #e2e8f0;
+  --color-input-placeholder: #94a3b8;
+
   color-scheme: dark;
 }
 
@@ -186,6 +403,12 @@
   --color-code-warn: #fbbf24;
   --color-code-ok: #4ade80;
   --color-code-gutter: #1e293b;
+  --color-code-comment: #7d90a8;
+  --color-code-string: #98c379;
+  --color-code-number: #d19a66;
+  --color-code-keyword: #c792ea;
+  --color-code-type: #56b6c2;
+  --color-code-fn: #e5c07b;
 
   /* Typography */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -211,6 +434,12 @@
   --space-12: 3rem;
   --space-16: 4rem;
   --space-20: 5rem;
+
+  /* Interactive control height — WCAG 2.5.5 AAA touch target (44px).
+   * The app's controls ran 36-42px before this token existed (audit F1, 135
+   * instances across 17 elements); every button, input, select, chip and
+   * link-action now sits on this one step. */
+  --control-height: 2.75rem;
 
   /* Border radius */
   --radius-sm: 4px;
@@ -327,17 +556,18 @@ h4 { font-size: var(--font-size-xl); }
   padding: 0 var(--space-6);
 }
 
-/* Animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* Animations
+   ----------
+   `fadeInUp` and the ambient keyframes used to be declared here, and the modules
+   that referenced them were silently dead: a CSS module's `animation` value is
+   rewritten to a scoped name by the build, while a `@keyframes` in this
+   unscoped sheet is not, so the two stopped matching and the elements rendered
+   static. Anything a module has to name now lives in `ambient.css` or
+   `enter.css` and is reached with `composes`, which keeps the reference and its
+   definition in one compilation.
+
+   What remains here is the layer that genuinely is global: the decoration
+   classes below, which are written in this file and so need no hop. ---- */
 
 /* ---- Ambient motion layer (issue #221) -------------------------------
    The landing hero and the marketing pages share one set of ambient
@@ -357,21 +587,6 @@ h4 { font-size: var(--font-size-xl); }
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-ambient: 24s;
   --duration-float: 14s;
-}
-
-/* Slow counter-drift for the soft colour blobs behind the hero. Sized in
-   `em` so a blob scales with its own font-size. */
-@keyframes auroraDrift {
-  0%,
-  100% {
-    transform: translate3d(-4%, -2%, 0) scale(1);
-  }
-  33% {
-    transform: translate3d(6%, 4%, 0) scale(1.15);
-  }
-  66% {
-    transform: translate3d(-2%, 7%, 0) scale(0.92);
-  }
 }
 
 /* Pans the background grid so the page reads as a live canvas rather than a
@@ -413,21 +628,9 @@ h4 { font-size: var(--font-size-xl); }
   }
 }
 
-/* A single line travelling down the terminal, evoking a running test job. */
-@keyframes scanline {
-  0% {
-    transform: translate3d(0, -100%, 0);
-    opacity: 0;
-  }
-  12%,
-  70% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(0, 400%, 0);
-    opacity: 0;
-  }
-}
+/* A single line travelling down the terminal, evoking a running test job. Now
+   in `ambient.css` — Home's `.panelScan` is a CSS module and could never resolve
+   a keyframe declared here. */
 
 /* Sweeps a highlight across a section as it enters the viewport. Only
    engaged inside the `@supports` block below, so browsers without

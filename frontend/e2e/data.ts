@@ -105,6 +105,131 @@ export const CHALLENGES: Array<{
 ];
 
 /**
+ * Per-challenge stats for the profile card grid (#347).
+ *
+ * Deliberately not uniform. A fixture where every field holds the same value
+ * cannot tell a correct rendering from a hard-coded one. Between them these two
+ * cover: two languages, so the card accent is visibly per-card rather than one
+ * global colour; a `null` average and a `null` duration, so the "not measured"
+ * branch is on screen rather than merely present in the code; a long description,
+ * so the clamp and its tooltip have something real to truncate; and a failed run.
+ */
+export const CHALLENGE_STATS = [
+  {
+    // The real `CHALLENGES` id, not a UUID of its own. #348 joins this rollup onto
+    // the "my challenges" cards by `challenge_id`, and while these were unrelated
+    // strings every one of those cards rendered "not evaluated yet" — a fixture
+    // that quietly cannot exercise the join it exists to feed.
+    challenge_id: "c-easy-1",
+    challenge_title: "Two Sum",
+    description:
+      "Given an array of integers and a target, return the indices of the two numbers that add up to the target. Each input has exactly one solution, and the same element may not be used twice.",
+    language: "python",
+    total_runs: 4,
+    completed_runs: 3,
+    failed_runs: 1,
+    avg_score: 75,
+    best_score: 100,
+    last_run_at: "2026-09-28T14:00:00Z",
+    last_duration_ms: 1200,
+  },
+  {
+    challenge_id: "c-hard-1",
+    // Not the title `CHALLENGES` gives this id, and deliberately so: the grid
+    // card renders the rollup's `challenge_title`, and the two-line title clamp
+    // needs something that actually clamps. `c-hard-1`'s own title is short and
+    // `challenges.spec.ts` asserts it, so renaming it to a long one there to fix
+    // this would trade one spec's coverage for another's. Two fixtures, two jobs.
+    challenge_title: "Concurrent Web Scraper With Retries",
+    description: "Short one.",
+    language: "go",
+    total_runs: 1,
+    completed_runs: 0,
+    failed_runs: 1,
+    avg_score: null,
+    best_score: null,
+    last_run_at: "2026-09-29T09:00:00Z",
+    // A run that never produced a result has no duration, so the card has to
+    // render something other than a number here.
+    last_duration_ms: null,
+  },
+];
+
+/**
+ * The recent submissions the profile lists alongside the card grid.
+ */
+export const SUBMISSIONS = [
+  {
+    id: "aaaaaaaa-1111-4111-8111-111111111111",
+    challenge_id: "c-easy-1",
+    challenge_title: "Two Sum",
+    language: "python",
+    provider: "demo",
+    model: "demo",
+    code: "def two_sum():\n    pass",
+    status: "completed",
+    score: 100,
+    // A result, so the row carries a test count, a duration, a tooltip *and* the
+    // share controls — the tallest card in the column.
+    evaluation_result: {
+      id: "er-1",
+      passed_tests: 118,
+      total_tests: 120,
+      score: 100,
+      logs: "118 passed, 2 failed",
+      logs_summary: "FAILED test_duplicate_indices: expected [0, 1] got [1, 0]",
+      metrics: { duration_ms: 4210 },
+      created_at: "2026-09-28T14:00:00Z",
+    },
+    created_at: "2026-09-28T14:00:00Z",
+  },
+  {
+    // Second language, second provider, and a *model* id — the row below the
+    // badges is `provider · model`, and a fixture with one of each value cannot
+    // tell a correct join from a hard-coded one.
+    id: "bbbbbbbb-1111-4111-8111-111111111111",
+    challenge_id: "c-med-1",
+    challenge_title: "LRU Cache",
+    language: "typescript",
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    code: null,
+    status: "failed",
+    score: 41.2,
+    evaluation_result: {
+      id: "er-2",
+      passed_tests: 3,
+      total_tests: 15,
+      score: 41.2,
+      logs: "3 passed, 12 failed",
+      logs_summary: "FAILED test_evicts_least_recent: expected 2 got 1",
+      metrics: { duration_ms: 890 },
+      created_at: "2026-09-27T10:00:00Z",
+    },
+    created_at: "2026-09-27T10:00:00Z",
+  },
+  {
+    // In flight: no result, no score, no duration, no share controls, and a
+    // delayed-but-not-stuck age. This is the card that used to be one row tall
+    // next to a three-row neighbour, which is the misalignment the issue is
+    // about — so it has to be in the fixture.
+    id: "cccccccc-1111-4111-8111-111111111111",
+    challenge_id: "c-hard-1",
+    challenge_title: "Edit Distance",
+    language: "go",
+    provider: "demo",
+    model: null,
+    code: null,
+    status: "processing",
+    phase: "testing",
+    started_at: "2026-09-29T09:59:00Z",
+    score: null,
+    evaluation_result: null,
+    created_at: "2026-09-29T09:59:00Z",
+  },
+];
+
+/**
  * Intercepts every `/api/**` request and fulfills it with canned data.
  *
  * Handles the endpoints the surfaced pages actually call:
@@ -115,6 +240,8 @@ export const CHALLENGES: Array<{
  * - POST /api/challenges   → 201, echoing the submitted body (signed in only)
  * - GET  /api/challenges/:id → the submitted challenge (signed in only)
  * - GET  /api/admin/users  → paginated list (only with `{ admin: true }`)
+ * - GET  /api/submissions  → the profile's recent-submissions list
+ * - GET  /api/submissions/stats → per-challenge aggregates behind the cards
  *
  * `auth` is deliberately separate from `admin`: the challenge forms sit behind
  * `ProtectedRoute`, not `AdminRoute`, so exercising them as a plain signed-in
@@ -252,6 +379,33 @@ export async function mockApi(
         status: 401,
         contentType: "application/json",
         body: JSON.stringify({ detail: "Not authenticated" }),
+      });
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/api/submissions/stats" && signedIn) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: CHALLENGE_STATS }),
+      });
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/api/submissions" && signedIn) {
+      const pageNumber = Number(url.searchParams.get("page") ?? "1");
+      const pageSize = Number(url.searchParams.get("page_size") ?? "10");
+      const start = (pageNumber - 1) * pageSize;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: SUBMISSIONS.slice(start, start + pageSize),
+          total: SUBMISSIONS.length,
+          page: pageNumber,
+          page_size: pageSize,
+          pages: 1,
+        }),
       });
       return;
     }

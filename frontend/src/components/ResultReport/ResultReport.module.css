@@ -31,23 +31,15 @@
   stroke-width: 10;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.6s ease;
-}
-
-.ringSuccess {
-  stroke: var(--color-success);
-}
-
-.ringWarning {
-  stroke: var(--color-warning);
-}
-
-.ringDanger {
-  stroke: var(--color-danger);
+  /* No `stroke` here on purpose: the colour comes from the global
+     `.ringScore*` classes in `score-ring.css`, applied alongside this one. Both
+     are single-class selectors, so the declaration that lands last would win —
+     which is why this rule must never grow a `stroke` of its own. */
 }
 
 .ringText {
   fill: var(--color-text);
-  font-size: 22px;
+  font-size: var(--font-size-2xl);
   font-weight: 700;
 }
 
@@ -201,6 +193,9 @@
 }
 
 .disclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
   cursor: pointer;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);

@@ -134,6 +134,10 @@ export interface Submission {
   id: string;
   user_id: string;
   challenge_id: string;
+  /** Parent challenge's title, resolved server-side so a submission card can
+   *  name its challenge without a lookup. Always present: the backend reads it
+   *  off a non-null, cascading relationship. */
+  challenge_title: string;
   status: SubmissionStatus;
   /** Pipeline phase while processing: "generating" | "testing" | "repairing";
    *  null when pending or terminal. Absent on older cached responses. */
@@ -197,6 +201,8 @@ export interface ProviderComparison {
 export interface ChallengeStatsItem {
   challenge_id: string;
   challenge_title: string;
+  /** Carried for the card's truncated description (#347); `""` when unset. */
+  description: string;
   language: string;
   total_runs: number;
   completed_runs: number;
@@ -204,6 +210,12 @@ export interface ChallengeStatsItem {
   avg_score: number | null;
   best_score: number | null;
   last_run_at: string;
+  /**
+   * Wall-clock of the most recent run. Null when that run never produced a
+   * result, which the card renders as an em dash — a `0` would read as
+   * "instant" rather than "not measured".
+   */
+  last_duration_ms: number | null;
 }
 
 export interface SubmissionStats {
@@ -292,7 +304,6 @@ export interface PlatformStats {
  *  challenge title (backend resolves both for the admin listing). */
 export interface AdminSubmission extends Submission {
   username: string;
-  challenge_title: string;
 }
 
 export interface StatusCount {

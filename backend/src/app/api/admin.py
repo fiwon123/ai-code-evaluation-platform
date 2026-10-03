@@ -256,7 +256,14 @@ async def list_submissions(
     """
     base = (
         select(Submission)
-        .options(selectinload(Submission.evaluation_result))
+        .options(
+            selectinload(Submission.evaluation_result),
+            # challenge_title comes off the relationship, so the page resolves
+            # every title in one extra query instead of one per row. Keeps the
+            # paged select itself free of joins, so paginate's subquery stays
+            # simple.
+            selectinload(Submission.challenge),
+        )
         .order_by(Submission.created_at.desc())
     )
     if status_filter:
@@ -264,16 +271,12 @@ async def list_submissions(
 
     orm_items, total, pages = await paginate(db, base, page=page, page_size=page_size)
 
-    # Resolve display names for the page in batched lookups, keeping the
-    # paged select itself free of joins (so paginate's subquery stays simple).
+    # Resolve the submitting user's display name for the page in one batched
+    # lookup. The challenge title needs no equivalent: it already rides along
+    # on the eager-loaded relationship above.
     user_ids = {item.user_id for item in orm_items}
-    challenge_ids = {item.challenge_id for item in orm_items}
     user_rows = await db.execute(select(User.id, User.username).where(User.id.in_(user_ids)))
-    challenge_rows = await db.execute(
-        select(Challenge.id, Challenge.title).where(Challenge.id.in_(challenge_ids))
-    )
     usernames = {row[0]: row[1] for row in user_rows}
-    titles = {row[0]: row[1] for row in challenge_rows}
 
     items = []
     for item in orm_items:
@@ -282,7 +285,6 @@ async def list_submissions(
             AdminSubmissionRead(
                 **base_data,
                 username=usernames.get(item.user_id, "unknown"),
-                challenge_title=titles.get(item.challenge_id, "unknown"),
             )
         )
 
@@ -293,6 +295,29 @@ async def list_submissions(
         page_size=page_size,
         pages=pages,
     )
+
+
+@router.delete("/submissions/{submission_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_submission(
+    submission_id: UUID,
+    db: AsyncSession = Depends(get_session),
+    _admin: User = Depends(require_admin),
+) -> None:
+    """Delete any submission on the platform (admin only).
+
+    The submission's evaluation result and attempts go with it: both
+    relationships carry ``cascade="all, delete-orphan"``, so a plain delete
+    takes the child rows rather than leaving them orphaned.
+    """
+    submission = await db.get(Submission, submission_id)
+    if submission is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission not found",
+        )
+
+    await db.delete(submission)
+    await db.commit()
 
 
 @router.get("/stats", response_model=PlatformStats)

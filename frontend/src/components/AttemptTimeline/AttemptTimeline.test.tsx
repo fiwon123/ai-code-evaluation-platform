@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import AttemptTimeline from "./AttemptTimeline";
 import type { EvaluationAttempt } from "../../types.ts";
 
@@ -91,7 +91,12 @@ describe("AttemptTimeline", () => {
     expect(disclosure).not.toBeNull();
     expect(disclosure).not.toHaveAttribute("open");
     // Still in the DOM (a real <details>), but not the default view.
-    expect(within(disclosure as HTMLElement).getByText(/def attempt_1/)).toBeInTheDocument();
+    // Matched on the disclosure's own code text: token spans mean the text is
+    // no longer contiguous in a single node (see test/code.ts).
+    const codeIn = [...(disclosure as HTMLElement).querySelectorAll("code")].map(
+      (el) => el.textContent ?? "",
+    );
+    expect(codeIn.some((text) => /def attempt_1/.test(text))).toBe(true);
   });
 
   it("marks the attempt the report was built from", () => {

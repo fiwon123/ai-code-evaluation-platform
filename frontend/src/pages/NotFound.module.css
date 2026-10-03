@@ -1,7 +1,9 @@
 /* The 404 page had no stylesheet at all: a bare `<div>` with no class, so it had
  * no shell, no gutter, and no page rhythm. It is the one page a user is
  * guaranteed to reach by following a dead link, so it gets the same shell as
- * every other page rather than none. */
+ * every other page rather than none. It also now gets the same app header
+ * rhythm as its siblings (title + subtitle under a `.header` wrapper) instead
+ * of a bare title over an EmptyState. */
 
 .page {
   max-width: var(--max-width);
@@ -11,22 +13,32 @@
   padding: var(--space-12) var(--space-6) var(--space-16);
 }
 
-.body {
-  max-width: 60ch;
+.header {
+  margin-bottom: var(--space-6);
 }
 
-.message {
+/* Layout only — size and the gradient come from the shared PageTitle. */
+.title {
+  margin-bottom: var(--space-1);
+}
+
+.subtitle {
   color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
-  margin-top: var(--space-6);
+  margin-top: var(--space-2);
 }
 
 .action {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
   color: var(--color-primary);
   font-weight: 600;
   text-decoration: underline;

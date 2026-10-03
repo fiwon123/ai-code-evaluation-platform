@@ -49,6 +49,26 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
+  // Playwright's default is 5s, which is tuned for an unloaded machine running a
+  // spec or two. This suite runs fully parallel against one shared Vite dev
+  // server on a 6-core box, and 5s is not enough headroom there: under CPU
+  // saturation `openCreateForm`'s heading wait expires with "element(s) not
+  // found" before the page has rendered at all (#385).
+  //
+  // This is not a timeout that papers over a slow assertion — the failure above
+  // was the page never appearing, and no amount of assertion patience would
+  // have found a defect in it. Raising the ceiling gives the loaded host room to
+  // actually run the test; it does not weaken any assertion, because every one
+  // of them still polls until it passes or the (now larger) budget runs out.
+  //
+  // The alternative considered and rejected was `retries`. A retry re-runs the
+  // test, which hides the symptom while leaving the suite ~5 minutes slower on
+  // every run, and it would have masked this rather than fixing it. Nothing here
+  // is non-deterministic: the same spec passes 6/6 unloaded and fails 1/12
+  // saturated, which is a resource problem, not a race.
+  expect: {
+    timeout: 15_000,
+  },
   reporter: "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
@@ -83,7 +103,32 @@ export default defineConfig({
     launchOptions: {
       chromiumSandbox: process.env.CHROMIUM_SANDBOX === "1",
     },
+    // Video is OFF by default and switched on with E2E_VIDEO=1.
+    //
+    // A still frame is the wrong instrument for an animation: it cannot show a
+    // sequence, an overlap, or whether a 10s loop reads as a smooth handoff or a
+    // series of jumps. That is not hypothetical — the whole #353 pipeline defect
+    // was *when* each card lit relative to the others, which a paused frame
+    // cannot show at all, and the visual sweep (paused frames only) came back
+    // clean on it.
+    //
+    // It stays opt-in because every test would record: the suite is ~260 tests
+    // and a webm per test is hundreds of MB per run, which `make test-e2e`
+    // should not silently start producing. Point a run at the recordings with
+    // `PW_TEST_HTML_REPORT_OPEN=never` and read the .webm out of
+    // `test-results/**/video.webm`; see e2e/motion-qa.spec.ts, which exists to
+    // be recorded rather than asserted.
+    //
+    // No `size` override on purpose. Pinning one would scale-to-fit every
+    // project into the same box, letterboxing the Pixel 7 profile — and a
+    // letterboxed recording is how a mobile layout bug gets missed. Left unset,
+    // each project records at its own viewport, which is the thing under review.
+    ...(process.env.E2E_VIDEO === "1" ? { video: { mode: "on" as const } } : {}),
   },
+  // `motion-qa.spec.ts` is not a test: it holds the page still for ~12s so the
+  // recorder can capture a full pipeline cycle. Collected only alongside the
+  // video, so `make test-e2e` never spends that wall-clock on it.
+  testIgnore: process.env.E2E_VIDEO === "1" ? [] : ["**/motion-qa.spec.ts"],
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "android", use: { ...devices["Pixel 7"] } },

@@ -13,7 +13,11 @@
 
 .primary {
   background: var(--color-primary-light);
-  color: var(--color-primary);
+  /* The `-strong` step, like the three below (#348). `--color-primary` measured
+     3.13:1 as text on `--color-primary-light` in the dark theme, and "processing"
+     is the only status that paints this variant — so the one status pill left
+     out of #346's contrast fix was the one that failed. */
+  color: var(--color-primary-strong);
 }
 
 /* Light mode: calm neutral tag — the blue-on-pale-blue pill blended into the
@@ -25,9 +29,12 @@
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
+/* All three use the `-strong` step (issue #346). The base `--color-success` /
+ * `--color-danger` are identity colours — fine as an accent, wrong as text on
+ * their own pale tint, where they measure 3.00:1 and 3.95:1. See globals.css. */
 .success {
   background: var(--color-success-light);
-  color: var(--color-success);
+  color: var(--color-success-strong);
 }
 
 .warning {
@@ -37,7 +44,7 @@
 
 .danger {
   background: var(--color-danger-light);
-  color: var(--color-danger);
+  color: var(--color-danger-strong);
 }
 
 .neutral {

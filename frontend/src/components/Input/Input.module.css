@@ -17,24 +17,74 @@
    * `--color-primary-light`, so `--color-focus-ring` never reached the most-used
    * control in the app. */
   composes: focusRingField from "../../styles/focus.css";
+  min-height: var(--control-height);
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-base);
   font-family: var(--font-sans);
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  /* Dark in BOTH themes (#387), matching the code and prompt surfaces: a light
+     field on a bright marketing card was the hardest place in the app to read
+     typed text. The dedicated input tokens keep the fill, ink and placeholder
+     independently retunable from the code surface. */
+  color: var(--color-input-text);
+  background: var(--color-input-bg);
+  /* The one place a control's boundary is drawn, so it is the one place that
+     takes the control token. --color-border is a *container* edge and clears
+     only 1.50:1 on the light surface, which for an input means the only thing
+     marking it as a box is nearly invisible (#345). It is deliberately still
+     checked against the surface the field *sits on* rather than its own dark
+     fill: the boundary is what separates the box from the card behind it. */
+  border: 1px solid var(--color-input-border);
   border-radius: var(--radius-md);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   width: 100%;
 }
 
 .input::placeholder {
-  color: var(--color-text-muted);
+  /* The dark fill needs a lighter hint than either theme's muted text, so the
+     placeholder gets its own token. `input-contrast.test.ts` still follows the
+     declaration rather than the token — a retune of `--color-input-placeholder`
+     is caught here, and the pair clears 4.5:1 in both themes (13.86:1 value,
+     6.35:1 placeholder on the light fill). */
+  color: var(--color-input-placeholder);
 }
 
+/*
+ * The chevron is a background image rather than a `::after`, because a `<select>`
+ * does not support generated content in any shipping browser — so the arrow
+ * cannot be a pseudo-element on the control itself, and wrapping the select
+ * would move the `flex: 1` sizing that callers put on it.
+ *
+ * A data-URI SVG cannot resolve `currentColor`, and it cannot use a CSS
+ * variable either, so the stroke is hardcoded from the matching token
+ * (`--color-input-placeholder` #94a3b8 for the rest state and
+ * `--color-input-text` #e2e8f0 while hovered). Since #387 the control is dark
+ * in *both* themes, so one arrow covers both and no `[data-theme]` override is
+ * needed; `Input.arrow.test.ts` still pins each hex to the live token, because
+ * a hand-copied hex drifts the moment the token is retuned. A `mask` would have
+ * been token-driven in one rule, but masking applies to the element's whole
+ * rendering — it would mask the option text along with the arrow.
+ */
 .select {
   composes: input;
-  appearance: auto;
+  appearance: none;
+  /* Reserve the gutter so a long option ("Two Sum (Python)") is truncated by
+     the control, never by the arrow sitting on top of it. */
+  padding-right: calc(var(--space-3) + 1.25rem);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2394a3b8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  /* Inset from the edge so the arrow reads as part of the control. Pinned to
+     the same --space-3 as the control's own right padding. */
+  background-position: right var(--space-3) center;
+  background-size: 0.75rem 0.5rem;
+  /* The browser's own arrow still reserves space even with `appearance: none`
+     in some engines; zeroing it keeps the text block left-aligned. */
+  text-indent: 0;
+}
+
+.select:hover {
+  /* Brightens toward the control's own ink: the placeholder grey is the
+     resting state, the full text colour is the hover state. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23e2e8f0' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 .textarea {

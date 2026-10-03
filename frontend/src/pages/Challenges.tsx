@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../components/Badge/Badge.tsx";
+import BadgeSelect from "../components/BadgeSelect/BadgeSelect.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
 import EmptyState from "../components/EmptyState/EmptyState.tsx";
@@ -11,25 +12,57 @@ import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
 import { challengesApi } from "../services/api.ts";
+import type { BadgeVariant } from "../components/Badge/Badge.tsx";
 import type { Challenge, ChallengeDifficulty } from "../types.ts";
+import { DIFFICULTIES, DIFFICULTY_VARIANT, difficultyLabel } from "../utils/difficulty.ts";
 import { extractError } from "../utils/errors.ts";
 import { formatRelativeTime } from "../utils/formatting.ts";
-import { LANGUAGES, languageLabel } from "../utils/language.ts";
+import { LANGUAGES, languageMeta } from "../utils/language.ts";
 import styles from "./Challenges.module.css";
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
 
-const DIFFICULTIES: ChallengeDifficulty[] = ["easy", "medium", "hard"];
+/**
+ * The difficulty filter's options, including the "no filter" case.
+ *
+ * `DIFFICULTIES` is the shared vocabulary and supplies the colour, so this
+ * cannot drift from the badges on the cards or the chips in the form. "All" is
+ * added here rather than to `DIFFICULTIES` because it is a *filter* state and
+ * not a difficulty: a challenge is never "all", and putting it in the shared
+ * list would mean every consumer had to filter it back out.
+ */
+const DIFFICULTY_FILTERS = [
+  { value: "all", label: "All", variant: "neutral" },
+  ...DIFFICULTIES,
+] as const satisfies readonly {
+  value: string;
+  label: string;
+  variant: BadgeVariant;
+}[];
 
-const DIFFICULTY_VARIANT: Record<
-  ChallengeDifficulty,
-  "success" | "warning" | "danger"
-> = {
-  easy: "success",
-  medium: "warning",
-  hard: "danger",
-};
+/**
+ * A language's option text, symbol first.
+ *
+ * The symbol is the identity cue a plain dropdown cannot have — and it can only
+ * be in the text at all, because a native `<select>` will not colour its own
+ * options. Measured rather than assumed: with `style="color"` on an `<option>`,
+ * `getComputedStyle` reports the colour, and the *closed control* still paints
+ * its own `color`/`background-color` on the selected option's text, because
+ * `select` colours its own text and inherits nothing from the option. The popup
+ * is rendered by the OS and is not in the DOM to be styled. So the symbol goes
+ * in the text, and the colour goes on the control via `--lang-accent` below.
+ */
+function languageFilterLabel(language: string): string {
+  const meta = languageMeta(language);
+  return `${meta.symbol} ${meta.label}`;
+}
+
+/** Sort options, each with a leading symbol for the same reason. */
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first", symbol: "\u2193" },
+  { value: "title", label: "Title A\u2013Z", symbol: "\u2191" },
+] as const;
 
 function Challenges() {
   const { user } = useAuth();
@@ -169,36 +202,58 @@ function Challenges() {
             /
           </kbd>
         </div>
-        <SelectInput
-          id="challenge-filter-difficulty"
+        {/* Coloured difficulty options need something a `<select>` cannot be.
+            Measured: an `<option>`'s own `color` is ignored by the closed
+            control, and the popup is OS-rendered. So this is a radio group —
+            real radios, one tab stop, arrow keys, and the same `DIFFICULTIES`
+            colour the badges use. `legend` is the group's accessible name and
+            replaces the `aria-label` the select had. */}
+        <BadgeSelect
+          legend="Filter by difficulty"
           name="difficulty"
           value={difficulty}
-          onChange={(e) => setDifficulty(e.target.value)}
-          aria-label="Filter by difficulty"
-          className={styles.filterSelect}
+          onChange={setDifficulty}
+          appearance="plain"
+          className={styles.difficultyFilter}
+          legendClassName={styles.difficultyLegend}
+          options={DIFFICULTY_FILTERS.map((option) => ({
+            value: option.value,
+            children: <Badge variant={option.variant}>{option.label}</Badge>,
+          }))}
+        />
+        {/* Stays a native `<select>`: 29 languages is far too many to lay out
+            inline, and the platform listbox is the right control for that many.
+            The identity it *can* carry is a symbol in the option text and a
+            colour on the control. The accent is decoration, so it is not
+            announced — the option text already names the language. */}
+        <span
+          className={styles.languageFilter}
+          // Always set, including `transparent` for "all": the stripe's
+          // visibility is then decided by the stylesheet alone, not by whether
+          // React happened to omit a `style` attribute.
+          style={
+            {
+              "--lang-accent":
+                language === "all" ? "transparent" : languageMeta(language).color,
+            } as React.CSSProperties
+          }
         >
-          <option value="all">All difficulties</option>
-          {DIFFICULTIES.map((diff) => (
-            <option key={diff} value={diff}>
-              {diff.charAt(0).toUpperCase() + diff.slice(1)}
-            </option>
-          ))}
-        </SelectInput>
-        <SelectInput
-          id="challenge-filter-language"
-          name="language"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          aria-label="Filter by language"
-          className={styles.filterSelect}
-        >
-          <option value="all">All languages</option>
-          {LANGUAGES.map((lang) => (
-            <option key={lang} value={lang}>
-              {languageLabel(lang)}
-            </option>
-          ))}
-        </SelectInput>
+          <SelectInput
+            id="challenge-filter-language"
+            name="language"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            aria-label="Filter by language"
+            className={styles.filterSelect}
+          >
+            <option value="all">All languages</option>
+            {LANGUAGES.map((lang) => (
+              <option key={lang} value={lang}>
+                {languageFilterLabel(lang)}
+              </option>
+            ))}
+          </SelectInput>
+        </span>
         <SelectInput
           id="challenge-sort"
           name="sort"
@@ -207,8 +262,11 @@ function Challenges() {
           aria-label="Sort challenges"
           className={styles.sortSelect}
         >
-          <option value="newest">Newest first</option>
-          <option value="title">Title A–Z</option>
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.symbol} {option.label}
+            </option>
+          ))}
         </SelectInput>
       </div>
 
@@ -237,12 +295,12 @@ function Challenges() {
                     <div className={styles.cardBadges}>
                       <LanguageBadge language={challenge.language} />
                       <Badge variant={DIFFICULTY_VARIANT[challenge.difficulty]}>
-                        {challenge.difficulty}
+                        {difficultyLabel(challenge.difficulty)}
                       </Badge>
                     </div>
                     <span className={styles.date}>{formatRelativeTime(challenge.created_at)}</span>
                   </div>
-                  <h3 className={styles.cardTitle}>{challenge.title}</h3>
+                  <h2 className={styles.cardTitle}>{challenge.title}</h2>
                   <p className={`${styles.cardDesc} lineClamp2`}>
                     {challenge.description}
                   </p>

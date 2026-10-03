@@ -25,6 +25,7 @@ vi.mock("../../services/api.ts", () => ({
     listChallenges: vi.fn(),
     removeChallenge: vi.fn(),
     listSubmissions: vi.fn(),
+    removeSubmission: vi.fn(),
   },
   ApiError: class ApiError extends Error {
     status: number;
@@ -47,6 +48,7 @@ const mockDeleteUser = vi.mocked(adminApi.deleteUser);
 const mockListChallenges = vi.mocked(adminApi.listChallenges);
 const mockRemoveChallenge = vi.mocked(adminApi.removeChallenge);
 const mockListSubmissions = vi.mocked(adminApi.listSubmissions);
+const mockRemoveSubmission = vi.mocked(adminApi.removeSubmission);
 const mockUseAuth = vi.mocked(useAuth);
 
 const currentAdmin: User = {
@@ -379,6 +381,21 @@ describe("AdminUsers", () => {
     expect(screen.getByText(/alice deleted/i)).toBeInTheDocument();
   });
 
+  // #321: the users table styled "Deactivate" as danger and "Delete" as a plain
+  // ghost — inverting the hierarchy, and the opposite of the challenges table.
+  it("makes Delete the danger treatment and Deactivate a softer one", async () => {
+    renderPage(<AdminUsers />);
+    // alice is active, so her row carries "Deactivate" rather than "Restore".
+    await screen.findByText("alice");
+
+    const row = screen.getByText("alice").closest("tr") as HTMLElement;
+    const del = within(row).getByRole("button", { name: "Delete" });
+    const deactivate = within(row).getByRole("button", { name: "Deactivate" });
+
+    expect(del.className).toContain("danger");
+    expect(deactivate.className).not.toContain("danger");
+  });
+
   it("disables destructive actions for the own account", async () => {
     mockListUsers.mockResolvedValueOnce(
       paginated([currentAdmin, ...users]) as never,
@@ -427,6 +444,7 @@ describe("AdminChallenges", () => {
 describe("AdminSubmissions", () => {
   beforeEach(() => {
     mockListSubmissions.mockResolvedValue(paginated(submissions) as never);
+    mockRemoveSubmission.mockReset();
   });
 
   it("lists submissions with status, owner, and challenge", async () => {
@@ -435,6 +453,65 @@ describe("AdminSubmissions", () => {
     expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByText("alice")).toBeInTheDocument();
     expect(screen.getByText("Two Sum")).toBeInTheDocument();
+  });
+
+  // #321: this table had no actions column at all, unlike its two siblings.
+  it("gives every row an actions column, aligned like the sibling tables", async () => {
+    renderPage(<AdminSubmissions />);
+    await screen.findAllByText("completed");
+
+    const header = screen.getByRole("columnheader", { name: "Actions" });
+    expect(header).toBeInTheDocument();
+    // One action cell per row, and a destructive control in each.
+    const cells = screen.getAllByRole("button", { name: "Delete" });
+    expect(cells).toHaveLength(submissions.length);
+    // `rowActions` is the shared right-aligned cluster from Admin.module.css.
+    for (const cell of cells) {
+      expect(cell.closest("td")?.className).toContain("actionsCol");
+      expect(cell.parentElement?.className).toContain("rowActions");
+    }
+  });
+
+  it("links each row to the submission's report", async () => {
+    renderPage(<AdminSubmissions />);
+    await screen.findAllByText("completed");
+
+    const links = screen.getAllByRole("link", { name: "View report" });
+    expect(links).toHaveLength(submissions.length);
+    expect(links[0]).toHaveAttribute("href", `/submissions/${submissions[0].id}`);
+  });
+
+  it("deletes a submission after confirmation", async () => {
+    mockRemoveSubmission.mockResolvedValue(undefined);
+    renderPage(<AdminSubmissions />);
+    await screen.findAllByText("completed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete submission?" });
+    // The dialog must name what is about to be destroyed.
+    expect(dialog).toHaveTextContent("cannot be undone");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(mockRemoveSubmission).toHaveBeenCalledWith(submissions[0].id);
+    });
+    expect(screen.queryByText(submissions[0].id)).not.toBeInTheDocument();
+  });
+
+  it("cancels the delete without calling the API", async () => {
+    renderPage(<AdminSubmissions />);
+    await screen.findAllByText("completed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete submission?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Delete submission?" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(mockRemoveSubmission).not.toHaveBeenCalled();
   });
 
   it("passes the status filter when one is selected", async () => {
