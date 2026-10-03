@@ -51,7 +51,7 @@
   align-items: center;
   min-height: var(--control-height);
   padding: 0 var(--space-2);
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.85);
   font-size: var(--font-size-sm);
   font-weight: 500;
   transition: color var(--transition-fast);
@@ -62,12 +62,12 @@
 }
 
 .link:hover {
-  color: var(--color-text);
+  color: #ffffff;
   text-decoration: none;
 }
 
 .linkActive {
-  color: var(--color-primary);
+  color: #ffffff;
 }
 
 .navRight {
