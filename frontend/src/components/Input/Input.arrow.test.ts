@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 /**
- * The select chevron's stroke is hardcoded per theme.
+ * The select chevron's stroke is hardcoded per state.
  *
  * A `background-image` data URI cannot resolve `currentColor` or a CSS
  * variable, so the stroke colour has to be a literal — and a literal silently
@@ -14,6 +14,12 @@ import { describe, expect, it } from "vitest";
  * control", differ in a way no eye or vision model is being asked to judge. So
  * the value is checked against the live token here instead, which is the only
  * check that actually fails when the token moves.
+ *
+ * Since #387 a form control is dark in *both* themes, so a single arrow
+ * suffices: the rest state is `--color-input-placeholder` and the hover state
+ * brightens to `--color-input-text`. The test below therefore pins each state's
+ * hex to its token and proves both palettes define those tokens with the same
+ * value (otherwise the arrow would be wrong in one of them).
  */
 const CSS = import.meta.glob("../../**/*.module.css", {
   query: "?raw",
@@ -83,22 +89,35 @@ describe("the select chevron", () => {
     );
   });
 
-  it("uses the theme's own text colour for the light stroke", () => {
-    expect(token("color-text-secondary", "light")).toBe("#3b4a5f");
-    expect(selectCss).toContain("stroke='%233b4a5f'");
+  it("draws its rest arrow in the control's placeholder colour", () => {
+    const light = token("color-input-placeholder", "light");
+    const dark = token("color-input-placeholder", "dark");
+    expect(light).toBe("#94a3b8");
+    // The control is dark in both themes, so a shared arrow is only correct if
+    // both palettes agree on the colour it was copied from.
+    expect(dark).toBe(light);
+    expect(selectCss).toContain("stroke='%2394a3b8'");
   });
 
-  it("uses the theme's own text colour for the dark stroke", () => {
-    // The assertion that would have caught the original bug.
-    const dark = token("color-text-secondary", "dark");
-    expect(dark).toBe("#a9b8cf");
-    expect(selectCss).toContain("stroke='%23a9b8cf'");
+  it("brightens the arrow to the control's text colour on hover", () => {
+    // The hover arrow is the state change; if it equals the resting stroke the
+    // hover is a no-op that no screenshot would flag.
+    const light = token("color-input-text", "light");
+    const dark = token("color-input-text", "dark");
+    expect(light).toBe("#e2e8f0");
+    expect(dark).toBe(light);
+    const hover = /\.select:hover\s*\{([^}]*)\}/.exec(selectCss)?.[1] ?? "";
+    expect(hover, ".select:hover must draw its own arrow").toContain(
+      "stroke='%23e2e8f0'",
+    );
+    expect(hover).not.toContain("%2394a3b8");
   });
 
-  it("overrides the dark arrow via [data-theme], not prefers-color-scheme", () => {
-    // The app switches theme with a data attribute on <html>; an OS-media-query
-    // rule would draw the light arrow on a dark page whenever the two disagreed.
-    expect(selectCss).toContain(':global([data-theme="dark"]) .select');
+  it("uses one arrow for both themes, never prefers-color-scheme", () => {
+    // The control is dark in both palettes (#387), so an OS-media-query or a
+    // [data-theme] override would be a second opinion about a control that no
+    // longer changes colour with the theme.
     expect(selectCss).not.toContain("prefers-color-scheme");
+    expect(selectCss).not.toContain('[data-theme="dark"]');
   });
 });

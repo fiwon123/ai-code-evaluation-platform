@@ -18,9 +18,15 @@ async function openCreateForm(page: Page): Promise<void> {
  *
  * The unit tests cover `BadgeSelect`'s semantics and the chevron's hardcoded
  * stroke hexes. Neither can answer the questions that actually mattered here:
- * whether the arrow is *legible on a real dark page* and whether the difficulty
- * grid is *reachable on a real phone* — both of which are properties of a
- * rendered pixel, not of a DOM tree.
+ * whether the arrow is *legible on a real rendered control* and whether the
+ * difficulty grid is *reachable on a real phone* — both of which are properties
+ * of a rendered pixel, not of a DOM tree.
+ *
+ * Since #387 a form control is dark in *both* themes, so the arrow is one
+ * colour everywhere and is matched against `--color-input-placeholder` rather
+ * than the theme's `--color-text-secondary`. The loop still runs both themes,
+ * because a regression that reintroduced a theme-specific field would show up
+ * as the stroke no longer matching the control's own token in one of them.
  */
 test.describe("Shared form primitives", () => {
   test.beforeEach(async ({ page }) => {
@@ -29,7 +35,7 @@ test.describe("Shared form primitives", () => {
   });
 
   for (const theme of ["light", "dark"] as const) {
-    test(`draws its own select arrow, inset and theme-correct (${theme})`, async ({
+    test(`draws its own select arrow, inset and token-matched stroke (${theme})`, async ({
       page,
     }) => {
       await page.goto("/challenges");
@@ -50,7 +56,7 @@ test.describe("Shared form primitives", () => {
           appearance: cs.appearance || (cs as unknown as { webkitAppearance: string }).webkitAppearance,
           stroke: stroke ? `#${stroke[1].toLowerCase()}` : null,
           token: getComputedStyle(document.documentElement)
-            .getPropertyValue("--color-text-secondary")
+            .getPropertyValue("--color-input-placeholder")
             .trim()
             .toLowerCase(),
           position: cs.backgroundPosition,

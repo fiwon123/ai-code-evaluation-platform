@@ -175,13 +175,20 @@ below.
 | `--color-surface-raised` | Raised surfaces (menus, popovers) |
 | `--color-surface-hover` | Resting state for a hoverable surface (table rows, list items) |
 | `--color-surface-card` | Marketing feature/panel cards that must read as a card on the page |
+| `--color-surface-inverse` | Dark marketing card fill (`Card variant="dark"`); aliases the ordinary surface in the dark theme |
 | `--color-divider` | Dividers and separators |
 | `--color-border` | Borders |
+| `--color-border-inverse` | Border for dark marketing cards; aliases `--color-border` in the dark theme |
 | `--color-border-hover` | Border hover states |
 | `--color-input-border` | Form-control boundary — inputs, selects, textareas, radio option boxes |
+| `--color-input-bg` | Form-control fill — inputs, selects, textareas. Dark in both themes |
+| `--color-input-text` | Form-control value text and the select chevron's hover state |
+| `--color-input-placeholder` | Form-control placeholder text and the select chevron's rest state |
 | `--color-text` | Body text, headings |
 | `--color-text-secondary` | Secondary text, labels |
-| `--color-text-muted` | Placeholders, meta text |
+| `--color-text-muted` | Meta text |
+| `--color-text-inverse` | Body text on a dark marketing card; aliases `--color-text` in the dark theme |
+| `--color-text-inverse-secondary` | Secondary text on a dark marketing card; aliases `--color-text-secondary` in the dark theme |
 | `--color-focus-ring` | Focus ring color |
 | `--color-on-accent` | Text on colored surfaces (button labels, active pagination, badges) |
 | `--color-on-solid` | Text on solid brand surfaces (primary/danger buttons, active pagination, avatars, primary gradients) |
@@ -210,6 +217,24 @@ The dark value is deliberately equal to the dark `--color-border`, so dark mode
 renders exactly as it did before #345. That leaves it at 1.54:1 — below the bar
 the light palette now meets, and an open question rather than a settled one. The
 measurement and the reasoning are recorded beside the token in `globals.css`.
+
+**Form controls are dark in both themes (#387).** A light field on a bright
+marketing card was the hardest place in the app to read typed text, so the
+field now matches the code and prompt surfaces. `--color-input-bg`,
+`--color-input-text` and `--color-input-placeholder` are dedicated tokens, not
+the `--color-code-*` set, so an input and a code block can be retuned
+independently. The boundary still comes from `--color-input-border`, and
+`input-contrast.test.ts` still measures it against the surface the field *sits
+on* rather than its own fill — the boundary separates the box from the card
+behind it.
+
+**`Card variant="dark"`** paints the dark marketing surface. Instead of
+restyling children it re-points the ordinary tokens (`--color-surface`,
+`--color-border`, `--color-text`, `--color-text-secondary`) for its subtree to
+`--color-*-inverse`, so descendants need no dark-aware rules. In the dark theme
+each inverse token aliases the corresponding ordinary token, which makes the
+variant a no-op there. Auth and form card shells stay on the default surface
+deliberately — a dark field on a dark card would erase the control's edge.
 
 ### Code surfaces
 

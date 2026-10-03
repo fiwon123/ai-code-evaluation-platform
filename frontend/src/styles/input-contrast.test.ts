@@ -13,6 +13,13 @@
  * things #345 said must not regress: the dark palette's appearance, and the
  * placeholder.
  *
+ * #387 later made the field dark in *both* themes, so the value and placeholder
+ * pairings below now name `--color-input-bg` as the background rather than the
+ * light card. The value/placeholder assertions follow the `.input` declaration,
+ * so they kept measuring the right pair without being rewritten; the boundary
+ * assertions still compare the border against the *host* surface, because a
+ * boundary is what separates the box from the card behind it.
+ *
  * Two deliberate choices about *what* is asserted:
  *
  *  1. The border and placeholder are read out of the module that paints them,
@@ -267,12 +274,14 @@ describe("form control text is readable in both themes", () => {
     ["light", LIGHT],
     ["dark", DARK],
   ] as const)(
-    "%s placeholder clears 4.5:1, so retuning --color-text-muted cannot dim it",
+    "%s placeholder clears 4.5:1, so retuning its token cannot dim it",
     (_theme, tokens) => {
-      // This is why the placeholder has no token of its own. Asserting the
-      // declaration follows whatever it points at, so a retune of the widely
-      // used --color-text-muted is caught here instead of shipping unreadable
-      // hints in every form in the app.
+      // Since #387 the placeholder has its own token (`--color-input-placeholder`)
+      // because the field is now dark in both themes and neither theme's
+      // `--color-text-muted` is light enough for the dark fill. Asserting the
+      // *declaration* rather than the token is still the point: a retune of
+      // that token, or a rule that stops pointing at it, is caught here before
+      // it ships as an unreadable hint in every form in the app.
       const body = ruleBody(INPUT_CSS, ".input::placeholder");
       const value = resolveColor(declaration(body, "color"), tokens, "placeholder");
       const background = inputBackground(tokens, _theme);

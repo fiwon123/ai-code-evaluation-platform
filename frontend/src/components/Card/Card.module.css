@@ -13,3 +13,27 @@
 .compact {
   padding: var(--space-4);
 }
+
+/*
+ * Dark marketing/informational surface (#387).
+ *
+ * Rather than teach every descendant a dark variant, the card re-points the
+ * ordinary tokens for its own subtree. Children keep reading `--color-text`,
+ * `--color-surface` and friends and inherit the inverse values for free, so a
+ * single rule covers text, nested panels, dividers and accents. In the dark
+ * palette the inverse tokens alias the ordinary surfaces, so this is a no-op
+ * there.
+ *
+ * `--color-surface` is remapped too, so a panel nested inside a dark card stays
+ * on the same dark family instead of flashing white. `--color-input-*` is not
+ * remapped: form controls are already dark in both themes.
+ */
+.dark {
+  --color-surface: var(--color-surface-inverse);
+  --color-border: var(--color-border-inverse);
+  --color-text: var(--color-text-inverse);
+  --color-text-secondary: var(--color-text-inverse-secondary);
+  background: var(--color-surface-inverse);
+  border-color: var(--color-border-inverse);
+  color: var(--color-text-inverse);
+}
