@@ -410,6 +410,36 @@
   --color-code-type: #56b6c2;
   --color-code-fn: #e5c07b;
 
+  /* Site chrome (issue #393) — the sticky header and the footer, and ONE fixed
+   * dark panel in both themes. Declared here, outside both palette blocks, for
+   * the same reason the code surfaces above are: the band does not change with
+   * the theme, so a per-theme value can only be a second thing to drift.
+   *
+   * It could not be done with the `--color-*-inverse` tokens the two bands used
+   * before. Those are per-theme by contract — the dark palette aliases each one
+   * to the ordinary token, so `Card variant="dark"` stays a no-op there, which
+   * `card-dark.test.ts` locks — so the footer measured #0f172a in light mode and
+   * #131d33 in dark. Worse, it painted *theme ink* onto that fixed dark panel,
+   * and in light mode `.colTitle` came out at 1.00:1 (`--color-text` #0f172a on a
+   * #0f172a fill: the Product/Company/Legal headings were invisible) and
+   * `.copyright` at 2.36:1, under the 4.5:1 AA wants for 12px text.
+   *
+   * #131d33 is the value the dark theme already shipped — it is the dark
+   * palette's own `--color-surface` — so dark mode renders exactly as it did and
+   * only light mode moves. Measured:
+   *     ink     #e6ebf3 on the fill = 14.02:1
+   *     muted   #94a3b8 on the fill =  6.55:1   (the copyright, 12px)
+   *     border  #2c3d5c on the fill =  1.54:1, and 1.74:1 vs the dark page
+   *     fill vs the light page #eef2f7 = 14.93:1
+   * The fill sits only 1.13:1 from the dark page, so there the border — not the
+   * fill — is what delimits the band, which is why the edge is a chrome token
+   * rather than the per-theme `--color-border`. `chrome-surface.test.ts` holds
+   * all four values, the ink contrast, and the theme-invariance itself. */
+  --color-chrome-bg: #131d33;
+  --color-chrome-border: #2c3d5c;
+  --color-chrome-text: #e6ebf3;
+  --color-chrome-text-muted: #94a3b8;
+
   /* Typography */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", monospace;

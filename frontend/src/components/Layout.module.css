@@ -1,12 +1,16 @@
+/* The header and the footer are one chrome pair, so they read the same tokens
+   (issue #393): the fill used to come from `--color-surface-inverse`, which is
+   per-theme, and fixing only the footer would have left the two bands as two
+   different navies. See the comment on `.footer` in Footer.module.css. */
 .header {
-  background: var(--color-surface-inverse);
-  border-bottom: 1px solid var(--color-border-inverse);
+  background: var(--color-chrome-bg);
+  border-bottom: 1px solid var(--color-chrome-border);
   height: var(--header-height);
   position: sticky;
   top: 0;
   z-index: var(--z-index-sticky);
   box-shadow: var(--shadow-card);
-  color: var(--color-text-inverse);
+  color: var(--color-chrome-text);
 }
 
 .nav {
@@ -133,7 +137,10 @@
 
 .caret {
   font-size: 8px;
-  color: var(--color-text-muted);
+  /* Chrome muted, for the same reason `.copyright` is: light-mode
+     `--color-text-muted` (#475569) is 2.21:1 on the chrome fill, and this
+     chevron sits 4px from the username it belongs to. */
+  color: var(--color-chrome-text-muted);
 }
 
 .dropdownBackdrop {
@@ -216,12 +223,15 @@
 .menuToggle {
   display: none;
   background: none;
-  border: 1px solid var(--color-border);
+  /* Inside the header, so on the chrome fill: the ordinary pair put #0f172a ink
+     (1.06:1 on the fill) inside a #c9d4e0 ring in light mode, i.e. a ☰ nobody
+     could see on a phone. */
+  border: 1px solid var(--color-chrome-border);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-base);
   cursor: pointer;
-  color: var(--color-text);
+  color: var(--color-chrome-text);
 }
 
 @media (max-width: 900px) {
