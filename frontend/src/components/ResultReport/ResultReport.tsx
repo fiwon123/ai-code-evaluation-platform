@@ -1,16 +1,35 @@
 import Card from "../Card/Card.tsx";
 import CodeBlock from "../CodeBlock/CodeBlock.tsx";
 import { extensionForLanguage } from "../../utils/language.ts";
-import { formatDurationMs, fallbackInfo, humanizeMetricKey, scoreVariant } from "../../utils/formatting.ts";
+import {
+  formatDurationMs,
+  fallbackInfo,
+  humanizeMetricKey,
+  scoreBand,
+} from "../../utils/formatting.ts";
+import { SCORE_BAND_CLASS } from "../ScoreRing/ScoreRing";
 import type { EvaluationResult, SharedResult } from "../../types.ts";
 import styles from "./ResultReport.module.css";
 
 const RING_RADIUS = 52;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-/** Donut-style score ring colored by the score bucket. */
+/**
+ * Donut-style score ring on the four-band score scale.
+ *
+ * Painted with the shared global `.ringScore*` classes rather than its own
+ * `.ringSuccess/.ringWarning/.ringDanger` rules. Those three were a verbatim
+ * copy of the rules in `score-ring.css` — including the comments, which talked
+ * about the Home hero in a component that has nothing to do with it — so the
+ * report's ring and the hero's ring agreed only by coincidence, and nothing in
+ * the tests noticed when one side changed. `theme-contrast.test.ts` now asserts
+ * the scale is declared in exactly one stylesheet.
+ *
+ * The score is final here, so there is no count-up to sweep: the arc is the band
+ * the score belongs to from the first paint.
+ */
 export function ScoreRing({ score }: { score: number }) {
-  const variant = scoreVariant(score);
+  const band = scoreBand(score);
   const clamped = Math.min(100, Math.max(0, score));
   const offset = RING_CIRCUMFERENCE * (1 - clamped / 100);
   return (
@@ -24,7 +43,7 @@ export function ScoreRing({ score }: { score: number }) {
     >
       <circle className={styles.ringTrack} cx="60" cy="60" r={RING_RADIUS} />
       <circle
-        className={`${styles.ringValue} ${styles[`ring${variant}`]}`}
+        className={`${styles.ringValue} ${SCORE_BAND_CLASS[band]}`}
         cx="60"
         cy="60"
         r={RING_RADIUS}

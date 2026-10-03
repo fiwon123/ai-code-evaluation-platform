@@ -582,22 +582,47 @@ function ruleBody(css: string, selector: string): string {
 const MIN_NON_TEXT = 3;
 
 /**
- * Two independent ring implementations paint the same three bands.
+ * Where the three flat ring bands are painted.
  *
- * `ScoreRing` (the global sheet) is what Home, the Demo and the admin pages use;
- * ResultReport carries its own copy. Fixing only the shared one would have left
- * the report ring at 2.15:1 and every assertion in this file green — the same
- * shape as the #348 gap, which is why both files are named here.
+ * This used to list two sheets. `ScoreRing`'s global one is what Home, the Demo
+ * and the admin pages use; `ResultReport.module.css` carried a verbatim copy —
+ * comments included, which talked about the Home hero inside a component that
+ * has nothing to do with it. Fixing only the shared sheet would have left the
+ * report ring at 2.15:1 with every assertion in this file green, which is the
+ * same shape as the #348 gap.
+ *
+ * The copy is gone: the report's donut paints the same global classes. What
+ * replaces the second entry is not a hope but a test — `declares no second copy
+ * of a ring band` below fails if the duplication comes back.
  */
-const RING_SHEETS = [
-  { file: "src/styles/score-ring.css", css: scoreRingCss },
-  {
-    file: "src/components/ResultReport/ResultReport.module.css",
-    css: MODULE_CSS["../components/ResultReport/ResultReport.module.css"]!,
-  },
-] as const;
+const RING_SHEETS = [{ file: "src/styles/score-ring.css", css: scoreRingCss }] as const;
 
 const RING_VARIANTS = ["Success", "Warning", "Danger"] as const;
+
+/**
+ * The four-band score scale (#389), as `[arc class, token]` in
+ * red → orange → yellow → green order.
+ *
+ * Tokens are bare — no `--` — because `themeTokens` keys its map that way, and
+ * `cssVar()` puts the prefix back for the stylesheet assertions.
+ *
+ * Read by the tests below for four different things — the stylesheet's
+ * membership, the contrast of each step, the hue order, and the fact that
+ * nothing else redeclares them — because one list of four pairs that has to
+ * agree with all four is the whole contract. A fifth band added anywhere but the
+ * end has to be added here to be checked at all, which is the intended friction.
+ */
+const SCORE_BANDS = [
+  ["ringScoreRed", "color-score-red"],
+  ["ringScoreOrange", "color-score-orange"],
+  ["ringScoreYellow", "color-score-yellow"],
+  ["ringScoreGreen", "color-score-green"],
+] as const;
+
+/** `color-score-red` -> `var(--color-score-red)`, for the stylesheet checks. */
+function cssVar(token: string): string {
+  return `var(--${token})`;
+}
 
 describe("score ring arcs are graphical objects, not text", () => {
   it.each([
@@ -644,6 +669,146 @@ describe("score ring arcs are graphical objects, not text", () => {
     ).toMatch(new RegExp(`stroke:\\s*var\\(--color-${family}-strong\\)`));
     expect(body).not.toMatch(new RegExp(`stroke:\\s*var\\(--color-${family}\\)`));
   });
+
+  it("paints the four-band score scale with the -score- tokens, in order", () => {
+    // #389 gives every percentage ring a four-band red → orange → yellow → green
+    // scale instead of the three flat bands, so each band is its own class.
+    //
+    // The order matters as much as the membership: a scale whose classes are
+    // shuffled still satisfies a membership check, and it reads as a broken
+    // dial. The thresholds that consume this order live in `scoreBand()` and are
+    // asserted in `formatting.test.ts`, so the two files together fix both ends
+    // of it — this file pins the paint, that one pins the mapping.
+    expect(
+      SCORE_BANDS.map(([cls]) => cls),
+      "the scale must stay red → orange → yellow → green, in that order",
+    ).toEqual(["ringScoreRed", "ringScoreOrange", "ringScoreYellow", "ringScoreGreen"]);
+    for (const [cls, token] of SCORE_BANDS) {
+      const body = ruleBody(scoreRingCss, `.${cls} {`);
+      expect(body, `.${cls} must use ${cssVar(token)}`).toMatch(
+        new RegExp(`stroke:\\s*var\\(--${token}\\)`),
+      );
+      // And not the status family. The first version of this scale reused
+      // `--color-{danger,warning,success}-strong`, which passes every contrast
+      // check and still reads wrong: those are text-on-a-tint steps, and
+      // `--color-warning-strong` is a brown, so the middle band was not yellow.
+      // Held here because nothing else in the suite can see it.
+      expect(body, `.${cls} must not reach for a -strong status step`).not.toMatch(
+        /stroke:.*-strong/,
+      );
+    }
+  });
+
+  it.each([
+    ["light", LIGHT],
+    ["dark", DARK],
+  ])("every score band clears %s-theme 1.4.11 where the ring is drawn", (_theme, tokens) => {
+    // The arc is a 12px graphical stroke, so 3:1 against the surface behind it —
+    // and on the Home hero that surface is the terminal panel, not the page, so
+    // it is `--color-surface-raised` that is measured rather than
+    // `--color-surface` as the flat-band test above does.
+    //
+    // This is the assertion the vivid traffic-light hues cannot pass: #f59e0b
+    // measures 2.15:1 and #eab308 1.89:1 on white. The scale is therefore built
+    // from the -700/-400 family instead (see globals.css), which keeps the hue
+    // a reader matches against a traffic light and clears the bar anyway.
+    const surface = tokens["color-surface-raised"]!;
+    expect(surface, "--color-surface-raised must exist").toBeDefined();
+    for (const [, token] of SCORE_BANDS) {
+      const step = tokens[token]!;
+      expect(step, `--${token} must be defined in the ${_theme} palette`).toBeDefined();
+      expect(
+        contrastRatio(step, surface),
+        `--${token} (${step}) is only ${contrastRatio(step, surface).toFixed(2)}:1 on ${surface}`,
+      ).toBeGreaterThanOrEqual(MIN_NON_TEXT);
+    }
+  });
+
+  it("orders the score bands red → orange → yellow → green by hue", () => {
+    // A retune that kept every band above 3:1 could still scramble the scale, and
+    // so could moving one band to a neighbouring hue: swapping `#b91c1c` for
+    // `#c2410c` passes every contrast check and every "is it red-dominant" check,
+    // because orange *is* red-dominant — it just reads as the wrong band. So the
+    // claim is asserted as what it actually is: four bands whose hue angles climb
+    // in order, starting in the red sector and ending in the green one.
+    for (const [theme, tokens] of [
+      ["light", LIGHT],
+      ["dark", DARK],
+    ] as const) {
+      const hues = SCORE_BANDS.map(([, token]) => {
+        const hex = tokens[token]!.replace("#", "");
+        const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [
+          number,
+          number,
+          number,
+        ];
+        // Hue in degrees, normalised so red lands near 0 rather than 360.
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const delta = max - min;
+        let hue: number;
+        if (delta === 0) {
+          hue = 0;
+        } else if (max === r) {
+          hue = 60 * (((g - b) / delta) % 6);
+        } else if (max === g) {
+          hue = 60 * ((b - r) / delta + 2);
+        } else {
+          hue = 60 * ((r - g) / delta + 4);
+        }
+        return (hue + 360) % 360;
+      });
+      const names = SCORE_BANDS.map(([, token]) => token);
+      const where = `in the ${theme} palette`;
+
+      for (let i = 1; i < hues.length; i++) {
+        expect(
+          hues[i]!,
+          `${names[i]} (${hues[i]!.toFixed(1)}°) must read further round the wheel than ` +
+            `${names[i - 1]} (${hues[i - 1]!.toFixed(1)}°) ${where}, or the scale is out of order`,
+        ).toBeGreaterThan(hues[i - 1]!);
+      }
+      // And the ends are the ends: a scale that is monotone but has slid round
+      // the wheel — amber → green → teal → blue — passes the check above.
+      expect(
+        hues[0],
+        `the first band must be in the red sector, not ${hues[0]!.toFixed(1)}° ${where}`,
+      ).toBeLessThan(15);
+      expect(
+        hues[3],
+        `the last band must be in the green sector, not ${hues[3]!.toFixed(1)}° ${where}`,
+      ).toBeGreaterThan(100);
+    }
+  });
+
+  it("declares no second copy of a ring band", () => {
+    // Every other check in this file asks "is the band painted correctly?",
+    // which a *duplicate* answers perfectly well. The copy in
+    // `ResultReport.module.css` was invisible here for exactly that reason:
+    // identical rules, identical contrast, zero failures, until someone retuned
+    // one side. So this asks the other question — does any stylesheet other
+    // than `score-ring.css` declare a ring arc at all?
+    //
+    // Scanned across every CSS module plus the globals sheet, because a copy is
+    // most likely to land in the module of whatever needed a ring next.
+    const sheets: ReadonlyArray<readonly [string, string]> = [
+      ...Object.entries(MODULE_CSS).map(([path, css]) => [normalise(path), css] as const),
+      ["src/styles/globals.css", GLOBALS],
+    ];
+    const selectors = [
+      ...RING_VARIANTS.map((variant) => `.ring${variant}`),
+      ...SCORE_BANDS.map(([cls]) => `.${cls}`),
+    ];
+    const copies = sheets.flatMap(([file, css]) =>
+      selectors.filter((selector) => css.includes(`${selector} {`)).map((selector) => `${file} → ${selector}`),
+    );
+    expect(
+      copies,
+      `ring bands are painted once, in src/styles/score-ring.css; a ring arc declared ` +
+        `again here means one of the two rings can be retuned without the other. ` +
+        `Apply the global class instead (SCORE_BAND_CLASS in ScoreRing.tsx).`,
+    ).toEqual([]);
+  });
 });
 
 describe("the Home terminal's stage tag is text on a tint", () => {
@@ -666,6 +831,7 @@ describe("the Home terminal's stage tag is text on a tint", () => {
     running: { family: "warning", since: "the first test starts" },
     results: { family: "warning", since: "the last test resolves" },
     score: { family: "primary", since: "the suite has resolved" },
+    retrying: { family: "warning", since: "a later attempt clears the panel" },
     ready: { family: "success", since: "the score lands" },
   };
 

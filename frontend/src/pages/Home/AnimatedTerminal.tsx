@@ -10,7 +10,8 @@ import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import styles from "./Home.module.css";
 
 /**
- * The Home hero's terminal: one clock, five stages, a score (issue #352).
+ * The Home hero's terminal: one clock, one prompt, three runs, a score (issue
+ * #352, and #389 for the runs).
  *
  * ## Why this is its own component
  *
@@ -45,27 +46,44 @@ const SAMPLE_PROMPT =
   "Implement two_sum(nums, target) and return the indices of the two values that add up to the target.";
 
 const SAMPLE_TESTS = [
-  { name: "two_sum_basic", passed: true },
-  { name: "two_sum_duplicates", passed: true },
-  { name: "two_sum_unsorted", passed: false },
+  { name: "two_sum_basic" },
+  { name: "two_sum_duplicates" },
+  { name: "two_sum_unsorted" },
 ];
 
 /**
- * The sample score, and why it is not rounder (issue #352).
+ * The prompt is tried three times, and each try fixes one thing (issue #389).
  *
- * `services/evaluation.py` computes the score as
- * `round((passed / total) * 100, 1)`. Two of the three sample tests pass, so the
- * figure the platform itself would print is 66.7 — and this panel used to claim
- * 88 next to a visible `✗`. That is not a rounding preference: it is the landing
- * page stating a number its own backend would never produce for the result shown
- * beside it, on the one surface whose entire job is to show what a real report
- * looks like.
+ * 33.3 → 66.7 → 100 — the scores the backend would actually print, since
+ * `services/evaluation.py` computes `round((passed / total) * 100, 1)` and two of
+ * three tests is 66.7. The hero used to claim 88 next to a visible `✗`, which is
+ * the landing page stating a number its own backend would never produce for the
+ * result shown beside it.
  *
- * 66.7 lands in the 40–70 band, so the ring wears the warning arc, which is the
- * `--color-warning-strong` step — see `theme-contrast.test.ts`, which holds the
- * arc to 3:1 rather than to whatever the palette happened to contain.
+ * Three runs rather than one because of the score scale. The ring steps red →
+ * orange → green as the number counts, and one run can only ever put it in one
+ * band — so the one surface built to demonstrate the scale was the one surface
+ * that never showed it. These scores land on red, orange and green in that
+ * order; a scale banded on quarters would put the middle run on yellow and the
+ * visitor would never see orange at all.
+ *
+ * Each attempt adds its fix rather than re-rolling the dice, because a run that
+ * failed differently each time would be a different prompt's result. The unsorted
+ * case is the last one fixed, which is also the one the second attempt still
+ * fails on, so the third attempt has something to show for itself.
+ *
+ * The rows make that visible rather than implied. A retry does not clear the
+ * panel: the failures are pulled out and only they are run again, so a ✓ is never
+ * re-earned and never disappears, and the ring's climb is legible against the
+ * rows above it — one ✓ and two ✗, then two ✓ and one ✗, then three ✓. `see the
+ * module comment in useTerminalStory.ts for why clearing the panel was the wrong
+ * shape.
  */
-const SAMPLE_SCORE = 66.7;
+const SAMPLE_ATTEMPTS = [
+  { results: [true, false, false] },
+  { results: [true, true, false] },
+  { results: [true, true, true] },
+];
 
 /** Illustrative duration for the sample run, in ms, as pytest reports it. */
 const SAMPLE_DURATION_MS = 142;
@@ -146,6 +164,7 @@ function AnimatedTerminal() {
   const story = useTerminalStory({
     prompt: SAMPLE_PROMPT,
     tests: SAMPLE_TESTS,
+    attempts: SAMPLE_ATTEMPTS,
     // Not the stagger: the story must not begin until the fade it is hidden
     // behind has finished, so the lead-in is the entrance's own duration.
     leadInMs: onScreen ? TERMINAL_ENTRANCE_MS : null,
@@ -154,25 +173,42 @@ function AnimatedTerminal() {
   /**
    * When the ring starts: after the shake, *relative to the score stage*.
    *
-   * Passing the story's absolute score time here — `scoreAtMs + shakeMs`, about
-   * 5.5s — is the obvious version and it is wrong. The story is a chain of
-   * per-character re-renders that runs late under load; a ring delay is a
-   * wall-clock deadline and does not care. The e2e suite caught the result: the
-   * number reached 26% while the second of three tests was still running.
+   * Passing the story's absolute score time here is the obvious version and it
+   * is wrong. The story is a chain of per-character re-renders that runs late
+   * under load; a ring delay is a wall-clock deadline and does not care. The e2e
+   * suite caught the result: the number reached 26% while the second of three
+   * tests was still running.
    *
    * So the ring is not told *when* to start, it is told *that it is time*. This
-   * is the only number involved — the 400ms between the score stage beginning
-   * and the number moving, which is the shake. A 400ms slip is invisible; a
-   * 5458ms one was a lie.
+   * is the only number involved — the shake, which is 260ms on the first
+   * attempt and 180ms on the two after it, so it is read per attempt rather than
+   * written down once. A 400ms slip is invisible; a 5458ms one was a lie.
    */
   const ringStartDelayMs = story.shakeMs;
   const isScoring = story.stage === "score";
   /**
-   * Sticky, not a live check. `stage === "score"` is true for one stage and false
-   * again at "ready", and a count-up that switched *off* on reaching its target
-   * would read 0% on the resting state — the frame most readers see.
+   * Whether the ring has a score to show at all, which is what gates the count-up.
+   *
+   * Not the same question as "is the score stage running", and the difference is
+   * the point: once a score is out the ring *keeps* it through the repair beats
+   * between attempts, so the digits hold 33 while the two failures are pulled out
+   * and then climb to 67. Gating on the score stage instead rewound the number to
+   * zero between attempts, which turned three attempts into three separate rings
+   * and threw away the second one's climb.
    */
-  const scoreShown = isScoring || story.complete;
+  const ringLive = story.ringValue > 0;
+  /**
+   * The value the ring draws, and the one its next count-up starts from.
+   *
+   * `story.ringValue` is the timeline's answer rather than a rule written here:
+   * it is the attempt's own score from the score stage onwards, and the score the
+   * ring already reached while the failures are being pulled out. `ringFrom` is
+   * that earlier score, which is where the next count begins — so the digits and
+   * the arc fill both start from one number in one place, and neither can be a
+   * beat ahead of the other.
+   */
+  const ringValue = story.ringValue;
+  const ringFrom = story.ringFrom;
 
   return (
     <div
@@ -200,7 +236,15 @@ function AnimatedTerminal() {
           <i />
         </span>
         <span className={styles.animTitle}>Code Evaluation</span>
-        <span className={styles.animStatus} data-stage={story.stage}>
+        {/* Which of the three runs this is. Without it the panel re-resolves
+              its rows and its score twice for no stated reason, and a reader
+              arriving mid-story sees a suite that has failed once, then again,
+              then passes — the sequence is the demonstration, so it has to be
+              the one labelled. */}
+          <span className={styles.animAttempt}>
+            attempt {story.attempt} of {story.attemptCount}
+          </span>
+          <span className={styles.animStatus} data-stage={story.stage}>
           {/* `ready` is the resting state, so a pulse there would say "still
               going" about a run that has finished. */}
           <span
@@ -230,10 +274,10 @@ function AnimatedTerminal() {
         data-scoring={isScoring ? "true" : "false"}
         /* Separate from `data-scoring`, which is the *trigger*. Without a
            settled state the score stage ends, `data-scoring` returns to false,
-           the rule naming the fill stops matching, and the arc snaps back to
-           empty — while the digits keep the 67% the count-up left them. Two
-           attributes because "start filling" and "is filled" are different
-           claims, and conflating them is what left the ring blank at rest. */
+           the rule naming the fill stops matching, and the arc falls back to
+           holding the previous attempt's score — while the digits hold 100%. Two
+           attributes because "start filling" and "is finished" are different
+           claims, and conflating them is what left the ring at 67% at rest. */
         data-complete={story.complete ? "true" : "false"}
         style={
           {
@@ -246,8 +290,10 @@ function AnimatedTerminal() {
         }
       >
         <div className={styles.scoreWrap}>
-          {/* `active` is the trigger: the number reads 0% until the score stage,
-              then counts up over the same `shakeMs` the arc waits out.
+          {/* `active` is "the ring has a score": the number reads 0% until the
+              first score stage, then counts over the same `shakeMs` the arc waits
+              out, and holds that number through the repair beats so the ring is
+              never rewound between attempts.
 
               `delayMs` and `durationMs` are the story's, and they are load-bearing.
               They used to be `ScoreRing`'s defaults — a 900ms delay and a 1200ms
@@ -258,10 +304,16 @@ function AnimatedTerminal() {
               the panel came to rest showing 55% next to a settled 67% arc.
               `active` says "start"; these two say "how long". */}
           <ScoreRing
-            value={SAMPLE_SCORE}
-            label="Sample score"
+            /* The timeline's ring value, so the arc holds 33% while attempt 1's
+               failures are pulled out and then extends to 67% — one ring climbing
+               to 100, not three rings each starting empty. `countFrom` is what
+               makes the fill start where the last one ended. */
+            value={ringValue}
+            countFrom={ringFrom}
+            label={`Sample score, attempt ${story.attempt} of ${story.attemptCount}`}
             animate
-            active={scoreShown}
+            scale
+            active={ringLive}
             delayMs={ringStartDelayMs}
             durationMs={story.scoreDurationMs}
           />

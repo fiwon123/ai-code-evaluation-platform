@@ -128,6 +128,42 @@ export function scoreVariant(score: number): ScoreVariant {
   return "danger";
 }
 
+/** The four colours of the score *scale*, as the rings paint them. */
+export type ScoreBand = "red" | "orange" | "yellow" | "green";
+
+/**
+ * Map an evaluation score (0–100) to one of the four scale bands.
+ *
+ * Deliberately **nested inside** `scoreVariant` rather than an independent set of
+ * quarters. A ring and a chip are usually on screen together — the report's ring
+ * sits beside the score badge — so a scale that disagreed with `scoreVariant`
+ * would show a green arc beside an amber "warning" for the same number, which is
+ * worse than having no second scale at all. `stat-identity.test.ts` exists to
+ * stop exactly that kind of contradiction, so the bands refine the verdict
+ * instead of competing with it:
+ *
+ *     <60          danger  -> red
+ *     60 – 74      warning -> orange     (the warning band, split in two)
+ *     75 – 79      warning -> yellow
+ *     ≥80          success -> green
+ *
+ * Orange and yellow therefore only ever appear where the app has already said
+ * "warning", and `SCORE_BANDS` below is what holds that to a test rather than to
+ * this comment.
+ */
+export function scoreBand(score: number): ScoreBand {
+  if (score >= 80) {
+    return "green";
+  }
+  if (score >= 75) {
+    return "yellow";
+  }
+  if (score >= 60) {
+    return "orange";
+  }
+  return "red";
+}
+
 const METRIC_LABELS: Record<string, string> = {
   backend: "Backend",
   duration_ms: "Duration (ms)",

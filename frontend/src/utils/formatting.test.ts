@@ -8,7 +8,10 @@ import {
   humanizeMetricKey,
   isDelayed,
   isSeverelyDelayed,
+  type ScoreBand,
+  scoreBand,
   scoreVariant,
+  type ScoreVariant,
   statusVariant,
   STALE_AFTER_MS,
   SEVERE_DELAY_AFTER_MS,
@@ -130,6 +133,65 @@ describe("scoreVariant", () => {
   it("returns danger below 60", () => {
     expect(scoreVariant(59)).toBe("danger");
     expect(scoreVariant(0)).toBe("danger");
+  });
+});
+
+describe("scoreBand", () => {
+  it("returns green at 80 and above", () => {
+    expect(scoreBand(100)).toBe("green");
+    expect(scoreBand(80)).toBe("green");
+  });
+
+  it("returns yellow from 75 to 79", () => {
+    expect(scoreBand(79)).toBe("yellow");
+    expect(scoreBand(75)).toBe("yellow");
+  });
+
+  it("returns orange from 60 to 74", () => {
+    expect(scoreBand(74)).toBe("orange");
+    expect(scoreBand(60)).toBe("orange");
+  });
+
+  it("returns red below 60", () => {
+    expect(scoreBand(59)).toBe("red");
+    expect(scoreBand(0)).toBe("red");
+  });
+
+  /**
+   * The reason the bands are not quarters.
+   *
+   * A ring is drawn next to chips, badges and table cells that all read
+   * `scoreVariant`, so a band that disagreed with it would put a green arc
+   * beside an amber "warning" for one and the same number. Sweeping the whole
+   * integer range is the assertion that can catch it — checking a handful of
+   * scores would only catch the ones somebody thought to write down.
+   */
+  it("never contradicts scoreVariant on any score", () => {
+    const family: Record<ScoreBand, ScoreVariant> = {
+      red: "danger",
+      orange: "warning",
+      yellow: "warning",
+      green: "success",
+    };
+    const disagreements: string[] = [];
+    for (let score = 0; score <= 100; score++) {
+      const variant = scoreVariant(score);
+      const band = scoreBand(score);
+      if (family[band] !== variant) {
+        disagreements.push(`${score}: ${band} (${family[band]}) but the app says ${variant}`);
+      }
+    }
+    expect(disagreements).toEqual([]);
+  });
+
+  it("shows the Home hero red → orange → green across its three attempts", () => {
+    // The story's scores, 33.3 → 66.7 → 100. Asserted because it is the reason
+    // the bands are 60/75/80: with quarters the middle attempt lands on yellow
+    // and the visitor never sees orange at all, which is the one colour the
+    // visitor is meant to be able to name.
+    expect(scoreBand(33.3)).toBe("red");
+    expect(scoreBand(66.7)).toBe("orange");
+    expect(scoreBand(100)).toBe("green");
   });
 });
 
