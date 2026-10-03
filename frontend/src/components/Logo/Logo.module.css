@@ -19,7 +19,7 @@
 }
 
 .accent {
-  color: #ffffff;
+  color: var(--color-primary);
 }
 
 /* Sizes */
