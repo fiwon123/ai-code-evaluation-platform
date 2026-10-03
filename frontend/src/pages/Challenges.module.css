@@ -228,6 +228,13 @@
 }
 
 .cardArrow {
+  /* The label ends in "→", a forward affordance, so it belongs at the forward
+   * edge of the card rather than starting at the left one and pointing back
+   * across the card (#397). `.card` is a flex column, so `stretch` left this
+   * span full width and the text rendered from the left; `flex-end` shrinks the
+   * box to its content and parks it at the right padding edge. `.cardDesc`'s
+   * `flex: 1` still keeps it at the bottom, so this moves nothing else. */
+  align-self: flex-end;
   margin-top: var(--space-4);
   font-size: var(--font-size-sm);
   font-weight: 600;

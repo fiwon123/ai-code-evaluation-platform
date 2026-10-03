@@ -93,6 +93,33 @@ test.describe("Challenges list", () => {
     expect(groupBox!.height).toBeLessThanOrEqual(toolbarBox!.height);
   });
 
+  test("parks each card's forward link at the right edge, under its arrow", async ({ page }) => {
+    await mockApi(page);
+    await page.goto("/challenges");
+
+    // "View challenge →" is a forward affordance, so it belongs at the forward
+    // edge of the card. It rendered from the left, pointing back across the card
+    // (#397). Measured rather than asserted by class name, because the span was
+    // a stretched flex child: the *box* was already full width, so only the text
+    // inside it moved and a bounding-box check on its own would pass either way.
+    const card = page.getByRole("link", { name: /Two Sum/ }).locator("div").first();
+    const label = card.getByText("View challenge →", { exact: true });
+
+    const cardBox = await card.boundingBox();
+    const labelBox = await label.boundingBox();
+    const titleBox = await card.locator("h2").boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(labelBox).not.toBeNull();
+    expect(titleBox).not.toBeNull();
+
+    // The trailing arrow ends flush with the content's right edge, where the
+    // title's does — one pixel of tolerance for subpixel layout rounding.
+    expect(labelBox!.x + labelBox!.width).toBeCloseTo(titleBox!.x + titleBox!.width, 0);
+    // And the label is sized to its own text rather than stretched across the
+    // card, which is the half that actually moved it off the left edge.
+    expect(labelBox!.width).toBeLessThan(cardBox!.width / 2);
+  });
+
   test("shows an empty state when the catalog is empty", async ({ page }) => {
     await mockApi(page, []);
 
