@@ -54,8 +54,7 @@ const DIFFICULTY_FILTERS = [
  * in the text, and the colour goes on the control via `--lang-accent` below.
  */
 function languageFilterLabel(language: string): string {
-  const meta = languageMeta(language);
-  return `${meta.symbol} ${meta.label}`;
+  return languageMeta(language).label;
 }
 
 /** Sort options, each with a leading symbol for the same reason. */

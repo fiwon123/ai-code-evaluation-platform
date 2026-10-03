@@ -1,11 +1,12 @@
 .header {
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-inverse);
+  border-bottom: 1px solid var(--color-border-inverse);
   height: var(--header-height);
   position: sticky;
   top: 0;
   z-index: var(--z-index-sticky);
   box-shadow: var(--shadow-card);
+  color: var(--color-text-inverse);
 }
 
 .nav {
