@@ -24,6 +24,7 @@ import {
   languageMeta,
   runnerForLanguage,
 } from "../../utils/language.ts";
+import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
 import styles from "./Demo.module.css";
 
 const STEPS = [
@@ -616,6 +617,7 @@ function Demo() {
                 <div className={styles.preview}>
                   <div className={styles.previewHeader}>
                     <h3 className={styles.previewTitle}>What will run</h3>
+                    <LanguageBadge language={selectedChallenge.language} showLabel showSymbol />
                   </div>
                   {selectedChallenge.description && (
                     <p className={styles.previewDescription}>
