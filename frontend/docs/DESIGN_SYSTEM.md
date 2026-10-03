@@ -163,6 +163,29 @@ below.
 | `--color-accent-violet` | Third stat identity — same rule as `--color-accent-teal` |
 | `--color-accent-rose` | Fourth stat identity — same rule as `--color-accent-teal` |
 
+### Score scale
+
+The four bands of the Home hero's score ring, red through green, at 0–25 / 25–50 /
+50–75 / 75–100. They are *not* a status family: the `-strong` steps above answer
+"did it pass", and these answer "where on the scale is it". Read the table in
+order — the scale's meaning is the sequence, so a reader matching it against a
+traffic light needs the order kept.
+
+| Token | Used for |
+|-------|----------|
+| `--color-score-red` | First band of the score ring's scale — a score under 25 |
+| `--color-score-orange` | Second band — 25 to under 50 |
+| `--color-score-yellow` | Third band — 50 to under 75 |
+| `--color-score-green` | Last band — 75 and up |
+
+Prefer a status token for anything that means pass or fail: a pill, a badge, a
+row tint. These four exist because the hero ring steps through them as the score
+counts, and because stepping through the `-strong` family read as dark red →
+brown → green (`--color-warning-strong` is a brown chosen for text on `#fef3c7`,
+not a yellow). Like the `-strong` steps, they are lightness-tuned to clear 3:1
+against the surface they are drawn on — `globals.css` carries the measured ratios
+for both themes and `theme-contrast.test.ts` fails if any step drops below it.
+
 ### Surfaces and text
 
 | Token | Used for |

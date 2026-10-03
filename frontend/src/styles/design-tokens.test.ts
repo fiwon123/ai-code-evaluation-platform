@@ -103,6 +103,32 @@ function documentedColorTokens(doc: string): Set<string> {
   return named;
 }
 
+/**
+ * The plain global stylesheets in this directory — `score-ring.css`,
+ * `ambient.css`, `enter.css`, `focus.css`, `dividers.css`, `sr-only.css` — keyed
+ * src-relative, with `globals.css` left out because it is added by name below.
+ *
+ * This scan used to read `*.module.css`, `.ts`/`.tsx` and `globals.css` only,
+ * which left these six invisible to it. Nothing depended on that gap until #389,
+ * whose `--color-score-*` ramp is referenced from `score-ring.css` alone and
+ * would have been reported as four dead tokens. They are imported by
+ * `global.css`, so a token one of them uses is used.
+ */
+const GLOBAL_CSS = import.meta.glob("./*.css", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+/** `GLOBAL_CSS` src-relative and, where asked, comment-free. */
+function globalSheets(strip: boolean): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(GLOBAL_CSS)
+      .filter(([path]) => path !== "./globals.css")
+      .map(([path, css]) => [`styles/${path.replace(/^\.\//, "")}`, strip ? stripComments(css) : css]),
+  );
+}
+
 /** src-relative path -> CSS text, for every stylesheet that can use a token. */
 function stylesheets(): Record<string, string> {
   const modules = Object.fromEntries(
@@ -111,7 +137,7 @@ function stylesheets(): Record<string, string> {
       stripComments(css),
     ]),
   );
-  return { ...modules, "styles/globals.css": GLOBALS };
+  return { ...modules, ...globalSheets(true), "styles/globals.css": GLOBALS };
 }
 
 function allSources(): Record<string, string> {
@@ -127,7 +153,7 @@ function allSources(): Record<string, string> {
       text,
     ]),
   );
-  return { ...modules, ...sources, "styles/globals.css": globalsCss };
+  return { ...modules, ...sources, ...globalSheets(false), "styles/globals.css": globalsCss };
 }
 
 const TOKENS_IN_CSS = definedColorTokens(GLOBALS);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Animates a number from 0 to `target` over `durationMs`.
+ * Animates a number from `from` to `target` over `durationMs`.
  *
  * - Honors `prefers-reduced-motion`: returns the target immediately.
  * - Uses requestAnimationFrame with an ease-out curve when available,
@@ -12,19 +12,33 @@ import { useEffect, useRef, useState } from "react";
  *   restarting from zero when the gate opens — the count-up is a single run
  *   with a start offset, not a restartable one.
  *
+ * ## Why `from` is a parameter rather than "wherever the number happens to be"
+ *
+ * Because the caller has to be able to say where the count starts *before* it
+ * starts, for two reasons. A delay stands between the change and the motion, so
+ * whatever the hook remembered would have moved on by the time the first frame
+ * ran; and the ring's arc is drawn by CSS from a custom property, which cannot
+ * read a value out of a hook. Both halves of the Home hero's score ring climb
+ * from 33 to 67 at the same instant, so the 33 has to be a fact in the data and
+ * not a side effect of animation order.
+ *
+ * The default of 0 keeps every other consumer counting up from nothing, which is
+ * what all of them want.
+ *
  * Returns the current animated value.
  */
 export function useCountUp(
   target: number,
   durationMs = 800,
   startDelayMs: number | null = 0,
+  from = 0,
 ): number {
   const reduced =
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const [value, setValue] = useState<number>(reduced ? target : 0);
+  const [value, setValue] = useState<number>(reduced ? target : from);
   const rafRef = useRef<number>(0);
   const timeoutRef = useRef<number>(0);
 
@@ -42,6 +56,10 @@ export function useCountUp(
 
     let start: number | null = null;
     let intervalId = 0;
+    // Latched rather than recomputed per frame: `from` is the number the caller
+    // said was on screen when this run started, and the run has to keep counting
+    // from there even as the component re-renders under it.
+    const startValue = from;
 
     const step = (now: number) => {
       if (start === null) {
@@ -50,7 +68,7 @@ export function useCountUp(
       const progress = Math.min(1, (now - start) / durationMs);
       // ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
+      setValue(Math.round(startValue + (target - startValue) * eased));
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(step);
       }
@@ -67,7 +85,7 @@ export function useCountUp(
       intervalId = window.setInterval(() => {
         const progress = Math.min(1, (Date.now() - startedAt) / durationMs);
         const eased = 1 - Math.pow(1 - progress, 3);
-        setValue(Math.round(target * eased));
+        setValue(Math.round(startValue + (target - startValue) * eased));
         if (progress >= 1) {
           window.clearInterval(intervalId);
         }
@@ -79,7 +97,7 @@ export function useCountUp(
       window.clearInterval(intervalId);
       cancelAnimationFrame(rafRef.current);
     };
-  }, [target, durationMs, startDelayMs, reduced]);
+  }, [target, durationMs, startDelayMs, from, reduced]);
 
   return value;
 }

@@ -315,18 +315,31 @@ describe("Home copy stays true to the code", () => {
     expect(text).toMatch(/two_sum_unsorted/);
     expect(text).toMatch(/66\.7/);
 
-    // ...and the same figure the hero's terminal plays, because two panels
-    // quoting different scores for one run is the defect again with a new page.
+    // ...and that figure is one the hero actually produces. Two panels quoting
+    // different scores for "the same sample run" is the defect again on a new
+    // page.
     //
-    // Compared against the *source* constant, not against the rendered DOM: the
-    // hero's terminal only reveals its score at the end of its story, so on a
-    // fresh render there is exactly one `66.7` on the page and a
-    // "does it appear twice" assertion would fail on correct code.
-    const heroScore = animatedTerminalSource.match(/SAMPLE_SCORE\s*=\s*([\d.]+)/)?.[1];
-    expect(heroScore, "could not read SAMPLE_SCORE out of AnimatedTerminal.tsx").toBeDefined();
-    expect(text, "the teaser and the hero quote different scores for one run").toContain(
-      heroScore as string,
+    // The hero now runs the prompt three times (#389) — 33.3, 66.7, 100 — so
+    // this can no longer be a single constant, and the check is that the teaser's
+    // figure is one of the hero's *attempts* rather than a number that happens to
+    // agree. Read out of the source rather than the DOM: the terminal only shows
+    // one attempt's score at a time, so a "does it appear twice" assertion
+    // cannot be made from a fresh render.
+    const attemptsBlock = animatedTerminalSource.match(/SAMPLE_ATTEMPTS[\s\S]*?\n\];/)?.[0];
+    const passes = [...(attemptsBlock ?? "").matchAll(/results:\s*\[([^\]]*)\]/g)].map(
+      (match) => (match[1]!.match(/true/g) ?? []).length,
     );
+    expect(
+      passes,
+      "the hero runs the prompt three times, passing one more test each — " +
+        "that is what puts the ring through red, orange and green",
+    ).toEqual([1, 2, 3]);
+    const heroScores = passes.map((n) => Math.round((n / 3) * 1000) / 10);
+    expect(
+      heroScores,
+      `the teaser's 66.7 must be a score the hero plays, not a figure that ` +
+        `merely looks like one`,
+    ).toContain(66.7);
   });
 
   it("names provider keys and endpoints that exist", () => {

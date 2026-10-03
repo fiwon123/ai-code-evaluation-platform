@@ -1,7 +1,7 @@
 import { act, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TERMINAL_TIMING } from "../hooks/useTerminalStory.ts";
+import { attemptBeats, TERMINAL_TIMING } from "../hooks/useTerminalStory.ts";
 import { restoreMatchMedia, stubMatchMedia } from "../test/matchMedia.ts";
 import About from "./About/About.tsx";
 import Demo from "./Demo/Demo.tsx";
@@ -18,6 +18,16 @@ import Home from "./Home/Home.tsx";
  */
 const storyReport = () =>
   within(document.querySelector('[class*="sampleReport"]') as HTMLElement);
+
+/**
+ * The terminal panel's header, where the attempt number and the stage tag live.
+ *
+ * Scoped separately from `storyReport` because the attempt counter is *not* part
+ * of the report: it qualifies the panel, and a page-wide query for "attempt"
+ * would also match the three-run assertion in the hook suite's prose.
+ */
+const storyHeader = () =>
+  within(document.querySelector('[class*="animHeader"]') as HTMLElement);
 
 import { TERMINAL_ENTRANCE_MS } from "./Home/AnimatedTerminal.tsx";
 import Pricing from "./Pricing/Pricing.tsx";
@@ -134,17 +144,26 @@ describe("landing pages", () => {
 
   it("renders the Home hero with the animated sample report", () => {
     renderHomeAtRest();
-    // 67, not 88. `services/evaluation.py` scores this exact report — two of
-    // three tests passing — at 66.7, and the panel used to print 88 beside a
-    // visible ✗. The landing page's whole job is showing what a real report
-    // looks like, so a number its own backend would never produce is the worst
-    // thing on it. `ScoreRing` rounds for display, so the accessible name is 67.
+    // 100, not 88. `services/evaluation.py` scores a run as
+    // `round((passed / total) * 100, 1)`, and the panel used to print 88 beside a
+    // visible ✗ — a number the landing page's own backend would never produce for
+    // the result beside it. `ScoreRing` rounds for display, so the accessible name
+    // is 100.
+    //
+    // The report at rest is the *third* attempt: the terminal runs the same prompt
+    // three times (33.3 → 66.7 → 100) so the score ring steps through the scale,
+    // and the resting frame is the one where the suite passes. The attempt number
+    // is in the label so a reader using assistive tech knows which run they are
+    // being told about.
     expect(
-      screen.getByRole("img", { name: "Sample score 67 / 100" }),
+      screen.getByRole("img", {
+        name: "Sample score, attempt 3 of 3 100 / 100",
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByLabelText("Sample evaluation report"),
     ).toBeInTheDocument();
+    expect(screen.getByText("attempt 3 of 3")).toBeInTheDocument();
   });
 
   /**
@@ -336,7 +355,7 @@ describe("landing pages", () => {
     });
   });
 
-  it("holds the digits at 0% through the shake, then counts to the score", () => {
+  it("holds the digits at 0% through each shake, then counts up once per attempt", () => {
     // On fake timers, because the claim is a sub-second window in the story and
     // the browser version of this assertion could miss it entirely on a loaded
     // machine. See the note in `e2e/terminal-story.spec.ts`, which is the
@@ -353,38 +372,184 @@ describe("landing pages", () => {
       );
 
       // The rendered digits, not the accessible name. The `<svg role="img">` is
-      // labelled with the *target* — "Sample score 67 / 100" — from the first
-      // frame, which is right for a screen reader and useless for this: the count
-      // being asserted lives in the `<text>`.
+      // labelled with the *target* — "…100 / 100" — from the first frame, which
+      // is right for a screen reader and useless for this: the count being
+      // asserted lives in the `<text>`.
       const digits = () => {
         const value = document.querySelector(".ringValue");
         return Number(value?.textContent?.replace("%", "").trim() ?? "0");
       };
+      const attempts = () =>
+        storyHeader().getByText(/^attempt \d of \d$/).textContent;
+      // The result rows as a reader sees them: the verdict mark is its own
+      // element, so the row's own text is the pair.
+      const rows = () =>
+        [...document.querySelectorAll('[class*="sampleTests_"] li')].map((row) =>
+          (row.textContent ?? "").trim(),
+        );
 
       // The story waits for the panel's own fade before its first frame, so
       // every offset below is measured from *after* that. The lead-in is read
       // from the component rather than repeated here, because if the two ever
       // disagree this test would be asserting against a timeline the page no
       // longer runs — and it would still pass, one beat out of step.
-      const timeline = TERMINAL_TIMING;
-      const story =
-        TERMINAL_ENTRANCE_MS + 800 + 99 * timeline.typeMs + timeline.runStartMs;
-      const lastTest = story + 2 * timeline.testGapMs;
+      const t = TERMINAL_TIMING;
+      const first = attemptBeats(0);
+      const later = attemptBeats(1);
 
-      // Throughout the run the score has not started.
-      act(() => void vi.advanceTimersByTime(lastTest + timeline.testResolveMs));
+      // Absolute ms at which attempt `index`'s count-up finishes, from the same
+      // constants the hook builds its frames from. Accumulated in `elapsed`
+      // rather than as deltas, because a chain of seven `advanceTimersByTime`
+      // increments is arithmetic that has to be re-derived by hand every time a
+      // beat is retuned — and a wrong delta fails as a timing flake, not as a
+      // broken story.
+      const typing = TERMINAL_ENTRANCE_MS + t.generatingMs + 99 * t.typeMs;
+      /**
+       * Absolute ms at which an attempt's count-up finishes, from the same
+       * constants the hook builds its frames from.
+       *
+       * Two shapes rather than one: the first attempt runs all three tests
+       * straight after the prompt, and every later attempt spends `retryMs`
+       * pulling its failures out first and then runs only the ones it pulled out.
+       * So the number of rows that start is part of the offset — which is what
+       * makes the later attempts shorter.
+       */
+      const attempt = (beats: typeof first, runStart: number, rows: number) => {
+        const scoreStart =
+          runStart +
+          (rows - 1) * beats.testGapMs +
+          beats.testResolveMs +
+          beats.resultsHoldMs;
+        return {
+          scoreStart,
+          end:
+            scoreStart +
+            beats.shakeMs +
+            beats.scoreCountMs +
+            beats.scoreHoldMs,
+        };
+      };
+      // Attempt 1: all three rows, no repair beat.
+      const firstRun = typing + t.runStartMs;
+      const firstAttempt = attempt(first, firstRun, 3);
+      // Attempt 2: two failures pulled out, then those two re-run.
+      const secondRun = firstAttempt.end + t.retryMs + t.runStartMs;
+      const secondAttempt = attempt(later, secondRun, 2);
+      // Attempt 3: the last failure pulled out, then re-run.
+      const thirdRun = secondAttempt.end + t.retryMs + t.runStartMs;
+      const thirdAttempt = attempt(later, thirdRun, 1);
+      let elapsed = 0;
+      /**
+       * Advance to an absolute time, in 50ms steps.
+       *
+       * The stepping is not cosmetic. `useCountUp` counts on
+       * `requestAnimationFrame`, and one `advanceTimersByTime(1900)` does not
+       * hand the count-up the frames it needs: jumping straight over a whole
+       * attempt leaves the digits on the previous attempt's value, so the
+       * second and third counts silently read 0. A browser gets ~60 of those
+       * frames a second, and this test is about timing, so its clock moves the
+       * way the real one does.
+       */
+      const elapseTo = (target: number) => {
+        while (elapsed < target) {
+          const step = Math.min(50, target - elapsed);
+          // Its own `act`, so each step is its own commit. Batching 1.4s of
+          // timers into one flush collapses the story's frames into a single
+          // render, and the count-up's `requestAnimationFrame` work scheduled by
+          // that render never gets the turns it needs to reach its target.
+          act(() => {
+            vi.advanceTimersByTime(step);
+          });
+          elapsed += step;
+        }
+      };
+
+      // Every value the ring is read at, so "never rewinds" can be asserted over
+      // the whole story rather than at three chosen moments.
+      const seenDigits: number[] = [];
+
+      // Throughout attempt 1's run the score has not started.
+      elapseTo(
+        typing +
+          t.runStartMs +
+          2 * first.testGapMs +
+          first.testResolveMs,
+      );
       expect(digits()).toBe(0);
-      expect(screen.getByText("2 passed · 1 failed · 142 ms · pytest")).toBeInTheDocument();
+      seenDigits.push(digits());
+      expect(attempts()).toBe("attempt 1 of 3");
+      expect(
+        screen.getByText("1 passed · 2 failed · 142 ms · pytest"),
+      ).toBeInTheDocument();
 
       // The score stage begins, and the shake runs before the count-up.
-      act(() => void vi.advanceTimersByTime(timeline.resultsHoldMs + 1));
+      elapseTo(firstAttempt.scoreStart + 1);
       expect(digits(), "the count-up started during the shake").toBe(0);
+      seenDigits.push(digits());
 
-      act(() => void vi.advanceTimersByTime(timeline.shakeMs));
+      elapseTo(firstAttempt.scoreStart + first.shakeMs);
       expect(digits(), "the count-up still had not started after the shake").toBe(0);
+      seenDigits.push(digits());
 
-      act(() => void vi.advanceTimersByTime(timeline.scoreCountMs + 50));
-      expect(digits()).toBe(67);
+      elapseTo(firstAttempt.end + 50);
+      expect(digits(), "attempt 1 passes one test of three").toBe(33);
+      seenDigits.push(digits());
+
+      // The repair. The two failures are pulled out and only they re-run — the ✓
+      // stays exactly where it was — and the ring *holds* 33 while that happens
+      // rather than emptying. This is the change that makes the three attempts one
+      // ring instead of three: the panel now reads "one test passes, two still
+      // running" beside a number that has not gone backwards.
+      elapseTo(secondRun);
+      expect(attempts()).toBe("attempt 2 of 3");
+      expect(digits(), "the ring holds its score while the failures come out").toBe(33);
+      seenDigits.push(digits());
+      expect(rows(), "the ✓ stays; the first ✗ is back and running again").toEqual([
+        "✓two_sum_basic",
+        "⋯two_sum_duplicates",
+      ]);
+      expect(screen.getByText("running suite…")).toBeInTheDocument();
+
+      elapseTo(secondAttempt.end + 50);
+      expect(digits(), "attempt 2 passes two tests of three").toBe(67);
+      seenDigits.push(digits());
+      expect(
+        screen.getByText("2 passed · 1 failed · 142 ms · pytest"),
+      ).toBeInTheDocument();
+
+      // The last one: one failure pulled out, the two ✓ untouched, ring held at 67
+      // until the re-run finishes.
+      elapseTo(thirdRun);
+      expect(attempts()).toBe("attempt 3 of 3");
+      expect(digits(), "the ring still holds 67 before the last fix").toBe(67);
+      seenDigits.push(digits());
+      expect(
+        rows(),
+        "the two ✓ are untouched; only the last ✗ is back and running",
+      ).toEqual([
+        "✓two_sum_basic",
+        "✓two_sum_duplicates",
+        "⋯two_sum_unsorted",
+      ]);
+
+      // And the last one lands on a full pass, which is the resting state.
+      elapseTo(thirdAttempt.end + 50);
+      expect(digits()).toBe(100);
+      seenDigits.push(digits());
+      expect(attempts()).toBe("attempt 3 of 3");
+      expect(
+        screen.getByText("3 passed · 0 failed · 142 ms · pytest"),
+      ).toBeInTheDocument();
+
+      // The whole claim in one line: 0 while the suite runs, then up to 100 and
+      // never down. A ring that emptied between attempts would show 33 → 0 here,
+      // and a ring that jumped ahead would show 33 → 67 before the re-run.
+      expect(seenDigits).toEqual([0, 0, 0, 33, 33, 67, 67, 100]);
+      for (let i = 1; i < seenDigits.length; i += 1) {
+        expect(seenDigits[i], "the ring rewound").toBeGreaterThanOrEqual(
+          seenDigits[i - 1]!,
+        );
+      }
     } finally {
       vi.useRealTimers();
     }
@@ -458,7 +623,9 @@ describe("landing pages", () => {
       // Far enough to reach the first test reveal, which is what proves the
       // story resumed from the top rather than jumping to its end.
       const firstTestAt =
-        800 + 99 * TERMINAL_TIMING.typeMs + TERMINAL_TIMING.runStartMs;
+        TERMINAL_TIMING.generatingMs +
+        99 * TERMINAL_TIMING.typeMs +
+        TERMINAL_TIMING.runStartMs;
       act(() =>
         void vi.advanceTimersByTime(TERMINAL_ENTRANCE_MS + firstTestAt + 1),
       );
@@ -483,7 +650,7 @@ describe("landing pages", () => {
     for (const [name, mark] of [
       ["two_sum_basic", "✓"],
       ["two_sum_duplicates", "✓"],
-      ["two_sum_unsorted", "✗"],
+      ["two_sum_unsorted", "✓"],
     ] as const) {
       const row = storyReport().getByText(name).closest("li");
       expect(row, `${name} has no row`).not.toBeNull();
@@ -495,11 +662,55 @@ describe("landing pages", () => {
     expect(storyReport().queryByText("⋯")).not.toBeInTheDocument();
   });
 
+  it("marks each attempt's own failures while the story runs", () => {
+    // The marks belong to the attempt on screen, not to the suite. At rest the
+    // panel has always passed all three, which means a report that hard-coded a
+    // ✓ would pass every assertion above while never showing a failure at all —
+    // and the ring stepping red → orange → green is only legible if the failures
+    // it corresponds to are on screen when it happens.
+    vi.useFakeTimers();
+    try {
+      stubMatchMedia(false);
+      render(
+        <MemoryRouter>
+          <Home />
+        </MemoryRouter>,
+      );
+      const t = TERMINAL_TIMING;
+      const first = attemptBeats(0);
+      // Far enough into attempt 1 for all three of its results to have resolved,
+      // but before its score, so the failures are visible on their own.
+      act(() =>
+        void vi.advanceTimersByTime(
+          TERMINAL_ENTRANCE_MS +
+            t.generatingMs +
+            99 * t.typeMs +
+            t.runStartMs +
+            2 * first.testGapMs +
+            first.testResolveMs +
+            1,
+        ),
+      );
+      expect(storyHeader().getByText("attempt 1 of 3")).toBeInTheDocument();
+      for (const [name, mark] of [
+        ["two_sum_basic", "✓"],
+        ["two_sum_duplicates", "✗"],
+        ["two_sum_unsorted", "✗"],
+      ] as const) {
+        const row = storyReport().getByText(name).closest("li");
+        expect(row?.querySelector('[aria-hidden="true"]')?.textContent, name).toBe(mark);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("summarises the sample report in the counts the platform would print", () => {
     renderHomeAtRest();
     // The tally is derived from the same rows, so it cannot disagree with them.
+    // At rest that is attempt 3, where all three pass.
     expect(
-      screen.getByText("2 passed · 1 failed · 142 ms · pytest"),
+      screen.getByText("3 passed · 0 failed · 142 ms · pytest"),
     ).toBeInTheDocument();
   });
 

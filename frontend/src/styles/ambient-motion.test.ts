@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import AnimatedTerminalSource from "../pages/Home/AnimatedTerminal.tsx?raw";
 import homeSource from "../pages/Home/Home.tsx?raw";
 import globalsCss from "./globals.css?raw";
+import scoreRingCss from "./score-ring.css?raw";
 import ambientCss from "./ambient.css?raw";
 import enterCss from "./enter.css?raw";
 
@@ -259,25 +260,57 @@ describe("Home hero decoration", () => {
 describe("Home score ring fill", () => {
   const homeCss = stripComments(Object.values(HOME_CSS)[0] ?? "");
 
-  it("starts the arc empty, from the score's own arc length", () => {
-    // Empty means "offset by exactly the arc length", which slides the whole
-    // filled segment into the gap the dash pattern leaves behind. A literal
-    // number here is the bug being guarded, not a style preference.
+  it("holds the arc at the score so far, in the ring's own units", () => {
+    // The resting offset is `arc - from`, which leaves exactly `from` drawn and
+    // hides everything beyond it. Both halves are the ring's own measurements —
+    // a literal number here is the bug being guarded, not a style preference.
+    //
+    // This used to be `var(--ring-arc)`, which holds *nothing*: a ring that
+    // emptied between attempts and refilled from zero, so the panel showed three
+    // separate runs rather than one climbing to 100 (#389).
     const base = homeCss.match(
       /\.animPanel \.sampleReport :global\(\.ringProgress\)\s*\{([^}]*)\}/,
     );
     expect(base, "no base rule for the panel's ring arc").not.toBeNull();
-    expect(base![1]).toMatch(/stroke-dashoffset:\s*var\(--ring-arc\)/);
+    expect(base![1]).toMatch(
+      /stroke-dashoffset:\s*calc\(var\(--ring-arc\)\s*-\s*var\(--ring-arc-from,\s*0px\)\)/,
+    );
     expect(base![1]).not.toMatch(/stroke-dashoffset:\s*\d/);
+    // And the two halves have to be the ring's own variables: a hardcoded
+    // `--ring-arc-from` fallback *without* the `0px` unit would make `calc`
+    // invalid and drop the declaration, leaving the ring on the previous rule.
+    expect(base![1]).toMatch(/--ring-arc-from,\s*0px/);
   });
 
-  it("fills from empty rather than from a number copied off another radius", () => {
+  it("fills from the score already drawn rather than from a number copied off another radius", () => {
     const keyframes = homeCss.match(/@keyframes ringFill\s*\{([\s\S]*?)\n\}/);
     expect(keyframes, "no ringFill keyframes").not.toBeNull();
-    expect(keyframes![1]).toMatch(/from\s*\{[^}]*stroke-dashoffset:\s*var\(--ring-arc\)/);
+    // The `from` end is the same expression as the resting offset, so a fill
+    // continues from the arc the reader is looking at rather than emptying it
+    // first. Identical strings on purpose: two ways of saying "where it is now"
+    // would be two things to keep in step.
+    expect(keyframes![1]).toMatch(
+      /from\s*\{[^}]*stroke-dashoffset:\s*calc\(var\(--ring-arc\)\s*-\s*var\(--ring-arc-from,\s*0px\)\)/,
+    );
     expect(keyframes![1]).toMatch(/to\s*\{[^}]*stroke-dashoffset:\s*0/);
     // The specific defect: a literal offset in the `from` end.
     expect(keyframes![1]).not.toMatch(/from\s*\{[^}]*stroke-dashoffset:\s*\d/);
+  });
+
+  it("settles the arc on the full score, not on the last score it passed through", () => {
+    // At rest the base rule would hold `arc - from`, and `from` is still the
+    // *previous* attempt's score — so a finished story would come to rest showing
+    // 67% beside a settled 100%. `data-complete` is what closes that gap.
+    const complete = homeCss.match(
+      /\.animPanel \.sampleReport\[data-complete="true"\] :global\(\.ringProgress\)\s*\{([^}]*)\}/,
+    );
+    expect(complete, "no settled rule for the panel's ring arc").not.toBeNull();
+    expect(complete![1]).toMatch(/stroke-dashoffset:\s*0/);
+    // And it has to come after the base rule, since both are one attribute deep
+    // and the later declaration wins.
+    expect(homeCss.indexOf('[data-complete="true"]')).toBeGreaterThan(
+      homeCss.indexOf(".animPanel .sampleReport :global(.ringProgress)"),
+    );
   });
 
   it("fills the arc for a reader who asked for no motion", () => {
@@ -296,6 +329,33 @@ describe("Home score ring fill", () => {
     );
     expect(arc![1], "a reduced-motion reader gets an empty ring beside the score").toMatch(
       /stroke-dashoffset:\s*0/,
+    );
+  });
+
+  it("eases the score scale between bands instead of snapping", () => {
+    // #389 steps the arc's colour through four bands as the number counts. The
+    // step is the point, so it has to read as the dial passing a mark rather
+    // than as a flicker: `stroke` is transitioned on `.ringProgress` for exactly
+    // that. Without it the arc changes colour in one frame, up to three times
+    // inside a 1200ms count-up.
+    //
+    // Locked here rather than in the component test because it is a stylesheet
+    // declaration, and because jsdom resolves no custom properties at all — a
+    // `stroke` transition asserted from a component test would pass whether or
+    // not the rule existed.
+    const progress = stripComments(scoreRingCss).match(/\.ringProgress\s*\{([^}]*)\}/);
+    expect(progress, "no .ringProgress rule").not.toBeNull();
+    const transition = progress![1]!.match(/transition:\s*([^;]+);/);
+    expect(transition, ".ringProgress declares no transition").not.toBeNull();
+    expect(
+      transition![1],
+      "the arc's colour change must ease; only the dashoffset transition was found",
+    ).toMatch(/[\s,]stroke\s/);
+    // And the fill must not have been dropped in the process — this rule is
+    // shared with the Demo, the admin dashboard and the report, so a shorter
+    // list here would quietly change how the arc draws for all of them.
+    expect(transition![1], "the dashoffset transition was lost").toMatch(
+      /stroke-dashoffset/,
     );
   });
 
@@ -325,10 +385,18 @@ describe("Home score ring fill", () => {
     );
   });
 
-  it("publishes the arc length the keyframes read", () => {
+  it("publishes the arc lengths the keyframes read, in px", () => {
     // The CSS is inert without this: `--ring-arc` is only set here, so a rename
     // on either side silently yields an invalid offset and a ring that never
     // fills — which looks like a timing bug, not a wiring one.
+    //
+    // The unit is asserted because it is the whole reason the ring fills at all.
+    // Every consumer writes `calc(var(--ring-arc) - var(--ring-arc-from, 0px))`,
+    // and `calc(83.69 - 0)` is a unitless number: not a valid `stroke-dashoffset`,
+    // so the declaration is dropped and the property falls back to `0`. The
+    // `ringFill` keyframes went the same way, which left the arc pinned at its
+    // target while `getAnimations()` reported the animation running on schedule
+    // for the full 800ms (#389). Nothing about that reads as a missing unit.
     //
     // Read through the same `import.meta.glob` the rest of this file uses rather
     // than `readFileSync(new URL(..., import.meta.url))`: under vitest
@@ -340,7 +408,15 @@ describe("Home score ring fill", () => {
     }) as Record<string, string>;
     const ring = stripComments(Object.values(sources)[0] ?? "");
     expect(ring, "ScoreRing.tsx was not read").not.toBe("");
-    expect(ring).toMatch(/"--ring-arc":\s*`\$\{visibleArc\}`/);
+    for (const [name, value] of [
+      ["--ring-arc", "visibleArc"],
+      ["--ring-arc-from", "fromArc"],
+      ["--ring-circumference", "circumference"],
+    ] as const) {
+      expect(ring, `${name} is not published in px`).toContain(
+        `"${name}": `+"`${"+value+"}px`,",
+      );
+    }
   });
 });
 

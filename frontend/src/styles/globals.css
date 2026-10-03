@@ -50,6 +50,41 @@
   --color-danger-strong: #b91c1c;
   --color-danger-hover: #b91c1c;
   --color-danger-light: #fee2e2;
+  /* The score scale (issue #389) — the four bands of red -> orange -> yellow ->
+   * green that the Home hero's ring steps through as the score counts.
+   *
+   * Its own four tokens rather than the `-strong` family above, because that
+   * family is built for *text on a tint* and this scale has to be read as a
+   * spectrum. Two of the differences are not cosmetic:
+   *
+   *   1. `--color-warning-strong` is #92400e here — a brown. It is the right
+   *      value for a 12px pill on #fef3c7 (6.37:1) and the wrong one for the
+   *      third band of a red-to-green scale, where the reader is matching hue
+   *      against a traffic light. Stepping through brown read as
+   *      "dark red -> brown -> green", not as a score scale.
+   *   2. WCAG 1.4.11 still applies (each band is a 12px graphical stroke, 3:1
+   *      against the surface behind it), so the middle bands cannot be the
+   *      vivid hues a dial wants: #f59e0b measures 2.15:1 on white and #eab308
+   *      1.89:1. These are the -700 family instead, which keeps the hue and
+   *      drops the lightness until every step clears the bar with room:
+   *
+   *      #b91c1c on --color-surface-raised  6.47:1
+   *      #c2410c on --color-surface-raised  5.18:1
+   *      #a16207 on --color-surface-raised  4.92:1
+   *      #15803d on --color-surface-raised  5.02:1
+   *
+   *      (`--color-surface-raised` is #ffffff in this theme, and it is the one
+   *      that matters: the ring sits on the terminal panel, not on the page.)
+   *
+   * The bands are close to one another on purpose (1.02:1 between yellow and
+   * green), because a scale with gaps in it reads as four verdicts instead of as
+   * one scale with four marks. 1.4.11 is measured band-against-surface, and the
+   * score itself is text in the middle of the ring, held to 4.5:1 by its own
+   * rule. `theme-contrast.test` holds all four to the 3:1 bar in both themes. */
+  --color-score-red: #b91c1c;
+  --color-score-orange: #c2410c;
+  --color-score-yellow: #a16207;
+  --color-score-green: #15803d;
 
   /* Neutrals */
   --color-bg: #eef2f7;
@@ -194,6 +229,24 @@
   --color-danger-strong: #fca5a5;
   --color-danger-hover: #fca5a5;
   --color-danger-light: #7f1d1d;
+  /* The dark half of the score scale (#389). Same 700->400 move as the light
+   * half, because the surface is dark here and the steps have to get *lighter*
+   * to clear the same bar. Measured against --color-surface-raised (#1a2540),
+   * which is what the terminal panel is painted in this theme:
+   *
+   *     #f87171 on #1a2540  5.49:1
+   *     #fb923c on #1a2540  6.71:1
+   *     #fbbf24 on #1a2540  9.10:1
+   *     #4ade80 on #1a2540  8.72:1
+   *
+   * The red is #f87171, not the `-strong` family's #fca5a5 — that is a pale pink
+   * chosen to be legible as small text on #7f1d1d, and as the bottom of this
+   * scale it reads pink rather than red, which is the one thing the scale has to
+   * get right at a glance. */
+  --color-score-red: #f87171;
+  --color-score-orange: #fb923c;
+  --color-score-yellow: #fbbf24;
+  --color-score-green: #4ade80;
 
   /* Neutrals */
   --color-bg: #0a1020;

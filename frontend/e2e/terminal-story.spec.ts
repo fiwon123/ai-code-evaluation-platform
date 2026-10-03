@@ -2,10 +2,16 @@ import { expect, test, type Page } from "@playwright/test";
 import { mockApi } from "./data";
 
 /**
- * The Home terminal story, in motion (issue #352).
+ * The Home terminal story, in motion (issues #352, #389).
+ *
+ * The panel types one prompt and then tries it three times — 33.3, 66.7, 100 —
+ * clearing its rows and its ring between attempts, so the story is ~8s rather than
+ * ~5s. Three runs because one run can only ever put the ring in one band of the
+ * score scale: the hero is the surface built to demonstrate that scale, and a
+ * single run was the one thing that never showed it.
  *
  * This is the one place the *sequence* is checked, and the interesting problem is
- * how to observe a ~5s animation without sleeping or racing it. Two rules decide
+ * how to observe an ~8s animation without sleeping or racing it. Two rules decide
  * the shape of everything below:
  *
  *  1. No wall-clock waits (`no-wall-clock-sleeps.test.ts` enforces this for the
@@ -24,11 +30,26 @@ import { mockApi } from "./data";
  * file covers the story itself, which reduced-motion readers never see.
  */
 
-/** The sample run this file is written against, from `AnimatedTerminal`. */
+/** The sample suite this file is written against, from `AnimatedTerminal`. */
 const SAMPLE_TESTS = [
   "two_sum_basic",
   "two_sum_duplicates",
   "two_sum_unsorted",
+] as const;
+
+/**
+ * What each attempt passes, in order, and the score that implies.
+ *
+ * Written out rather than imported: `tsconfig.e2e.json` deliberately keeps the
+ * e2e project from reaching into `src/`, and the claim worth locking is the
+ * reader-facing one — the panel says "2 passed" and shows a ring that means it.
+ * Every attempt fixes one more test, so the marks accumulate rather than being
+ * re-rolled, and the scores land on red, orange and green in that order.
+ */
+const SAMPLE_ATTEMPTS = [
+  { passed: [true, false, false], score: "33%" },
+  { passed: [true, true, false], score: "67%" },
+  { passed: [true, true, true], score: "100%" },
 ] as const;
 
 /**
@@ -44,10 +65,25 @@ const SAMPLE_TESTS = [
  */
 const MIN_TYPE_MS_PER_CHAR = 10;
 
-/** The canonical stage order, indexed so "never goes backwards" is a number. */
+/**
+ * The canonical stage order, indexed so "never goes backwards" is a number.
+ *
+ * Written out in full, repetitions and all, because the repetition *is* the
+ * claim: three runs of the same order with a `re-running` beat between them.
+ * Collapsing this to a set would have accepted a story that ran once, or one that
+ * rewound.
+ */
 const STAGE_ORDER = [
   "generating",
   "prompt",
+  "running",
+  "results",
+  "score",
+  "retrying",
+  "running",
+  "results",
+  "score",
+  "retrying",
   "running",
   "results",
   "score",
@@ -57,6 +93,14 @@ const STAGE_ORDER = [
 /** Everything about the panel worth recording at one instant. */
 interface Sample {
   stage: string;
+  /**
+   * The header's `attempt N of 3` tag, parsed to its number.
+   *
+   * Read rather than derived from the stage, because the tag is what a reader is
+   * actually looking at: a story that re-resolved its rows three times without
+   * saying so would pass every other assertion in this file.
+   */
+  attempt: number;
   /** Row text in DOM order, with the verdict mark still attached. */
   rows: string[];
   /**
@@ -88,6 +132,17 @@ interface Sample {
    * reading that can tell an empty ring from a full one.
    */
   arcUnfilled: number;
+  /**
+   * How much of the whole circle is actually drawn, 0–1.
+   *
+   * `arcUnfilled` answers "how far through *this* attempt's fill are we", which
+   * was the whole claim while each attempt refilled the ring from empty. The ring
+   * now holds the score it has reached between attempts (#389), so that reading is
+   * 0 for the entire repair beat — correct, and blind to the thing that matters.
+   * This one is absolute: the fraction of the circumference on screen, so it can
+   * be compared against the digits beside it at any moment, filled or not.
+   */
+  drawn: number;
   /** How many characters of the prompt are on screen. */
   typed: number;
   /** The meta row's left-hand text: the tally once every row has resolved. */
@@ -129,7 +184,7 @@ function transitions<T>(series: T[]): T[] {
  * reasons, so a record is appended only when a tracked field differs from the
  * previous one.
  */
-async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
+async function recordStory(page: Page, timeout = 60_000): Promise<Sample[]> {
   await page.addInitScript(() => {
     const store = window as unknown as {
       __terminalHistory: { key: string; sample: unknown }[];
@@ -140,9 +195,15 @@ async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
       const status = document.querySelector('[class*="animStatus_"]');
       const rows = [...document.querySelectorAll('[class*="sampleTests_"] li')];
       const value = document.querySelector(".ringValue");
-      const arc = document.querySelector(".ringProgress");
+      const arc = document.querySelector(".ringProgress") as SVGElement | null;
+      const attempt = document.querySelector('[class*="animAttempt_"]');
       return {
         stage: status?.getAttribute("data-stage") ?? "",
+        attempt:
+          Number.parseInt(
+            /attempt\s+(\d+)/.exec(attempt?.textContent ?? "")?.[1] ?? "",
+            10,
+          ) || 0,
         rows: rows.map((row) => (row.textContent ?? "").trim()),
         names: rows.map((row) => (row.textContent ?? "").trim().slice(1)),
         states: rows.map((row) => row.getAttribute("data-state") ?? ""),
@@ -168,6 +229,38 @@ async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
               ),
             )
           : 1,
+        // What is actually drawn, read from the values React wrote rather than
+        // from the animated computed style.
+        //
+        // `stroke-dasharray` is `<visibleArc> <circumference>` and lives on the
+        // circle as an attribute; the two arc lengths are custom properties on the
+        // parent `<svg>`, written in its `style` attribute. Both are read straight
+        // off the DOM node, so this is a snapshot of the commit that just happened
+        // — no style recalc, no animation.
+        //
+        // That last part is the whole point. The held fill is not the animated
+        // `stroke-dashoffset`; it is the number the arc was told to hold. Outside a
+        // score stage the animation is `none`, the offset is `--ring-arc -
+        // --ring-arc-from`, and the drawn fraction is simply `--ring-arc-from /
+        // circumference`. Reading the animated computed offset here is what
+        // recorded a resting 67% fill beside a 32% number and failed a correct
+        // page: inside a `MutationObserver` callback its computed value can lag
+        // the recalc. The committed attribute cannot. Deriving the fill from the
+        // hold also makes it constant across a hold, so the dedup key below stops
+        // recording a sample per rAF frame of a settle.
+        drawn: (() => {
+          if (!arc) return 0;
+          const parts = (arc.getAttribute("stroke-dasharray") ?? "")
+            .split(/[\s,]+/)
+            .map((part) => Number.parseFloat(part));
+          const circumference = parts[1] ?? 0;
+          if (!(circumference > 0)) return 0;
+          const ringStyle = arc.closest("svg")?.getAttribute("style") ?? "";
+          const held = Number.parseFloat(
+            /--ring-arc-from\s*:\s*([^;]+)/.exec(ringStyle)?.[1] ?? "",
+          );
+          return Math.min(1, Math.max(0, (Number.isFinite(held) ? held : 0) / circumference));
+        })(),
         typed: Number.parseInt(
           document.querySelector("[data-typed]")?.getAttribute("data-typed") ?? "",
           10,
@@ -185,6 +278,7 @@ async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
       // arc is compared on whether it is running, not on its scoped name.
       const key = JSON.stringify([
         sample.stage,
+        sample.attempt,
         sample.rows,
         sample.score,
         sample.scoring,
@@ -195,6 +289,7 @@ async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
         // Rounded: the fill is a continuous animation, and an unrounded value
         // would record a sample per frame and swamp the history.
         Math.round(sample.arcUnfilled * 20),
+        Math.round(sample.drawn * 20),
       ]);
       // `at` is deliberately not part of the key: the key decides *whether* this
       // is a new observation, and a timestamp differs every time.
@@ -222,6 +317,16 @@ async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
 
   await page.goto("/");
   await expect(page.getByLabel("Sample evaluation report")).toBeVisible();
+  // Scroll the panel into view before waiting on it, because that is what starts
+  // the story: it is withheld until the panel is 15% on screen, and at 412px wide
+  // the hero leaves 60px of a 413px panel below the fold — 14.5%, just under the
+  // gate. Without this the whole file timed out on the Pixel 7 profile waiting for
+  // a story that a reader on that phone would start by scrolling.
+  //
+  // Not a workaround for the test: it is the trigger, and the story is
+  // deliberately *not* started on mount (a reader who never scrolls should not have
+  // the whole thing play out behind the fold).
+  await page.locator('[class*="animPanel_"]').scrollIntoViewIfNeeded();
   await expect(page.locator('[class*="animStatus_"]')).toHaveText("report ready", {
     timeout,
   });
@@ -233,6 +338,22 @@ async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
 }
 
 /**
+ * Open the Home page and start the story.
+ *
+ * The scroll is the trigger, not a convenience: the panel is withheld until it
+ * is 15% on screen (`useOnScreen`), and the Pixel 7 profile leaves 14.5% of it
+ * above the fold. A test that navigates and then waits for the first result row
+ * waits forever on that viewport — which is what happened once the story got
+ * slower and a 15s wait expired with the element never added. Every test in this
+ * file has to start the story the way a reader does.
+ */
+async function openStory(page: Page): Promise<void> {
+  await page.goto("/");
+  await expect(page.getByLabel("Sample evaluation report")).toBeVisible();
+  await page.locator('[class*="animPanel_"]').scrollIntoViewIfNeeded();
+}
+
+/**
  * Wait for the story to finish and its number to land.
  *
  * Two things this does not do. It is not a sleep: it waits on state, so a faster
@@ -241,17 +362,45 @@ async function recordStory(page: Page, timeout = 30_000): Promise<Sample[]> {
  * which lands first is a race (observed at 0, 65 and 67 on successive runs). So
  * the settled value is read from the DOM after waiting for it, which is the only
  * stable way to ask.
+ *
+ * 100%, not 67% (#389): the ring climbs to the finished score, so a settled story
+ * that stopped at the second attempt's tally would be a regression the helper
+ * would have papered over — it is the last thing every story test reads.
  */
 async function settle(page: Page): Promise<string> {
   await expect(page.locator('[class*="animStatus_"]')).toHaveText("report ready", {
-    timeout: 20_000,
+    timeout: 30_000,
   });
   const value = page.locator(".ringValue");
-  await expect(value).toHaveText("67%", { timeout: 20_000 });
+  await expect(value).toHaveText("100%", { timeout: 30_000 });
   return (await value.textContent()) ?? "";
 }
 
+/**
+ * The score-scale band the arc is currently painted with (#389) — the class on
+ * the arc, with the shared `ringProgress` removed.
+ *
+ * Read from the class rather than from the computed `stroke` because the class is
+ * the decision: four classes and four thresholds in the component, and the
+ * computed colour would hide a band that resolved to the wrong token.
+ */
+async function bandOf(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const arc = document.querySelector(".ringProgress");
+    return (arc?.getAttribute("class") ?? "").replace("ringProgress ", "");
+  });
+}
+
 test.describe("Home terminal story", () => {
+  // The story is now ~11s of real animation (three attempts, each with a slowed
+  // count-up and a settle beat), against Playwright's 30s default. Alone that is
+  // comfortable; fully parallel on a saturated host the chained `setTimeout`
+  // timeline runs late, and a 30s cap failed a *correct* story at the scoring
+  // stage. The budget is per-test, so raising it does not weaken an assertion —
+  // `recordStory` and `settle` still poll for state and finish the moment the
+  // story does.
+  test.describe.configure({ timeout: 90_000 });
+
   test.beforeEach(async ({ page }) => {
     await mockApi(page);
   });
@@ -265,8 +414,10 @@ test.describe("Home terminal story", () => {
     // Settle before reading the resting state, for the reason in `settle`.
     const settled = await settle(page);
 
-    expect(settled).toBe("67%");
+    expect(settled).toBe("100%");
     expect(samples.at(-1)?.names).toHaveLength(3);
+    // The last thing on screen is the third attempt, and the panel says so.
+    expect(samples.at(-1)?.attempt, "the story did not finish on its last attempt").toBe(3);
 
     // The exact stage sequence, every stage, in order.
     //
@@ -280,6 +431,11 @@ test.describe("Home terminal story", () => {
     //
     // Leading empty strings are samples taken before React mounted the panel,
     // where there is genuinely no stage yet.
+    //
+    // And every attempt's tag is consistent with the stage around it: the three
+    // runs are told apart by the header, so a reset that showed the *next*
+    // attempt's rows under the previous attempt's number would read as two
+    // attempts happening at once.
     const stages = transitions(
       samples.map((sample) => sample.stage).filter((stage) => stage !== ""),
     );
@@ -342,13 +498,22 @@ test.describe("Home terminal story", () => {
     // MutationObserver cannot miss a transition, so this is the whole claim
     // rather than a sample of it — including `results` being on screen at all,
     // which no assertion in this file used to be able to see.
+    //
+    // 0 → 1 → 2 → 3, then the panel repairs rather than resets: attempt 1's two
+    // failures come out one at a time (3 → 2 → 1) and are re-run (1 → 2 → 3), and
+    // the last failure does the same (3 → 2 → 3).
+    //
+    // That middle descent is the whole point, so it is spelled out rather than
+    // derived. A retry that emptied the panel would show 3 → 0 → 3 and read as a
+    // reload; a retry that forgot to remove anything would show 3 → 3 and claim
+    // the second attempt re-proved rows it had already passed.
     expect(
       transitions(counts),
       `row counts over the story: ${counts.join(" → ")}`,
-    ).toEqual([0, 1, 2, 3]);
+    ).toEqual([0, 1, 2, 3, 2, 1, 2, 3, 2, 3]);
   });
 
-  test("adds the results in order and never removes one", async ({ page }) => {
+  test("adds the results in order, and only ever removes a failure", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
 
     const samples = await recordStory(page);
@@ -370,6 +535,64 @@ test.describe("Home terminal story", () => {
       );
     }
 
+    // Rows only ever *disappear* as failures being pulled out for another run, and
+    // only during the repair beat. This is the claim that distinguishes a retry
+    // from a re-run of everything: a ✓ taken off screen and put back says the
+    // second attempt proved nothing, which is the story the panel used to tell.
+    //
+    // Checked over every pair of consecutive samples rather than at one moment,
+    // so it holds whether or not any particular removal frame was caught — and
+    // the removals themselves are asserted below, or the loop would pass vacuously
+    // on a story that never removed anything.
+    const removals: string[] = [];
+    for (let i = 1; i < samples.length; i += 1) {
+      const previous = samples[i - 1]!;
+      const sample = samples[i]!;
+      if (previous.names.length <= sample.names.length) continue;
+      expect(
+        sample.stage,
+        `rows disappeared at stage "${sample.stage}", which is not the repair`,
+      ).toBe("retrying");
+      for (const row of previous.rows.slice(sample.names.length)) {
+        expect(
+          row.slice(0, 1),
+          `a ✓ was taken off screen and will be put back ("${row}")`,
+        ).not.toBe("✓");
+        removals.push(row);
+      }
+    }
+    expect(
+      removals.length,
+      "no row was ever removed, so the retry is re-running the whole suite",
+    ).toBeGreaterThan(0);
+    // Only the failures, and off the end: attempt 1's `unsorted` then
+    // `duplicates`, then attempt 2's `unsorted` again. Nothing else goes — the
+    // `basic` row that passed first time is on screen for the whole story, and
+    // `duplicates` is the one row that is removed, re-run and comes back green.
+    expect(removals).toEqual([
+      "✗two_sum_unsorted",
+      "✗two_sum_duplicates",
+      "✗two_sum_unsorted",
+    ]);
+
+    // And the failure is gone by the time the repair ends. The row being taken
+    // away is still red *while* it goes — that is the removal, and asserting it
+    // away was asserting that the previous attempt's verdict had already been
+    // replaced by the next one's before the re-run that earns it, which is the
+    // defect this test caught in the browser. What must not survive is a ✗ the
+    // repair has finished with.
+    const lastRepair = new Map<number, Sample>();
+    for (const sample of samples) {
+      if (sample.stage === "retrying") lastRepair.set(sample.attempt, sample);
+    }
+    expect(lastRepair.size, "no repair was sampled").toBeGreaterThan(0);
+    for (const [attempt, sample] of lastRepair) {
+      expect(
+        sample.rows.filter((row) => row.startsWith("✗")),
+        `attempt ${attempt}'s repair ended with a failure still on screen`,
+      ).toEqual([]);
+    }
+
     // It starts empty and ends full. Which intermediate lengths the sampler
     // happened to catch is not asserted: with rows 400ms apart and a poll
     // round-trip in the way, demanding a sample at every length is a race, and a
@@ -381,15 +604,15 @@ test.describe("Home terminal story", () => {
 
   test("marks a running test without a verdict, and a resolved one with one", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.goto("/");
+    await openStory(page);
 
     // Start the wait *before* the rows are due, so the poller is already running
     // when the first one appears. Waiting for the first row and then looking for
     // the second would be a race against a 560ms gap.
-    // The first row is due about 3.5s after the panel appears, so these waits
-    // need more than the 5s default on a loaded machine.
+    // The first row is due a beat after the panel appears, so this wait needs
+    // room on a loaded machine beyond the 15s `expect` default.
     const first = page.locator('[class*="sampleTests_"] li').first();
-    await expect(first).toBeVisible({ timeout: 15_000 });
+    await expect(first).toBeVisible({ timeout: 30_000 });
     await expect(first).toContainText("two_sum_basic");
 
     // An unresolved row cannot carry ✓ or ✗ — it carries the pending mark, so a
@@ -397,7 +620,7 @@ test.describe("Home terminal story", () => {
     //
     // Stated as an invariant over every sample rather than by racing to look at
     // one: the first version waited for row two and asserted it read `⋯`, which
-    // is a ~260ms window and a coin flip on a loaded machine. Checking the rule
+    // is a ~220ms window and a coin flip on a loaded machine. Checking the rule
     // on whatever rows each sample caught is true whenever it is evaluated, and
     // the sample that first shows a row is necessarily a pending one.
     const samples = await recordStory(page);
@@ -421,6 +644,10 @@ test.describe("Home terminal story", () => {
     // Gated on the story being over it sat under three resolved rows claiming
     // "running suite…" for the whole scoring beat; the screenshot is what caught
     // it, because the DOM said nothing wrong.
+    //
+    // Checked against the tally the attempt in question actually earned, so the
+    // three runs' differing pass counts are part of the assertion rather than a
+    // hardcoded "2 passed" that only the middle attempt would satisfy.
     for (const sample of samples) {
       // The *whole* run, not the rows on screen. `sample.states` only covers
       // revealed rows, so "every revealed row is done" is true after the first
@@ -429,54 +656,94 @@ test.describe("Home terminal story", () => {
       const allResolved =
         sample.states.length === SAMPLE_TESTS.length &&
         sample.states.every((state) => state === "done");
-      if (sample.states.length > 0) {
+      if (sample.states.length === 0) continue;
+      const attempt = SAMPLE_ATTEMPTS[sample.attempt - 1];
+      expect(attempt, `sample claims attempt ${sample.attempt}, which is not one of them`).toBeDefined();
+      const earned = attempt!.passed.filter(Boolean).length;
+      if (allResolved) {
+        expect(
+          sample.tally,
+          `attempt ${sample.attempt} resolved every test, tally reads "${sample.tally}"`,
+        ).toContain(`${earned} passed`);
+        // And nothing failed on the run that passes everything.
+        if (earned === SAMPLE_TESTS.length) {
+          expect(sample.tally).toContain("0 failed");
+        }
+      } else {
         expect(
           sample.tally,
           `${sample.states.filter((s) => s === "done").length} of ${SAMPLE_TESTS.length} resolved, tally reads "${sample.tally}"`,
-        ).toEqual(allResolved ? expect.stringContaining("2 passed") : "running suite…");
+        ).toBe("running suite…");
       }
     }
 
     // The settled report: the marks match the names, and the tally agrees with
-    // them — 2 + 1, and the score that means.
+    // them — the third attempt's 3 + 0, and the full ring that means.
     const rows = page.locator('[class*="sampleTests_"] li');
     await expect(rows.nth(0)).toHaveText("✓two_sum_basic", { timeout: 20_000 });
     await expect(rows.nth(1)).toHaveText("✓two_sum_duplicates", { timeout: 20_000 });
-    await expect(rows.nth(2)).toHaveText("✗two_sum_unsorted", { timeout: 20_000 });
-    await expect(page.getByText("2 passed · 1 failed · 142 ms · pytest")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("img", { name: "Sample score 67 / 100" })).toBeVisible();
+    await expect(rows.nth(2)).toHaveText("✓two_sum_unsorted", { timeout: 20_000 });
+    await expect(page.getByText("3 passed · 0 failed · 142 ms · pytest")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("img", { name: /attempt 3 of 3 100 \/ 100/ })).toBeVisible();
 
     // The mark and the name are separate elements and the mark is decorative, so
     // a row's accessible text is the test name alone.
     await expect(rows.nth(0).locator('[aria-hidden="true"]')).toHaveText("✓");
   });
 
-  test("keeps the arc empty until the score stage, then fills it to the score", async ({
+  test("holds the arc at the score it has reached, and never rewinds it", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
 
     const samples = await recordStory(page);
 
-    // Before the score stage the arc is not merely un-animated, it is empty.
-    // Asserting the *geometry* is what makes this bite: the pre-fill shipped
-    // with `animation-name: none` and a hardcoded offset in the keyframe, so it
-    // satisfied every name-based assertion in the file while showing two thirds
-    // of a filled ring next to a 0% number for the whole run.
+    // The arc's held fraction, sampled from the commit rather than from the
+    // animation, so it is the geometry of the hold and not a frame of the sweep.
+    // Outside a score stage the ring holds 0% while the first suite runs, 33%
+    // while attempt 1's failures are pulled out, 67% through attempt 2's, and
+    // 100% at rest.
+    //
+    // This is what makes the test bite. The pre-fill shipped with
+    // `animation-name: none` and a hardcoded offset in the keyframe, so it
+    // satisfied every name-based assertion in this file while showing two thirds
+    // of a filled ring next to a 0% number for the whole run — the arc pinned at
+    // its *target* from the first frame.
+    //
+    // Deliberately NOT `expect(drawn).toBeCloseTo(score / 100)`: the arc's hold is
+    // React state and lands with the commit, while the digits are a
+    // `requestAnimationFrame` loop. On a saturated host the main thread can starve
+    // the loop past a stage boundary and the number reads 0 beside a held 33%
+    // without anything being wrong on screen — a frame later it lands. Comparing
+    // the two frame by frame was asserting that two clocks agree, and it flaked.
+    // The number's agreement with the arc is asserted where it can be, on fake
+    // timers: `src/pages/landing.test.tsx` and `useCountUp.test.ts`.
+    const holds = samples
+      .filter((sample) => sample.scoring !== "true" && sample.complete !== "true")
+      .map((sample) => sample.drawn);
+    expect(
+      transitions(holds.map((hold) => Math.round(hold * 100))),
+      "the arc must stop at the scores the attempts reached",
+    ).toEqual([0, 33, 67]);
+    // And the digits never get ahead of the arc: the arc is the authority on the
+    // score, so a number above the held fill is the ring claiming more than it has
+    // been given — the "emptied between attempts" defect, seen from the number.
     for (const sample of samples) {
-      // "Empty" is the claim only until the score is out. Once the run is
-      // complete the arc is *supposed* to be drawn — that is the resting state,
-      // and it is why `data-complete` exists separately from the trigger.
-      if (sample.scoring !== "true" && sample.complete !== "true") {
-        // Close to, not exactly: the computed `stroke-dashoffset` comes back
-        // rounded to two decimals, so the ratio is 0.99999… on a correct build.
-        expect(
-          sample.arcUnfilled,
-          `at stage "${sample.stage}" (data-scoring=${sample.scoring}) the arc was ${(
-            (1 - sample.arcUnfilled) * 100
-          ).toFixed(0)}% drawn beside a score of ${sample.score}`,
-        ).toBeGreaterThan(0.999);
-      }
+      if (sample.scoring === "true" || sample.complete === "true") continue;
+      expect(
+        sample.score / 100,
+        `at stage "${sample.stage}" the number was ${sample.score}% above a ${(sample.drawn * 100).toFixed(0)}% arc`,
+      ).toBeLessThanOrEqual(sample.drawn + 0.06);
+    }
+
+    // And it only ever goes up. Sampled off the history rather than off three
+    // chosen moments, so it holds for a story that was faster or slower than this.
+    const drawn = samples.map((sample) => sample.drawn);
+    for (let i = 1; i < drawn.length; i += 1) {
+      expect(
+        drawn[i],
+        `the ring went backwards: ${drawn.slice(0, i + 1).map((d) => `${Math.round(d * 100)}%`).join(" → ")}`,
+      ).toBeGreaterThanOrEqual(drawn[i - 1]! - 0.02);
     }
 
     // And it ends filled, to the score rather than to a fixed offset.
@@ -510,31 +777,50 @@ test.describe("Home terminal story", () => {
 
     const samples = await recordStory(page);
 
-    // The score is zero for the whole of the run. A tally that counts itself up
-    // while the suite is still going would contradict the rows above it.
-    const early = samples.filter((s) => s.stage !== "ready" && s.stage !== "score");
-    expect(early.length).toBeGreaterThan(0);
-    for (const sample of early) {
+    // The score is zero for the whole of the *first* run. A tally that counts
+    // itself up while the suite is still going would contradict the rows above it.
+    //
+    // Zero rather than "not moving" on purpose: after the first score stage the
+    // ring holds its value through the repair beats, so a number that dropped back
+    // to 0 there would be correct by this test's old rules and wrong by the design
+    // — the panel would be showing three runs rather than one ring climbing.
+    const firstScore = samples.findIndex((sample) => sample.stage === "score");
+    expect(firstScore, "the story never scored").toBeGreaterThan(0);
+    for (const sample of samples.slice(0, firstScore)) {
       expect(sample.score, `score read ${sample.score} at stage "${sample.stage}"`).toBe(0);
     }
+    // Which is also why the ring cannot be the thing that re-proves a row: from
+    // here on it only ever goes up.
+    const after = samples.slice(firstScore).map((sample) => sample.score);
+    for (let i = 1; i < after.length; i += 1) {
+      expect(after[i], "the score rewound").toBeGreaterThanOrEqual(after[i - 1]!);
+    }
 
-    // And once it does move, the results are already there.
-    for (const sample of samples.filter((s) => s.score > 0)) {
+    // And every score stage counts over the whole suite: three rows, the same
+    // three the attempt ran. Scoped to the score stages because that is where the
+    // number moves — a held score during a repair sits above a panel that is
+    // deliberately down to the rows that still need running.
+    for (const sample of samples.filter((s) => s.stage === "score")) {
       expect(
         sample.names.length,
-        `the score moved before the results were in (${sample.names.length} rows)`,
+        `a score stage counted to ${sample.score} with ${sample.names.length} rows`,
       ).toBe(3);
     }
 
-    // 66.7 is what `services/evaluation.py` computes for two of three passing
-    // tests, and the panel used to claim 88 beside a visible ✗. Read after
-    // settling, because the last *sample* is taken mid-commit.
-    expect(await settle(page)).toBe("67%");
+    // And every attempt reaches its own score, in order: 33.3, 66.7 and 100 are
+    // what `services/evaluation.py` computes for one, two and three of three
+    // passing tests, and the panel used to claim 88 beside a visible ✗.
+    //
+    // Read from the settled DOM rather than the history, because the last
+    // *sample* is taken mid-commit.
+    const scores = SAMPLE_ATTEMPTS.map((attempt) => attempt.score);
+    expect(scores).toEqual(["33%", "67%", "100%"]);
+    expect(await settle(page)).toBe("100%");
   });
 
   test("starts the ring when the story says so, not on a clock of its own", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.goto("/");
+    await openStory(page);
 
     // The panel mounts a beat after load, and this test reads it directly rather
     // than polling — the previous version read the custom property straight after
@@ -567,33 +853,54 @@ test.describe("Home terminal story", () => {
 
     const samples = await recordStory(page);
 
-    // The contract, stated as the invariant that actually broke: the number
-    // moves if and only if the score stage is running, and the arc is animating
-    // if and only if the score stage is running. The old design gated both on a
-    // wall-clock deadline, so a story that ran late — which it always did under
-    // load — had the ring at 26% with two of three tests outstanding.
+    // The contract, stated as the invariant that actually broke: the number moves
+    // only while the score stage is running, and the arc is animating if and only
+    // if the score stage is running. The old design gated both on a wall-clock
+    // deadline, so a story that ran late — which it always did under load — had
+    // the ring at 26% with two of three tests outstanding.
     //
-    // One direction only, and deliberately. "Score > 0 implies scoring" is the
-    // claim that broke: the old deadline-based ring moved the number while the
-    // suite ran. The converse is false *by design* — the shake runs before the
-    // count-up, so for the first 400ms of the score stage the number is
-    // deliberately still 0%, and asserting the other direction would be asserting
-    // that the shake does not exist.
-    for (const sample of samples) {
-      if (sample.score > 0) {
-        expect(
-          sample.scoring === "true" || sample.stage === "ready",
-          `the number moved (${sample.score}%) at stage "${sample.stage}", where data-scoring=${sample.scoring}`,
-        ).toBe(true);
-      }
+    // Stated as *changes* rather than as a value, because the ring now holds its
+    // score between attempts: 33% at a stage that is not `score` is the hold and
+    // is correct, and only a number that moves is a violation. The old form of
+    // this assertion ("score > 0 implies scoring") was the claim that broke when
+    // the deadline-based ring moved the number while the suite ran; it has to
+    // become this one rather than be weakened, or it would now pass for the wrong
+    // reason — every hold would look like a failure.
+    const moves = samples.filter(
+      (sample, index) => index > 0 && sample.score !== samples[index - 1]!.score,
+    );
+    expect(moves.length, "the number never moved, so the trigger was not checked").toBeGreaterThan(0);
+    // A `running` stage must never show a number above the score it is holding
+    // from the attempt before. That is the defect, stated without racing a
+    // timer: the broken ring reached 26% while attempt 1's three tests were
+    // still resolving, so it read a score the attempt had not earned. The count
+    // for attempt N starts only once attempt N's rows are all in, so while
+    // attempt N runs the number is the previous attempt's score — or, on a
+    // loaded machine, the previous count still landing on it, which is why this
+    // is a bound rather than an equality. Attempt 1 runs before any score, so it
+    // holds 0.
+    for (const sample of samples.filter((s) => s.stage === "running")) {
+      const previous =
+        sample.attempt >= 2
+          ? Number.parseInt(SAMPLE_ATTEMPTS[sample.attempt - 2]!.score, 10)
+          : 0;
+      expect(
+        sample.score,
+        `the number reached ${sample.score} while attempt ${sample.attempt} was still running`,
+      ).toBeLessThanOrEqual(previous);
     }
-    // The shake — 400ms of the score stage where the digits are deliberately
-    // still 0% — is deliberately NOT asserted here. It is a sub-second window in
-    // a wall clock, and a loaded machine can starve the observer straight past
-    // it, which it did: this file failed once in a full parallel run and passed
-    // three times alone. Asserted on fake timers instead, in
-    // `src/pages/landing.test.tsx`, where the window cannot be missed. A
-    // sampling test for a timing claim is a flake wearing a test's clothes.
+    expect(
+      moves.some((sample) => sample.stage === "score"),
+      "the number never counted during a score stage",
+    ).toBe(true);
+    // The shake — the first 300ms (200ms on later attempts) of the score stage
+    // where the digits are deliberately still holding — is deliberately NOT
+    // asserted here. It is a sub-second window in a wall clock, and a loaded
+    // machine can starve the observer straight past it, which it did: this file
+    // failed once in a full parallel run and passed three times alone. Asserted on
+    // fake timers instead, in `src/pages/landing.test.tsx`, where the window
+    // cannot be missed. A sampling test for a timing claim is a flake wearing a
+    // test's clothes.
 
     // The arc's animation tracks the attribute exactly, never a timer.
     //
@@ -621,7 +928,7 @@ test.describe("Home terminal story", () => {
 
   test("reduced motion gets the whole report at once, and nothing moving", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/");
+    await openStory(page);
 
     const report = page.getByLabel("Sample evaluation report");
     // No story to wait for: the final state is the first state. These are
@@ -630,9 +937,12 @@ test.describe("Home terminal story", () => {
     await expect(report).toBeVisible();
     await expect(page.locator('[class*="animStatus_"]')).toHaveText("report ready");
     await expect(page.locator('[class*="sampleTests_"] li')).toHaveCount(3);
-    await expect(page.getByRole("img", { name: "Sample score 67 / 100" })).toBeVisible();
-    await expect(page.locator(".ringValue")).toHaveText("67%");
-    await expect(page.getByText("2 passed · 1 failed · 142 ms · pytest")).toBeVisible();
+    // The *final* attempt, not the first: reduced motion skips the three runs
+    // rather than showing the first one on its own, so the resting state is a full
+    // pass and the tag says which attempt it was.
+    await expect(page.getByRole("img", { name: /attempt 3 of 3 100 \/ 100/ })).toBeVisible();
+    await expect(page.locator(".ringValue")).toHaveText("100%");
+    await expect(page.getByText("3 passed · 0 failed · 142 ms · pytest")).toBeVisible();
 
     // And nothing is animating: no arc fill, no shake, no pulsing dot. A
     // reduced-motion reader gets the content, not a slower version of the
@@ -650,5 +960,159 @@ test.describe("Home terminal story", () => {
     expect(motion.arc, "the score arc should not animate").toBe("none");
     expect(motion.wrap, "the shake should not run").toBe("none");
     expect(motion.dotActive).toBe("false");
+
+    // The #389 scale is painted here too — one flat band per score — and a
+    // reduced-motion reader is given the final one rather than a sweep. Which
+    // band depends on the score; the last attempt's 100 is the fourth.
+    expect(await bandOf(page), "100 should be the fourth band").toBe("ringScoreGreen");
+    // Scoped to the panel: the page has gradients of its own (the logo), and this
+    // is a claim about the score arc.
+    expect(
+      await page.locator(".sampleReport").locator("linearGradient").count(),
+      "the arc is a flat colour",
+    ).toBe(0);
+  });
+
+  test("steps the arc through the scale as the number counts", async ({ page }) => {
+    // Issue #389. The scale is the point: a reader landing on the hero should see
+    // where 66.7 sits, not just be told it is a "warning". It is one flat colour
+    // at a time — the earlier version interpolated a gradient across the arc,
+    // which put three colours on a ring whose entire content is one number.
+    //
+    // The claim under test is that the colour changes *while* the number runs, so
+    // this samples the story from the first frame and records the band at every
+    // change rather than only the settled one.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.addInitScript(() => {
+      const w = window as unknown as { __bands: Array<[string, string]> };
+      w.__bands = [];
+      const attach = () => {
+        const root = document.documentElement;
+        if (!root) {
+          setTimeout(attach, 0);
+          return;
+        }
+        const sample = () => {
+          const arc = document.querySelector(".ringProgress");
+          const value = document.querySelector(".ringValue");
+          if (!arc || !value) return;
+          const entry = [`${arc.getAttribute("class")}`, value.textContent ?? ""];
+          const last = w.__bands.at(-1);
+          if (!last || last[0] !== entry[0]) w.__bands.push(entry as [string, string]);
+        };
+        // `attributes` because the band is a class swap on an element that
+        // already exists — a subtree childList observer would miss every change
+        // after the ring mounted.
+        new MutationObserver(sample).observe(root, {
+          attributes: true,
+          subtree: true,
+          childList: true,
+          characterData: true,
+        });
+        sample();
+      };
+      attach();
+    });
+
+    await openStory(page);
+    await settle(page);
+
+    const bands = await page.evaluate(
+      () => (window as unknown as { __bands: Array<[string, string]> }).__bands,
+    );
+    const bandOf = (cls: string) => cls.replace("ringProgress ", "");
+    const seen = bands.map(([cls]) => bandOf(cls));
+
+    // The observer has to have been watching long enough to see the runs; a
+    // single entry means the ring was not sampled while it counted.
+    expect(seen.length, `only saw ${JSON.stringify(bands)}`).toBeGreaterThan(2);
+    // Red at 0%, and green at the end — the third attempt passes everything. The
+    // first run cannot reach any other band on its own, which is why the panel
+    // runs three: one score per band would leave orange and yellow unseen.
+    expect(seen[0], `the arc started on ${seen[0]}`).toBe("ringScoreRed");
+    expect(seen.at(-1), `the arc ended on ${seen.at(-1)}`).toBe("ringScoreGreen");
+    // And it passed through the middle bands rather than jumping straight there.
+    expect(seen, `the arc only used ${seen.join(" → ")}`).toContain("ringScoreOrange");
+
+    // Every band a sample was on belongs to the score it was showing. This is the
+    // pairing that makes the effect meaningful rather than decorative: a band
+    // change at a number that is still inside the previous band would be the
+    // scale disagreeing with its own dial.
+    //
+    // The thresholds are the app-wide ones (`scoreVariant`'s 60/80 nested inside
+    // `scoreBand`'s 60/75/80), written out rather than imported for the same
+    // reason as the sample attempts: this is the claim a reader checks by looking,
+    // and a copy that drifts from the component is caught by this test rather
+    // than by both drifting together.
+    const bandFor = (n: number) =>
+      n < 60
+        ? "ringScoreRed"
+        : n < 75
+          ? "ringScoreOrange"
+          : n < 80
+            ? "ringScoreYellow"
+            : "ringScoreGreen";
+    for (const [cls, number] of bands) {
+      const n = Number.parseInt(number, 10);
+      expect(bandFor(n), `${bandOf(cls)} while the ring read ${number}`).toBe(bandOf(cls));
+    }
+
+    // The bands are real colours in the light theme, and the ring is one flat
+    // paint: no paint server left over from the gradient version.
+    const strokes = await page.evaluate(() => {
+      const arc = document.querySelector(".ringProgress") as SVGElement | null;
+      return arc ? getComputedStyle(arc).stroke : "";
+    });
+    expect(strokes, "the arc's computed stroke").toMatch(/^rgb\(/);
+    // Scoped to the panel: the logo has a gradient and always did.
+    await expect(page.locator(".sampleReport").locator("linearGradient")).toHaveCount(0);
+  });
+
+  test("keeps the panel's height fixed for the whole story", async ({ page }) => {
+    // Issue #389. The typewriter wrapped to a new line mid-run and the result
+    // rows arrived one at a time, so the whole hero shifted down while the one
+    // thing a reader was watching played. The fix reserves the tallest state of
+    // each region; this measures the rendered panel and asserts it never moved.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+
+    await page.addInitScript(() => {
+      const store = window as unknown as { __panelHeights: number[] };
+      store.__panelHeights = [];
+      const attach = () => {
+        const root = document.documentElement;
+        if (!root) {
+          setTimeout(attach, 0);
+          return;
+        }
+        const read = () => {
+          const panel = document.querySelector('[class*="animPanel"]');
+          if (panel) store.__panelHeights.push(panel.getBoundingClientRect().height);
+        };
+        new MutationObserver(read).observe(root, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+        read();
+      };
+      attach();
+    });
+
+    await openStory(page);
+    await settle(page);
+
+    const heights = await page.evaluate(
+      () => (window as unknown as { __panelHeights: number[] }).__panelHeights,
+    );
+    // The observer fires per typed character, so a correct run leaves hundreds
+    // of samples. A handful means the panel was not watched at all.
+    expect(heights.length, "the panel was never measured").toBeGreaterThan(20);
+    const min = Math.min(...heights);
+    const max = Math.max(...heights);
+    // Sub-pixel slack: layout rounds between reflows.
+    expect(
+      max - min,
+      `the hero terminal changed height by ${(max - min).toFixed(1)}px during the story`,
+    ).toBeLessThanOrEqual(1);
   });
 });

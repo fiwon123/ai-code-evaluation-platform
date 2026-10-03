@@ -271,6 +271,28 @@
 }
 
 /*
+ * Which run this is.
+ *
+ * Plain secondary text rather than a second pill: the stage tag beside it already
+ * claims the panel's whole width of attention, and a reader needs this number to
+ * be findable — not to compete. It sits between the title and the tag because it
+ * qualifies the *report* below, so it wants to be adjacent to the score and the
+ * rows rather than to the window chrome.
+ *
+ * `font-variant-numeric: tabular-nums` is load-bearing on the "2" in "attempt 2
+ * of 3": without it the digit is proportionally spaced and the label visibly
+ * re-flows as the panel steps from 1 to 2 to 3, which in a panel that is already
+ * moving is one more thing moving.
+ */
+.animAttempt {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
  * The stage tag.
  *
  * One element, coloured by `data-stage` rather than a class per stage, so the
@@ -303,8 +325,13 @@
   background: var(--color-primary-light);
 }
 
+/* `retrying` is grouped with the two run stages rather than given its own: it is
+   the beat where the panel clears for the next attempt, so the honest colour is
+   the warning it was already showing for the suite it is about to run — not a
+   third identity the reader has to learn. */
 .animStatus[data-stage="running"],
-.animStatus[data-stage="results"] {
+.animStatus[data-stage="results"],
+.animStatus[data-stage="retrying"] {
   color: var(--color-warning-strong);
   background: var(--color-warning-light);
 }
@@ -366,7 +393,14 @@
 
 .animPromptText {
   color: var(--color-text-secondary);
-  min-height: 1.5em;
+  /* Reserve the prompt's tallest state, so the typewriter cannot grow the panel
+   * (#389). `min-height: 1.5em` held one line while the text was short; the
+   * moment it wrapped to a second line the whole hero pushed down. The sample
+   * prompt is 99 characters and wraps to at most four lines at the narrow
+   * breakpoint (three at 412px), and the inherited line-height is 1.6, so four
+   * lines is `4 × 1.6em = 6.4em`. The extra whitespace on wide screens is the
+   * price of a panel that does not move while it plays. */
+  min-height: 6.4em;
   word-break: break-word;
 }
 
@@ -468,6 +502,13 @@
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   text-align: left;
+  /* Reserve all three rows before any is revealed (#389). Rows are *rendered*
+   * only once the story resolves them, so the list grows 0 → 3 during the run
+   * and drags `.sampleMeta` — and the panel — down with it. The reservation is
+   * the final geometry: three rows (each `0.5rem` padding + a `0.875rem × 1.6`
+   * line box) plus two `0.5rem` gaps is ~6.7rem, so `7rem` holds at every
+   * intermediate length and the movement cannot reappear. */
+  min-height: 7rem;
 }
 
 /*
@@ -522,6 +563,13 @@
   color: var(--color-text-muted);
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-divider);
+  /* Reserve the tall state, not the tally's one-line "running suite…" (#389).
+   * The settled tally wraps to two lines at the narrow breakpoint, and the row
+   * sits below the ring's fixed reservation, so without this the last beat of
+   * the run — the one a reader is most likely to be watching — nudged the
+   * panel. `3.5rem` covers the two `0.75rem × 1.6` lines plus the `0.75rem` top
+   * padding, with room to spare. */
+  min-height: 3.5rem;
 }
 
 .sampleMetaLink {
@@ -566,23 +614,51 @@
  * would win and reduced-motion readers would get the animation back.
  */
 .animPanel .sampleReport :global(.ringProgress) {
-  /* Empty until the score stage, and empty *by construction* rather than by an
-     animation having not started yet. `stroke-dasharray` is
-     `<arc> <circumference>`, so an offset of exactly `arc` slides the whole
-     filled segment into the gap: nothing drawn. Without this the arc sat at its
-     final two-thirds for the whole run, next to digits reading 0% — a ring that
-     looks finished before the suite is. */
-  stroke-dashoffset: var(--ring-arc);
+  /* The dashoffset *transition* is dropped here, and only the colour one kept.
+     The global `.ringProgress` transitions `stroke-dashoffset` so that a ring
+     whose score changes eases into the new arc. In this panel the score *is* the
+     animation: `--ring-arc` and `--ring-arc-from` change on the very frame
+     `data-scoring` flips, which is the frame `ringFill` takes over. So the base
+     offset changed underneath a running keyframe animation and the transition
+     animated that change too — and the two fought. Measured: the ring sat fully
+     drawn to 33% beside a 0% number for the length of the shake, then emptied,
+     then filled again, all before the count reached 33%. The colour transition
+     stays because the band hop is the point of the scale. */
+  transition: stroke var(--duration-base) ease;
+
+  /* The resting state is *the ring so far*, not empty.
+     `stroke-dasharray` is `<arc> <circumference>`, so an offset of `arc` slides
+     the whole filled segment into the gap — nothing drawn — and an offset of
+     `arc - from` leaves exactly `from` drawn. Both numbers are the ring's own,
+     published by `ScoreRing` as `--ring-arc` and `--ring-arc-from`.
+
+     Before the first score both are 0, so this is empty exactly as it should be:
+     a ring that looks finished before the suite is was the bug the empty offset
+     was there to fix, and it is still fixed — there is simply no score to hold
+     yet.
+
+     Between attempts it holds the score the last count-up drew, which is the
+     change #389 asked for. It used to empty here while the failures were pulled
+     out, so the panel went 33% → nothing → 67%: three rings rather than one
+     climbing to 100, and the second attempt's rise had nothing to climb from. */
+  stroke-dashoffset: calc(var(--ring-arc) - var(--ring-arc-from, 0px));
   animation-name: none;
   animation-duration: var(--ring-duration, 1.2s);
-  animation-timing-function: ease-out;
+  /* The digits ease with `1 - (1 - p)^3` in `useCountUp`, so the arc uses the
+     bezier that is that curve: `cubic-bezier(0.33, 1, 0.68, 1)`. `ease-out` is
+     close enough to pass any eye that only looks at one of the two, and visibly
+     wrong next to it — a CSS `ease-out` is asymptotic, so at the moment the
+     digits reached 98% the arc was still at 87%, and the 13% that was left
+     snapped in on the next frame when `[data-complete]` took the offset to 0.
+     One curve for both halves of the ring, so they land together. */
+  animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
   animation-delay: var(--ring-delay, 0ms);
-  /* `forwards`, not `backwards`. The base rule now starts the arc *empty*, so
-     the fill's end state has to be held: with `backwards` the animation stops
-     applying the moment it finishes and the ring springs back to empty beside a
-     67% number at rest. `forwards` is also all that is needed for the delay
-     period, because the base value *is* the empty state — which is what
-     `backwards` used to be covering. */
+  /* `forwards`, not `backwards`. The fill's end state has to be held: with
+     `backwards` the animation stops applying the moment it finishes and the ring
+     springs back to the last drawn arc beside a number that has moved on.
+     `forwards` is also all that is needed for the delay period, because the base
+     value *is* the state before the fill — which is what `backwards` used to be
+     covering. */
   animation-fill-mode: forwards;
 }
 
@@ -590,22 +666,28 @@
   animation-name: ringFill;
 }
 
-/* Settled: the arc stays drawn once the score is out. Same value the keyframes
+/* Settled: the arc stays drawn once the story is over. Same value the keyframes
    end on, so the hand-off from `forwards` to this rule is invisible — which is
    the point, because the score stage is over by the time this takes effect and
    the alternative was the ring emptying at the exact moment the number stopped
-   moving. */
+   moving.
+
+   Needed separately from the base rule because at rest there is nothing to hold
+   *from*: `--ring-arc-from` is still the previous attempt's score, and holding
+   that offset would leave the ring showing 67% beside a settled 100%. */
 .animPanel .sampleReport[data-complete="true"] :global(.ringProgress) {
   stroke-dashoffset: 0;
 }
 
-/* Empty to filled, in the score's own units. The `to` end is 0 — the arc exactly
-   where `stroke-dasharray` already puts it — and the `from` end is the score's arc
-   length, which is what makes the fill land on the score rather than on whatever
-   a number happened to be. */
+/* From wherever the ring already is to fully drawn, in its own units. The `to`
+   end is 0 — the arc exactly where `stroke-dasharray` puts it — and the `from`
+   end is `arc - from`, which is the offset that leaves `from` drawn. So the fill
+   lands on the score and starts at the score before it: the first count sweeps
+   the whole arc from empty, and each later one extends the arc the reader is
+   already looking at. */
 @keyframes ringFill {
   from {
-    stroke-dashoffset: var(--ring-arc);
+    stroke-dashoffset: calc(var(--ring-arc) - var(--ring-arc-from, 0px));
   }
   to {
     stroke-dashoffset: 0;
