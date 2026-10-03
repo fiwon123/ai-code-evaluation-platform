@@ -187,7 +187,8 @@
 .cardTop {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* `justify-content: space-between` went with the date (#399): the badges are
+   * the only thing on this row now, so there is nothing left to push apart. */
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -227,15 +228,28 @@
   padding: 2px var(--space-2);
 }
 
-.cardArrow {
-  /* The label ends in "→", a forward affordance, so it belongs at the forward
-   * edge of the card rather than starting at the left one and pointing back
-   * across the card (#397). `.card` is a flex column, so `stretch` left this
-   * span full width and the text rendered from the left; `flex-end` shrinks the
-   * box to its content and parks it at the right padding edge. `.cardDesc`'s
-   * `flex: 1` still keeps it at the bottom, so this moves nothing else. */
-  align-self: flex-end;
+/* The card's last row: the created time on the left, the forward link on the
+ * right (#399). One row, so the link reads as the card's footer rather than as a
+ * label stranded under the description, and the date — which used to sit in the
+ * badge strip, opposite end of the card from the link that opens it — ends up
+ * next to the thing it describes. `.cardDesc`'s `flex: 1` still pushes the row to
+ * the bottom, so the card's vertical layout is unchanged with or without the
+ * owner badge. */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   margin-top: var(--space-4);
+}
+
+.cardArrow {
+  /* No `align-self` here: the row above is what parks this at the card's right
+   * edge. In a *row*-direction flex it would mean the bottom of the row instead,
+   * which is a silently wrong fix rather than a loud one (#397, #399).
+   * `nowrap` keeps "View challenge →" on one line in a narrow card — a link that
+   * wraps after the arrow reads as two labels, not one affordance. */
+  white-space: nowrap;
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-primary);
