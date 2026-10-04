@@ -35,16 +35,18 @@ import styles from "./AmbientBackdrop.module.css";
 /** Every stylesheet that mounts the wash, and the rule that hosts it. */
 const HOST_SHELLS = [
   "components/AuthLayout/AuthLayout.module.css",
+  // #404: `PageHeader` mounts the wash on behalf of every page that adopted it,
+  // so its module is now a host shell like any other. Its callers no longer
+  // declare the trio themselves — they inherit it — which is why the four
+  // migrated page modules are absent from this list rather than still carrying
+  // a copy of the rule.
+  "components/PageHeader/PageHeader.module.css",
   "pages/About/About.module.css",
   "pages/Admin/Admin.module.css",
   "pages/ChallengeDetail.module.css",
-  "pages/Challenges.module.css",
   "pages/Contact/Contact.module.css",
-  "pages/CreateChallenge.module.css",
   "pages/Demo/Demo.module.css",
-  "pages/EditChallenge.module.css",
   "pages/Features/Features.module.css",
-  "pages/Legal/Legal.module.css",
   "pages/NotFound.module.css",
   "pages/Pricing/Pricing.module.css",
   "pages/Profile/Profile.module.css",

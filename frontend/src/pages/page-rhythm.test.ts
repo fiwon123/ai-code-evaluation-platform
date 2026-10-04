@@ -246,7 +246,49 @@ describe("marketing hero", () => {
   const NO_HERO: string[] = [];
 
   /**
-   * The hero subtitle rule.
+   * Marketing pages whose hero chrome comes from `PageHeader` (issue #404),
+   * mapped to the component that renders their header block.
+   *
+   * Explicit, like `PAGE_GROUP`: the delegation is a decision, not something to
+   * infer. `/legal` adopted `PageHeader` and so stopped declaring its own
+   * `.subtitle`, which means its hero rule now lives in the component. The
+   * delegation itself is asserted below, so this map cannot become a way to make
+   * a missing rule quietly pass.
+   */
+  const HEADER_OWNER: Record<string, string> = {
+    "Legal/Legal.module.css": "Legal/LegalShell.tsx",
+  };
+
+  /** The shared stylesheet a delegated hero is styled by. */
+  const PAGE_HEADER_CSS = Object.values(
+    import.meta.glob("../components/PageHeader/*.module.css", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>,
+  ).join("\n");
+
+  /**
+   * Page component sources, keyed by their path under `pages/` — the same shape
+   * as `MODULES`, so the two registries can be written the same way. Test files
+   * are excluded: a spec that happens to render a `PageHeader` is not a page
+   * that delegates its header to one.
+   */
+  const PAGE_SOURCES = new Map(
+    Object.entries(
+      import.meta.glob("../**/*.tsx", {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>,
+    )
+      .filter(([key]) => !key.endsWith(".test.tsx"))
+      .map(([key, source]) => [key.replace(/^(\.{1,2}\/)+/, ""), source] as const),
+  );
+
+  /**
+   * The hero subtitle rule, from the page's own stylesheet or — for a page that
+   * delegated its header to `PageHeader` — from the component's.
    *
    * The role used to be named `.subtitle`, `.pageSubtitle`, `.tagline` and
    * `.summary` across the marketing pages; the v0.21.0 harmonization pass
@@ -254,11 +296,33 @@ describe("marketing hero", () => {
    * page that reintroduces a variation fails.
    */
   function heroRule(page: string): { selector: string; body: string } | null {
-    const css = stripComments(MODULES[`./${page}`] ?? "");
-    const match = /([^{}]*)\.subtitle\s*\{([^}]*)\}/.exec(css);
-    if (!match) return null;
-    return { selector: "subtitle", body: match[2] };
+    const own = /([^{}]*)\.subtitle\s*\{([^}]*)\}/.exec(
+      stripComments(MODULES[`./${page}`] ?? ""),
+    );
+    if (own) return { selector: "subtitle", body: own[2] ?? "" };
+
+    if (!HEADER_OWNER[page]) return null;
+    // A delegated hero is styled by the component's marketing tone. The rule is
+    // read from the component rather than skipped, so these pages keep their
+    // measure and type-scale coverage instead of quietly dropping out of it.
+    const shared = /\.marketing\s+\.subtitle\s*\{([^}]*)\}/.exec(PAGE_HEADER_CSS);
+    return shared ? { selector: "marketing .subtitle", body: shared[1] ?? "" } : null;
   }
+
+  it("delegates only to a component that really renders these headers", () => {
+    // Guards the delegation itself. Without this, a page could earn an entry in
+    // `HEADER_OWNER` by deleting its `.subtitle` rule and nothing would notice
+    // that the hero it stopped styling had not been adopted by anything — which
+    // is the failure this whole file exists to make loud.
+    for (const [page, owner] of Object.entries(HEADER_OWNER)) {
+      const source = PAGE_SOURCES.get(owner);
+      expect(source, `${page} delegates its header to a missing file: ${owner}`).toBeTruthy();
+      expect(
+        source,
+        `${owner} is named as ${page}'s header owner but does not render a PageHeader`,
+      ).toMatch(/<PageHeader[\s/>]/);
+    }
+  });
 
   it("finds a hero subtitle on every marketing page that has one", () => {
     // Guard on the guard. An earlier version of this block looked its rules up
