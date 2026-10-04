@@ -18,17 +18,22 @@
   margin: 0 auto;
   padding: 0 var(--space-6);
   height: 100%;
-  display: flex;
+  /* Three tracks — brand, links, actions — with the two sides *equal* (#400).
+   * That equality is the whole fix: `justify-content: space-between` on a flex
+   * row centres the gap, not the group, and the actions cluster (188px) is 65px
+   * wider than the logo (123px), so the links could only ever sit left of the
+   * header's centre line — 147px off at 1440px, measured. Two `1fr` sides and an
+   * `auto` middle put the links' own centre on the header's centre line at every
+   * width, and cost nothing when the two sides differ.
+   *
+   * The links are 547px wide, so this only fits from 1024px up; below that the
+   * media block at the end of this file returns `.nav` to the flex row it was,
+   * which is also what stops the 769–920px band where the links overlapped the
+   * theme toggle and the auth buttons. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-4);
-}
-
-.navLeft {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  min-width: 0;
 }
 
 .brand {
@@ -36,6 +41,11 @@
   align-items: center;
   min-height: var(--control-height);
   color: #ffffff;
+  /* #400: a grid item stretches to its track by default, so without this the
+   * logo's box would span the whole first column — a ~76px invisible click
+   * target at 1024px. `start` shrinks it to the logo, which is also where it
+   * already looked. */
+  justify-self: start;
 }
 
 .brand:hover {
@@ -83,6 +93,13 @@
      extra, so the toggle reads as its own control rather than a spacer. */
   gap: var(--space-3);
   margin-left: var(--space-2);
+  /* #400: the mirror of `.brand`'s `justify-self: start`. A stretched `.navRight`
+   * is a flex row with `flex-start` contents, so the toggle and the auth buttons
+   * would sit at the *start* of the third track and leave dead chrome at the
+   * header's right edge — 90px of it at 1280px, measured. `end` puts the margin
+   * box flush with the track's right edge, so the buttons stay where they were
+   * and `margin-left` keeps doing its #232 job of spacing them off the links. */
+  justify-self: end;
 }
 
 /* Auth actions (logged out) */
@@ -234,13 +251,17 @@
   color: var(--color-chrome-text);
 }
 
-@media (max-width: 900px) {
-  .navLeft {
-    gap: var(--space-4);
+/* Below 1024px the header is the two-item bar it has always been — brand left,
+ * burger right — rather than the three-track centred row (#400). `display: flex`
+ * here is load-bearing, not tidiness: a grid would place the burger into the
+ * middle track, because `order` reorders grid items but the links are out of flow
+ * in this layout and leave their track free. */
+@media (max-width: 1023px) {
+  .nav {
+    display: flex;
+    justify-content: space-between;
   }
-}
 
-@media (max-width: 768px) {
   .menuToggle {
     display: inline-flex;
     align-items: center;
