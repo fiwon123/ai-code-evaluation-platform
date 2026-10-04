@@ -4,8 +4,8 @@
 :root,
 [data-theme="light"] {
   /* Colors */
-  --color-primary: #1d4ed8;
-  --color-primary-hover: #1e40af;
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
   --color-primary-light: #dbeafe;
   /* The fourth `-strong` step, and the one the other three were missing
    * (#348). `--color-primary` is the right blue for a *fill* and the wrong one
@@ -16,6 +16,8 @@
    * move the lightness until the pair clears 4.5:1 on the tint it sits on. */
   --color-primary-strong: #1e40af;
   --color-secondary: #475569;
+  --color-success: #22c55e;
+  --color-success-light: #14532d;
   --color-success: #16a34a;
   --color-success-light: #dcfce7;
   /* Text-on-tint variants (issue #346).
