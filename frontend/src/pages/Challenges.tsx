@@ -297,7 +297,6 @@ function Challenges() {
                         {difficultyLabel(challenge.difficulty)}
                       </Badge>
                     </div>
-                    <span className={styles.date}>{formatRelativeTime(challenge.created_at)}</span>
                   </div>
                   <h2 className={styles.cardTitle}>{challenge.title}</h2>
                   <p className={`${styles.cardDesc} lineClamp2`}>
@@ -306,7 +305,12 @@ function Challenges() {
                   {user?.id === challenge.owner_id && (
                     <span className={styles.ownerBadge}>You own this</span>
                   )}
-                  <span className={styles.cardArrow}>View challenge →</span>
+                  <div className={styles.cardFooter}>
+                    <span className={styles.date}>
+                      {formatRelativeTime(challenge.created_at)}
+                    </span>
+                    <span className={styles.cardArrow}>View challenge →</span>
+                  </div>
                 </Card>
               </Link>
             ))}

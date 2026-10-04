@@ -42,9 +42,16 @@
    * the shared one, so it cannot drift from the fields on every other page. */
   composes: focusRingField from "../styles/focus.css";
   width: 100%;
-  background: var(--color-surface-raised);
-  border-color: var(--color-border);
-  box-shadow: var(--shadow-card);
+  /* No fill of its own, which is the point (#397). This used to paint
+   * `--color-surface-raised` (#ffffff in light mode) while still inheriting
+   * `.input`'s `--color-input-text`, the light ink #387 chose *for the dark
+   * input fill*: white text on a white box, 1.23:1 measured, so anything typed
+   * here was unreadable in light mode. Inheriting the fill instead puts the
+   * field on `--color-input-bg`/`--color-input-border` in both themes, like
+   * every other input in the app and like the two `<select>`s beside it on this
+   * toolbar (#0f172a light, #0b1220 dark). `--shadow-card` went with it: the
+   * shared field has no lift, and a card shadow around a dark control read as a
+   * separate kind of thing from the selects it sits next to. */
   padding-right: 2.5rem;
 }
 
@@ -56,9 +63,15 @@
   pointer-events: none;
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  /* The key cap sits *inside* the field, so it is painted in the field's own
+   * ink rather than in page tokens (#397). `--color-bg-subtle` was a pale chip
+   * (#e6edf8) that only ever worked against the old white fill; on the shared
+   * dark fill it would be a light box inside a dark one. `--color-input-
+   * placeholder` is the same grey the placeholder text uses, and the outline is
+   * the control's own boundary token — 6.96:1 for the glyph, 3.5:1 for the
+   * edge, on `--color-input-bg` in both themes. */
+  color: var(--color-input-placeholder);
+  border: 1px solid var(--color-input-border);
   border-radius: var(--radius-sm);
   padding: 1px var(--space-2);
 }
@@ -174,7 +187,8 @@
 .cardTop {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* `justify-content: space-between` went with the date (#399): the badges are
+   * the only thing on this row now, so there is nothing left to push apart. */
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -214,8 +228,28 @@
   padding: 2px var(--space-2);
 }
 
-.cardArrow {
+/* The card's last row: the created time on the left, the forward link on the
+ * right (#399). One row, so the link reads as the card's footer rather than as a
+ * label stranded under the description, and the date — which used to sit in the
+ * badge strip, opposite end of the card from the link that opens it — ends up
+ * next to the thing it describes. `.cardDesc`'s `flex: 1` still pushes the row to
+ * the bottom, so the card's vertical layout is unchanged with or without the
+ * owner badge. */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   margin-top: var(--space-4);
+}
+
+.cardArrow {
+  /* No `align-self` here: the row above is what parks this at the card's right
+   * edge. In a *row*-direction flex it would mean the bottom of the row instead,
+   * which is a silently wrong fix rather than a loud one (#397, #399).
+   * `nowrap` keeps "View challenge →" on one line in a narrow card — a link that
+   * wraps after the arrow reads as two labels, not one affordance. */
+  white-space: nowrap;
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-primary);
