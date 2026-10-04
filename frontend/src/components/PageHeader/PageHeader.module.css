@@ -1,0 +1,108 @@
+/*
+ * The page-header shell, defined once (issue #404).
+ *
+ * The host contract at the top is the load-bearing part. `position: relative`
+ * anchors the absolutely-positioned backdrop, `isolation: isolate` gives this
+ * block a stacking context so a `z-index: -1` backdrop paints behind the
+ * header's own text instead of behind the page's, and `overflow: hidden` clips
+ * the 80px blur to the header rather than letting it wash down the page. That
+ * trio was copy-pasted into sixteen stylesheets; it now lives here and is
+ * checked in `AmbientBackdrop.test.tsx` alongside the shells that still declare
+ * their own.
+ */
+.header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* app — dashboards, lists and forms. ---------------------------------------- */
+
+/*
+ * A flex row rather than a block because `/challenges` puts "New challenge" to
+ * the right of the title; `flex-wrap` and the column fallback below are what
+ * keep that usable on a phone. A page with no `actions` (the two challenge
+ * forms) is unaffected: with one item, `space-between` is a no-op.
+ */
+.app {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-8);
+}
+
+.app .title {
+  margin-bottom: var(--space-1);
+}
+
+.app .subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 640px) {
+  .app {
+    flex-direction: column;
+  }
+}
+
+/* marketing — landing and informational pages. ------------------------------- */
+
+.marketing {
+  text-align: center;
+  margin-bottom: var(--space-12);
+}
+
+.marketing .title {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+/*
+ * The 600px measure is what makes centring a paragraph legible rather than
+ * merely symmetric; `margin: 0 auto` centres the measure box itself. Both are
+ * needed — `text-align: center` alone would centre a full-width line of text
+ * and leave the measure unbounded, which is the state `/legal` was in: it
+ * carried the 600px measure from #309 but neither the centring nor the auto
+ * margin, so its summary sat hard against the left edge while About, Contact,
+ * Features and Pricing sat centred.
+ */
+.marketing .subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-lg);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* breadcrumb --------------------------------------------------------------- */
+
+.crumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.crumbLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+  color: var(--color-primary);
+}
+
+/* entrance ----------------------------------------------------------------- */
+
+/*
+ * The two challenge forms rose into place and `/challenges` never did, so the
+ * entrance is a per-page decision (`animate`) rather than a tone default:
+ * folding it into `.app` would add motion to a page nobody asked to move, and
+ * leaving it as three copies of `composes:` would keep the duplication this
+ * component exists to remove. See `styles/enter.css` for why this animation is
+ * deliberately not gated on `prefers-reduced-motion`.
+ */
+.animated {
+  composes: fadeInUp from "../../styles/enter.css";
+}

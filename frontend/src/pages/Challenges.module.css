@@ -4,34 +4,6 @@
   margin: 0 auto;
 }
 
-.pageHeader {
-  /* #402: hosts the shared `AmbientBackdrop`. All three declarations are
-     load-bearing and the reason is in that component: `position` anchors it,
-     `isolation: isolate` is what makes its `z-index: -1` mean "behind this
-     header" rather than "behind the page background" (where it vanishes), and
-     `overflow: hidden` clips the blobs' 80px blur to the header instead of
-     letting it smear over the content below. */
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-8);
-}
-
-/* Layout only — size and the gradient come from the shared PageTitle. */
-.title {
-  margin-bottom: var(--space-1);
-}
-
-.subtitle {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
 .toolbar {
   display: flex;
   gap: var(--space-3);
@@ -268,10 +240,4 @@
   padding: var(--space-16) var(--space-6);
   text-align: center;
   color: var(--color-text-secondary);
-}
-
-@media (max-width: 640px) {
-  .pageHeader {
-    flex-direction: column;
-  }
 }

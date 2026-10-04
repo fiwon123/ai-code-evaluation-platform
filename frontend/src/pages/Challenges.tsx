@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import BadgeSelect from "../components/BadgeSelect/BadgeSelect.tsx";
 import Button from "../components/Button/Button.tsx";
@@ -8,7 +7,7 @@ import Card from "../components/Card/Card.tsx";
 import EmptyState from "../components/EmptyState/EmptyState.tsx";
 import LanguageBadge from "../components/LanguageBadge/LanguageBadge.tsx";
 import { SelectInput, TextInput } from "../components/Input/Input.tsx";
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../components/PageHeader/PageHeader.tsx";
 import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
@@ -175,16 +174,11 @@ function Challenges() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.pageHeader}>
-        <AmbientBackdrop />
-        <div>
-          <PageTitle className={styles.title}>Challenges</PageTitle>
-          <p className={styles.subtitle}>
-            Submit a challenge and let an LLM generate and evaluate a solution.
-          </p>
-        </div>
-        <Button to="/challenges/new">+ New challenge</Button>
-      </div>
+      <PageHeader
+        title="Challenges"
+        subtitle="Submit a challenge and let an LLM generate and evaluate a solution."
+        actions={<Button to="/challenges/new">+ New challenge</Button>}
+      />
 
       <div className={styles.toolbar}>
         <div className={styles.searchWrap}>

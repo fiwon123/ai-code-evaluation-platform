@@ -3,9 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import styles from "./EditChallenge.module.css";
 import { challengesApi } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
-import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Card from "../components/Card/Card.tsx";
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../components/PageHeader/PageHeader.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import {
   ChallengeFormActions,
@@ -149,25 +148,17 @@ export default function EditChallenge() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <AmbientBackdrop />
-        <nav className={styles.crumbs} aria-label="Breadcrumb">
-          <Link to="/challenges" className={styles.crumbLink}>
-            Challenges
-          </Link>
-          <span aria-hidden="true">/</span>
-          <Link to={`/challenges/${id}`} className={styles.crumbLink}>
-            Challenge
-          </Link>
-          <span aria-hidden="true">/</span>
-          <span aria-current="page">Edit</span>
-        </nav>
-        <PageTitle className={styles.title}>Edit challenge</PageTitle>
-        <p className={styles.subtitle}>
-          Update the task description, the prompt your LLM will see, or the
-          tests used to grade the generated solution.
-        </p>
-      </header>
+      <PageHeader
+        className={styles.narrow}
+        animate
+        breadcrumb={[
+          { label: "Challenges", to: "/challenges" },
+          { label: "Challenge", to: `/challenges/${id}` },
+          { label: "Edit" },
+        ]}
+        title="Edit challenge"
+        subtitle="Update the task description, the prompt your LLM will see, or the tests used to grade the generated solution."
+      />
 
       <Card className={styles.card}>
         <form onSubmit={(e) => void handleSubmit(e)}>
