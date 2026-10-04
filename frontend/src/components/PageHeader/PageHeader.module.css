@@ -48,6 +48,23 @@
   }
 }
 
+/*
+ * The title/subtitle column fills the measure rather than hugging its own text.
+ *
+ * A flex item with the default `flex: 0 1 auto` is sized by its content, so a
+ * header with no `actions` collapsed to the width of its longest line: measured
+ * at 635px on `/challenges/new` where the block header it replaced was the full
+ * 760px, which left the header text visibly narrower than the form beneath it.
+ * `1 1 auto` fills the row and can still shrink; `min-width: 0` is what lets it
+ * shrink *below* the content's minimum, so a long word wraps instead of
+ * overflowing the row. A no-op on `/challenges`, whose column already filled the
+ * space its `actions` left.
+ */
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* marketing — landing and informational pages. ------------------------------- */
 
 .marketing {

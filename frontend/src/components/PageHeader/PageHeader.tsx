@@ -86,26 +86,30 @@ export function PageHeader({
   return (
     <header className={classes.join(" ")}>
       <AmbientBackdrop />
-      {breadcrumb && breadcrumb.length > 0 ? (
-        <nav className={styles.crumbs} aria-label="Breadcrumb">
-          {breadcrumb.map((crumb, index) => (
-            <Fragment key={crumb.label}>
-              {/* From the second crumb on, so the trail never opens with a slash. */}
-              {index > 0 ? <span aria-hidden="true">/</span> : null}
-              {crumb.to ? (
-                <Link to={crumb.to} className={styles.crumbLink}>
-                  {crumb.label}
-                </Link>
-              ) : (
-                <span aria-current="page">{crumb.label}</span>
-              )}
-            </Fragment>
-          ))}
-        </nav>
-      ) : null}
       {/* The text column, so `actions` can sit beside the whole block rather
-          than beside its first line. */}
-      <div>
+          than beside its first line — and so it fills the measure instead of
+          hugging its own text. The breadcrumb lives inside it, not beside it:
+          as a sibling it competed with the column for the row's width and
+          wrapped the two challenge forms onto two lines, which is exactly what
+          the before/after measurement caught (#404). */}
+      <div className={styles.text}>
+        {breadcrumb && breadcrumb.length > 0 ? (
+          <nav className={styles.crumbs} aria-label="Breadcrumb">
+            {breadcrumb.map((crumb, index) => (
+              <Fragment key={crumb.label}>
+                {/* From the second crumb on, so the trail never opens with a slash. */}
+                {index > 0 ? <span aria-hidden="true">/</span> : null}
+                {crumb.to ? (
+                  <Link to={crumb.to} className={styles.crumbLink}>
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span aria-current="page">{crumb.label}</span>
+                )}
+              </Fragment>
+            ))}
+          </nav>
+        ) : null}
         {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
         <PageTitle size={marketing ? "lg" : "md"} className={styles.title}>
           {title}
