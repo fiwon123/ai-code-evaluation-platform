@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
@@ -390,6 +391,7 @@ function ChallengeDetail() {
       </p>
 
       <div className={styles.header}>
+        <AmbientBackdrop />
         <div>
           <PageTitle className={styles.title}>{challenge.title}</PageTitle>
         </div>

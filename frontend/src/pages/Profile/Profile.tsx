@@ -6,6 +6,7 @@ import {
   type FormEvent,
 } from "react";
 import { Link } from "react-router-dom";
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
@@ -801,6 +802,7 @@ function Profile() {
   return (
     <div className={styles.page}>
       <Card className={styles.profileCard}>
+        <AmbientBackdrop />
         <div className={styles.avatar}>{user.username.charAt(0).toUpperCase()}</div>
         <div className={styles.identity}>
           <PageTitle size="md" className={styles.name}>{user.username}</PageTitle>

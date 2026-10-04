@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
@@ -103,6 +104,7 @@ function AdminSubmissions() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
+        <AmbientBackdrop />
         <PageTitle size="md" className={styles.title}>Submissions</PageTitle>
         <p className={styles.subtitle}>Every evaluation run across the platform.</p>
       </div>

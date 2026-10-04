@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import Card from "../components/Card/Card.tsx";
 import PageTitle from "../components/PageTitle/PageTitle.tsx";
@@ -79,6 +80,7 @@ function SharedResultPage() {
       </p>
 
       <div className={styles.header}>
+        <AmbientBackdrop />
         <PageTitle className={styles.title}>{result.challenge_title}</PageTitle>
         <Badge variant={statusVariant(result.status)}>{result.status}</Badge>
       </div>

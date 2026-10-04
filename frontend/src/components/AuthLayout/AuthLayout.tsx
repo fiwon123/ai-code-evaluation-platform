@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import AmbientBackdrop from "../AmbientBackdrop/AmbientBackdrop.tsx";
 import Card from "../Card/Card.tsx";
 import Logo from "../Logo/Logo.tsx";
 import PageTitle from "../PageTitle/PageTitle.tsx";
@@ -49,21 +50,18 @@ const PROMISES = [
  * the aside's `<h2>` from preceding the page's `<h1>`, which is how a heading
  * outline ends up starting at level two.
  *
- * The blobs are the same `auroraDrift` decoration the hero uses, declared once
- * here rather than copied into three modules, and they opt out of reduced
- * motion in this file — an ambient animation that forgets is the exact defect
- * `ambient-motion.test.ts` exists to catch.
+ * The blobs are the same `auroraDrift` decoration the hero uses, and since #402
+ * they come from the shared `AmbientBackdrop` rather than a third copy of these
+ * rules — an ambient animation that forgets to opt out of reduced motion is the
+ * exact defect `ambient-motion.test.ts` exists to catch, and a guarantee that
+ * depends on every copy remembering is not a guarantee.
  */
 function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
   return (
     <div className={styles.page}>
       {/* Decorative only: every blob is aria-hidden and the whole backdrop is
           pointer-transparent, so it cannot intercept a click on the form. */}
-      <div className={styles.backdrop} aria-hidden="true">
-        <span className={styles.blobPrimary} />
-        <span className={styles.blobAccent} />
-        <span className={styles.blobViolet} />
-      </div>
+      <AmbientBackdrop variant="auth" />
 
       <div className={styles.grid}>
         <div className={styles.main}>

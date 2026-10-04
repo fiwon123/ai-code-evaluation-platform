@@ -4,11 +4,11 @@
   margin: 0 auto;
 }
 
-/* Anchors the ambient layer. The decoration is `position: absolute` with a
-   negative z-index, so the header has to establish a stacking context —
-   without `isolation: isolate` the blobs would escape behind the page
-   background and vanish, and `overflow: hidden` stops their blur bleeding
-   into the walkthrough below. */
+/* Anchors the shared ambient layer (see `AmbientBackdrop`): the decoration is
+   `position: absolute` with a negative z-index, so the header has to establish
+   a stacking context — without `isolation: isolate` the blobs would escape
+   behind the page background and vanish, and `overflow: hidden` stops their
+   blur bleeding into the walkthrough below. */
 .header {
   text-align: center;
   margin-bottom: var(--space-12);
@@ -19,77 +19,13 @@
   border-radius: var(--radius-xl);
 }
 
-/* Same shape as Home's `.heroBackdrop`: its own stacking context behind every
-   child, so no decorative rule can win a specificity fight with the copy. */
-.ambientBackdrop {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-/* The drift, composed from `ambient.css` rather than declared here.
-   This started as a local `@keyframes auroraDrift` copy, a workaround for a
-   Vite CSS-modules trap: a build rewrites a keyframe *reference* inside a module
-   to a scoped name (`animation: auroraDrift` -> `animation: _auroraDrift_18avk_1`)
-   but does not rewrite the `@keyframes` rule when that rule lives in an unscoped
-   stylesheet, so the element ends up naming a keyframes rule that does not
-   exist. The animation never starts, `document.getAnimations()` reports nothing,
-   and the page looks fine while simply not moving.
-
-   Composing from a shared file fixes that at the root for every module instead of
-   one file at a time — Home, AuthLayout and the challenge forms were all still
-   dead when this copy was the only one that worked. See `ambient.css`, and
-   `ambient-motion.test.ts`, which now fails if a module names a keyframe it
-   cannot resolve. */
-
-/* Sizes/offsets here. Tints are `color-mix` over tokens both palettes define,
-   which is what `ambient-motion.test.ts` requires — a literal hex fails it. */
-.blobPrimary,
-.blobAccent {
-  position: absolute;
-  border-radius: var(--radius-full);
-  filter: blur(80px);
-}
-
-.blobPrimary {
-  composes: ambientDrift from "../../styles/ambient.css";
-  width: 380px;
-  height: 380px;
-  top: -180px;
-  left: -120px;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--color-primary) 34%, transparent),
-    transparent 70%
-  );
-}
-
-.blobAccent {
-  composes: ambientDrift from "../../styles/ambient.css";
-  width: 300px;
-  height: 300px;
-  bottom: -160px;
-  right: -100px;
-  animation-duration: 32s;
-  animation-delay: -8s;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--color-secondary) 28%, transparent),
-    transparent 70%
-  );
-}
-
-/* The opt-out for these two now ships with the composed class in `ambient.css`.
-   Kept here as well: it is the same belt-and-braces the hero and the auth
-   layout carry, and it costs one rule. */
-@media (prefers-reduced-motion: reduce) {
-  .blobPrimary,
-  .blobAccent {
-    animation: none;
-  }
-}
+/* The blobs that used to be declared here are now `AmbientBackdrop` (#402),
+   shared with every other page. This header keeps the three declarations that
+   host it — `position: relative`, `isolation: isolate`, `overflow: hidden` —
+   because a `z-index: -1` backdrop without them paints behind the page
+   background instead of behind the copy. The drift is composed from
+   `ambient.css` for the same reason it was here: see the top of that file for
+   the scoping trap that silently killed this page's animation once already. */
 
 /* Layout only — size and the gradient come from the shared PageTitle.
    No light-mode override on purpose: `--gradient-title` is built from the

@@ -1,4 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Card from "../../components/Card/Card.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import {
@@ -27,6 +28,7 @@ export function LegalShell({ document }: LegalShellProps) {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <AmbientBackdrop />
         <span className="eyebrow">Legal</span>
         <PageTitle size="lg" className={styles.title}>
           {document.title}

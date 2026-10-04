@@ -329,6 +329,67 @@ export async function mockApi(
       return;
     }
 
+    // The admin dashboard and the two remaining admin tables (#402). They were
+    // the only admin endpoints `mockApi` did not answer, which is why
+    // `/admin/challenges` and `/admin/submissions` had no e2e coverage at all:
+    // the route returned the error boundary, and a test that only asserted "a
+    // heading exists" passed on it. Added as an empty paginated result for the
+    // same reason the rest of this fixture is empty — the claims under test are
+    // about layout and decoration, not about rows.
+    if (
+      method === "GET" &&
+      url.pathname === "/api/admin/stats" &&
+      options.admin
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          total_users: ADMIN_USERS.length,
+          total_challenges: CHALLENGES.length,
+          total_submissions: SUBMISSIONS.length,
+          completed_submissions: 0,
+          failed_submissions: 0,
+          pending_submissions: 0,
+          average_score: null,
+          // Every breakdown group is required, not optional: the dashboard calls
+          // `.map()` on all six, so a partial payload throws inside the chart
+          // section and React replaces the whole page with its error boundary —
+          // which is exactly what this fixture did on the first attempt, and why
+          // the route looked like it simply had no backdrop.
+          submissions_by_status: [],
+          submissions_by_language: [],
+          submissions_by_provider: [],
+          submissions_by_error_type: [],
+          top_challenges: [],
+          submissions_last_14_days: [],
+        }),
+      });
+      return;
+    }
+
+    if (
+      method === "GET" &&
+      (url.pathname === "/api/admin/challenges" ||
+        url.pathname === "/api/admin/submissions") &&
+      options.admin
+    ) {
+      const pageNumber = Number(url.searchParams.get("page") ?? "1");
+      const pageSize = Number(url.searchParams.get("page_size") ?? "20");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [],
+          total: 0,
+          page: pageNumber,
+          page_size: pageSize,
+          pages: 1,
+        }),
+      });
+      return;
+    }
+
     if (method === "POST" && url.pathname === "/api/challenges" && signedIn) {
       const body = (route.request().postDataJSON() ?? {}) as Record<
         string,

@@ -19,6 +19,15 @@
 }
 
 .header {
+  /* #402: hosts the shared `AmbientBackdrop`. All three declarations are
+     load-bearing and the reason is in that component: `position` anchors it,
+     `isolation: isolate` is what makes its `z-index: -1` mean "behind this
+     header" rather than "behind the page background" (where it vanishes), and
+     `overflow: hidden` clips the blobs' 80px blur to the header instead of
+     letting it smear over the content below. */
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   composes: fadeInUp from "../styles/enter.css";
   max-width: 760px;
 }
