@@ -183,6 +183,13 @@
      so a retune cannot quietly drop below it. */
   --color-accent-teal: #0f766e;
   --color-accent-violet: #6d28d9;
+
+  /* #402: the tint strengths for `AmbientBackdrop`'s corner wash. Values, not
+   * guesses — `e2e/ambient-wash.spec.ts` measures the composited contrast of
+   * header text over the wash in both themes on all 19 routes. The light wash
+   * sits on a near-white page, where text has contrast to spare. */
+  --wash-primary: 34%;
+  --wash-accent: 20%;
   --color-accent-rose: #be123c;
 
   /* Code surfaces (stay dark in both themes for readability) */
@@ -353,6 +360,18 @@
        rose   6.24:1 / 6.77:1 */
   --color-accent-teal: #2dd4bf;
   --color-accent-violet: #a78bfa;
+
+  /* #402: the dark wash is weaker than the light one, and that is not a taste
+   * call. The dark palette's muted text starts around 4.9:1 on its own surfaces
+   * where the light palette's starts around 6.6:1, so a tint strong enough to
+   * read in the dark theme spends contrast the dark theme does not have.
+   * Measured across every route and both breakpoints, the tightest case in the
+   * app is the profile card's "Member since" line (89px from the primary blob's
+   * centre): 34% -> 3.70:1, 22% -> 4.55, 18% -> 4.62, 14% -> 4.69, 10% -> 4.76.
+   * 14% is where a screenshot review stopped calling the wash "barely there"
+   * while still clearing AA with margin. */
+  --wash-primary: 14%;
+  --wash-accent: 10%;
   --color-accent-rose: #fb7185;
 
   /* Code surfaces (stay dark in both themes for readability) */

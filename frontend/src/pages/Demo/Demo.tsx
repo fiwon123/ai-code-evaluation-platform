@@ -10,6 +10,7 @@ import { useAuth } from "../../context/AuthContext.tsx";
 import { useNow } from "../../hooks/useNow.ts";
 import { usePrefersReducedMotion } from "../../hooks/usePrefersReducedMotion.ts";
 import { useSubmissionSocket } from "../../hooks/useSubmissionSocket.ts";
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import Reveal from "../../components/Reveal/Reveal.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
@@ -355,13 +356,7 @@ function Demo() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        {/* Decoration only. `aria-hidden` because it carries no information the
-            heading does not, and `pointer-events` is off in CSS so it cannot
-            take a click meant for the page. */}
-        <div className={styles.ambientBackdrop} aria-hidden="true">
-          <span className={styles.blobPrimary} />
-          <span className={styles.blobAccent} />
-        </div>
+        <AmbientBackdrop />
         <span className="eyebrow">Demo</span>
         <PageTitle size="lg" className={styles.title}>See how it works</PageTitle>
         <p className={styles.subtitle}>

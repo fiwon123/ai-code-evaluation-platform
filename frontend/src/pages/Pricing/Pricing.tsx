@@ -1,3 +1,4 @@
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
@@ -100,6 +101,7 @@ function Pricing() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <AmbientBackdrop />
         <span className="eyebrow">Pricing</span>
         <PageTitle size="lg" className={styles.title}>Simple, transparent pricing</PageTitle>
         <p className={styles.subtitle}>

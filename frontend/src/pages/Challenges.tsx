@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import BadgeSelect from "../components/BadgeSelect/BadgeSelect.tsx";
 import Button from "../components/Button/Button.tsx";
@@ -175,6 +176,7 @@ function Challenges() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
+        <AmbientBackdrop />
         <div>
           <PageTitle className={styles.title}>Challenges</PageTitle>
           <p className={styles.subtitle}>

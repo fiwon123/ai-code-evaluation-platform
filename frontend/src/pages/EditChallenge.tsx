@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import styles from "./EditChallenge.module.css";
 import { challengesApi } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
+import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Card from "../components/Card/Card.tsx";
 import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
@@ -149,6 +150,7 @@ export default function EditChallenge() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <AmbientBackdrop />
         <nav className={styles.crumbs} aria-label="Breadcrumb">
           <Link to="/challenges" className={styles.crumbLink}>
             Challenges

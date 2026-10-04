@@ -562,6 +562,33 @@ export interface SweepMotion {
  * `src/pages/visual-sweep.lock.test.ts` checks both directions — so a new
  * motion surface without either a pass or a written exception fails the build.
  */
+/**
+ * Every route that hosts the shared header ambient wash, and why.
+ *
+ * Before #402 only `/demo` carried it. `AmbientBackdrop` now paints it on every
+ * other header too, so "Home is the only page with a motion system on it" — the
+ * claim this array exists to make checkable — stopped being true, and would have
+ * done so silently, because a route that gains motion is not a test failure
+ * anywhere. That is the gap `films every page that animates, or says in writing
+ * why it does not` in `visual-sweep.lock.test.ts` closes.
+ *
+ * Derived from `SWEEP_ROUTES` rather than retyped, so adding a route to the
+ * matrix cannot skip the declaration: the new entry is there before anyone
+ * remembers this file exists. `/auth/callback` counts — it renders no header of
+ * its own but still mounts `AuthLayout`, so the auth backdrop drifts behind it.
+ * Home is excluded because its ambient layer is a different thing with its own
+ * passes above.
+ */
+const AMBIENT_WASH_ROUTES = SWEEP_ROUTES.map((route) => route.path).filter(
+  (path) => path !== "/",
+);
+
+const AMBIENT_WASH_WHY =
+  "The header ambient wash (#402): the shared `AmbientBackdrop`'s `auroraDrift`, which is the only motion on this page.";
+
+const AMBIENT_WASH_EXCUSION =
+  "No filmstrip, and the reason is that the frames would be redundant rather than missing. The wash is one shared component painting the same two keyframes on every host, so a strip here is the `/demo` strip again with only the host height changed. The height is the part worth checking, and it is asserted where it can be measured instead of eyeballed: `e2e/ambient-wash.spec.ts` checks on every route, in both themes, that the running animation is named `auroraDrift`, that the wash is clipped to its host and fills it, that its visible area clears a floor, and that any text it reaches keeps 4.5:1; `e2e/ambient-motion.spec.ts` covers the reduced-motion cut. #402.";
+
 export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = [
   {
     route: "/",
@@ -575,6 +602,9 @@ export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = 
     route: "/pricing",
     why: "The FAQ disclosure. Its glyph is element-level and seekable; its answer animates through `::details-content`, which no `Animation` object represents.",
   },
+  ...AMBIENT_WASH_ROUTES.filter(
+    (route) => route !== "/demo" && route !== "/pricing",
+  ).map((route) => ({ route, why: AMBIENT_WASH_WHY })),
 ];
 
 /**
@@ -601,6 +631,13 @@ export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = 
  * way `useCountUp` is handled, is the missing piece.
  */
 export const SWEEP_MOTION_EXCEPTIONS: Readonly<Record<string, string>> = {
+  // `/demo` is absent because it has a pass; `/pricing` keeps its own reason
+  // below because its blind spot is a different kind of thing.
+  ...Object.fromEntries(
+    AMBIENT_WASH_ROUTES.filter(
+      (route) => route !== "/demo" && route !== "/pricing",
+    ).map((route) => [route, AMBIENT_WASH_EXCUSION]),
+  ),
   "/pricing":
     "The FAQ answer animates via ::details-content, which getAnimations() never reports, so a seek-based filmstrip would place the glyph and leave the panel snapped — a sheet that looks like the #332 desync. Asserted numerically in e2e/pricing.spec.ts; the blind spot is recorded in the manifest by censusPseudoTransitions. #334.",
 };

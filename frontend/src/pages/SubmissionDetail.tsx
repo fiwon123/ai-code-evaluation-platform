@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AttemptTimeline from "../components/AttemptTimeline/AttemptTimeline.tsx";
+import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import EmptyState from "../components/EmptyState/EmptyState.tsx";
 import Button from "../components/Button/Button.tsx";
@@ -176,6 +177,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
     return (
       <div className={styles.page}>
         <div className={styles.header}>
+          <AmbientBackdrop />
           <PageTitle className={styles.title}>Evaluation report</PageTitle>
         </div>
         <div role="status" aria-label="Loading submission">
@@ -212,6 +214,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
       </p>
 
       <div className={styles.header}>
+        <AmbientBackdrop />
         <PageTitle className={styles.title}>Evaluation report</PageTitle>
         <Badge variant={statusVariant(submission.status)}>{submission.status}</Badge>
       </div>

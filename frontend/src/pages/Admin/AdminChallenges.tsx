@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
@@ -111,6 +112,7 @@ function AdminChallenges() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
+        <AmbientBackdrop />
         <PageTitle size="md" className={styles.title}>Challenges</PageTitle>
         <p className={styles.subtitle}>Review and remove challenges.</p>
       </div>
