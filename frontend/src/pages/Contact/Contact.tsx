@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
-import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import {
   Field,
   TextAreaInput,
@@ -112,15 +111,12 @@ function Contact() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <AmbientBackdrop />
-        <span className="eyebrow">Contact</span>
-        <PageTitle size="lg" className={styles.title}>Get in touch</PageTitle>
-        <p className={styles.subtitle}>
-          Questions about the platform, enterprise pricing, or contributing?
-          We'd love to hear from you.
-        </p>
-      </header>
+      <PageHeader
+        tone="marketing"
+        eyebrow="Contact"
+        title="Get in touch"
+        subtitle="Questions about the platform, enterprise pricing, or contributing? We'd love to hear from you."
+      />
 
       <div className={styles.columns}>
         <Card className={styles.formCard}>

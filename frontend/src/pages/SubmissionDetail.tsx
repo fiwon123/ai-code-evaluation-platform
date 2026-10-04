@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import AttemptTimeline from "../components/AttemptTimeline/AttemptTimeline.tsx";
-import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import EmptyState from "../components/EmptyState/EmptyState.tsx";
 import Button from "../components/Button/Button.tsx";
 import Card from "../components/Card/Card.tsx";
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../components/PageHeader/PageHeader.tsx";
 import ResultReport from "../components/ResultReport/ResultReport.tsx";
 import ShareResult from "../components/ShareResult/ShareResult.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
@@ -176,10 +175,7 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
   if (loading) {
     return (
       <div className={styles.page}>
-        <div className={styles.header}>
-          <AmbientBackdrop />
-          <PageTitle className={styles.title}>Evaluation report</PageTitle>
-        </div>
+        <PageHeader tone="detail" title="Evaluation report" />
         <div role="status" aria-label="Loading submission">
           <Skeleton variant="text" width="40%" height="1.5rem" />
           <Skeleton variant="rect" width="100%" height="180px" />
@@ -213,11 +209,11 @@ function SubmissionDetail({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: { pollI
         <Link to="/challenges">← Back to challenges</Link>
       </p>
 
-      <div className={styles.header}>
-        <AmbientBackdrop />
-        <PageTitle className={styles.title}>Evaluation report</PageTitle>
-        <Badge variant={statusVariant(submission.status)}>{submission.status}</Badge>
-      </div>
+      <PageHeader
+        tone="detail"
+        title="Evaluation report"
+        actions={<Badge variant={statusVariant(submission.status)}>{submission.status}</Badge>}
+      />
       <hr className="dividerRule" />
 
       {inProgress ? (

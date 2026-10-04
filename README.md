@@ -9,6 +9,14 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![Tests](https://img.shields.io/badge/tests-2006%20passing-brightgreen.svg)](#running-the-tests-locally)
 [![License](https://img.shields.io/badge/license-Portfolio-orange.svg)](LICENSE)
+<p align="center">
+  <img src="docs/screenshots/logo.svg" alt="AI Code Evaluation Platform Logo" width="96" height="96">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="AI Code Evaluation Platform - Home Page" width="100%">
+</p>
+
 
 A platform that accepts coding challenges, generates solutions with LLMs, executes the
 generated code in isolated Docker sandboxes, runs automated test suites, and produces
@@ -55,22 +63,18 @@ and across runs. The output is a measurement, not an impression.
 
 ## Screenshots
 
-> **Adding images:** drop screenshots in `docs/screenshots/` and uncomment the `src` paths
-> below. The repository intentionally ships without binary assets, so the tree stays
-> text-only until you decide what to show.
-
 ### Landing page
 
 The public entry point — what the product claims, and the path into signing up.
 
-<!-- ![Landing page](docs/screenshots/landing.png) -->
+![Landing page](docs/screenshots/home.png)
 
 ### Challenge list and search
 
 Browse the challenge catalogue, filter by language, and open a challenge to see its
 prompt, tests, and submission history.
 
-<!-- ![Challenges](docs/screenshots/challenges.png) -->
+![Challenges](docs/screenshots/challenges.png)
 
 ### Evaluation result
 

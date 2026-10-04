@@ -256,6 +256,10 @@ describe("marketing hero", () => {
    * a missing rule quietly pass.
    */
   const HEADER_OWNER: Record<string, string> = {
+    "About/About.module.css": "About/About.tsx",
+    "Contact/Contact.module.css": "Contact/Contact.tsx",
+    "Features/Features.module.css": "Features/Features.tsx",
+    "Pricing/Pricing.module.css": "Pricing/Pricing.tsx",
     "Legal/Legal.module.css": "Legal/LegalShell.tsx",
   };
 
