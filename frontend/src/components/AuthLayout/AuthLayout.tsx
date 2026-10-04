@@ -78,7 +78,7 @@ function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
         </div>
 
         <aside className={styles.aside}>
-          <Logo size="lg" />
+          <Logo size="lg" variant="auth" />
           <h2 className={styles.asideTitle}>
             Every AI solution, scored the same way
           </h2>

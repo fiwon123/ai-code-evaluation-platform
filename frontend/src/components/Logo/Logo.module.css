@@ -18,6 +18,10 @@
   letter-spacing: -0.01em;
 }
 
+.auth .wordmark {
+  color: var(--color-text);
+}
+
 .accent {
   color: var(--color-primary);
 }

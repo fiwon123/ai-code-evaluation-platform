@@ -5,13 +5,14 @@ interface LogoProps {
   size?: "sm" | "md" | "lg";
   showText?: boolean;
   className?: string;
+  variant?: "default" | "auth";
 }
 
-function Logo({ size = "md", showText = true, className = "" }: LogoProps) {
+function Logo({ size = "md", showText = true, className = "", variant = "default" }: LogoProps) {
   const gradientId = useId();
 
   return (
-    <span className={`${styles.logo} ${styles[size]} ${className}`}>
+    <span className={`${styles.logo} ${styles[size]} ${styles[variant]} ${className}`}>
       <svg
         className={styles.mark}
         viewBox="0 0 48 48"
