@@ -493,17 +493,22 @@ describe("Demo page language filter", () => {
   const optionValues = (select: HTMLElement) =>
     Array.from(select.querySelectorAll("option")).map((o) => o.value);
 
-  it("offers 'All languages' first, then one symbol-led option per language that has a challenge", async () => {
+  it("offers 'All languages' first, then one option per language that has a challenge", async () => {
     renderPage();
     await screen.findByRole("heading", { name: "What will run" });
 
     const select = languageFilter() as HTMLSelectElement;
-    // Catalog order, not arrival order: the fixture hands over py/go/js but
-    // LANGUAGES is the deliberate order, so the control reads Py, JS, Go.
-    expect(optionValues(select)).toEqual(["go", "javascript", "python"]);
+    // "All languages" is the state the page loads in, so it leads — and without
+    // it the control is a `<select>` whose value matches no option, painting the
+    // first language while the page shows every challenge (#394).
+    //
+    // Alphabetical by label, not arrival order: the fixture hands over py/go/js,
+    // and the control reads Go, JavaScript, Python.
+    expect(optionValues(select)).toEqual(["", "go", "javascript", "python"]);
 
-    expect(select.options[0].textContent).toBe("Go");
-    expect(select.options[2].textContent).toBe("Python");
+    expect(select.options[0].textContent).toBe("All languages");
+    expect(select.options[1].textContent).toBe("Go");
+    expect(select.options[3].textContent).toBe("Python");
   });
 
   it("does not offer a language that has no challenge behind it", async () => {
@@ -600,13 +605,16 @@ describe("Demo page language filter", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("names each challenge option with its language symbol", async () => {
+  it("names each challenge option with its title alone", async () => {
     renderPage();
     await screen.findByRole("heading", { name: "What will run" });
 
     const select = challengeSelect() as HTMLSelectElement;
-    // Title first — that is what is being chosen — with the language symbol
-    // behind it as the identity cue.
+    // Title only. The language used to be appended as " — Go" and was dropped
+    // rather than moved: the filter above admits one language at a time, so
+    // inside any one list the suffix would be identical on every option. The
+    // language is still on screen as the `--lang-accent` stripe and the preview's
+    // `LanguageBadge`, neither of which a closed `<select>` can paint.
     expect(select.options[0].textContent).toBe("Two Sum");
     expect(select.options[1].textContent).toBe("Longest Common Prefix");
   });
@@ -621,14 +629,30 @@ describe("Demo page language filter", () => {
     const accent = () =>
       container.querySelector<HTMLElement>("[style*='--lang-accent']");
     // Unfiltered is deliberately transparent, not absent: whether a stripe is
-    // visible is the stylesheet's call, not React's.
-    // Unfiltered - no "All" option, so initial state depends on selected language
-    expect(accent()?.style.getPropertyValue("--lang-accent")).not.toBe("transparent");
+    // visible is the stylesheet's call, not React's. `languageMeta("")` would
+    // answer "Unknown" in grey, which is an identity this state does not have.
+    expect(accent()?.style.getPropertyValue("--lang-accent")).toBe("transparent");
 
     fireEvent.change(languageFilter(), { target: { value: "go" } });
     expect(accent()?.style.getPropertyValue("--lang-accent")).toBe(
       languageMeta("go").color,
     );
+  });
+
+  it("lets the reader widen the filter back to every challenge", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "What will run" });
+
+    fireEvent.change(languageFilter(), { target: { value: "go" } });
+    expect(optionValues(challengeSelect())).toEqual(["go1"]);
+
+    // The reset is the reason "All languages" is an option and not a comment:
+    // narrowing the filter used to be a one-way door, because no option matched
+    // the unfiltered state (`value=""`) and the browser painted the first
+    // language while the page showed everything (#394).
+    fireEvent.change(languageFilter(), { target: { value: "" } });
+
+    expect(optionValues(challengeSelect())).toEqual(["py1", "go1", "js1"]);
   });
 
   it("lets a keyword chip reach a challenge the language filter was hiding", async () => {
