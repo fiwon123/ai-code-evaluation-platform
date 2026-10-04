@@ -566,14 +566,14 @@ function SectionHead({
   subtitle: string;
 }) {
   return (
-    <header className={styles.sectionHead}>
+    <div className={styles.sectionHead}>
       <p className={styles.sectionEyebrow}>
         <span className={styles.eyebrowDot} aria-hidden="true" />
         {eyebrow}
       </p>
       <h2 className={styles.sectionTitle}>{title}</h2>
       <p className={styles.sectionSubtitle}>{subtitle}</p>
-    </header>
+    </div>
   );
 }
 
