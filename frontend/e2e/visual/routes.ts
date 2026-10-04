@@ -562,6 +562,7 @@ export interface SweepMotion {
  * `src/pages/visual-sweep.lock.test.ts` checks both directions — so a new
  * motion surface without either a pass or a written exception fails the build.
  */
+<<<<<<< HEAD
 /**
  * Every route that hosts the shared header ambient wash, and why.
  *
@@ -589,6 +590,8 @@ const AMBIENT_WASH_WHY =
 const AMBIENT_WASH_EXCUSION =
   "No filmstrip, and the reason is that the frames would be redundant rather than missing. The wash is one shared component painting the same two keyframes on every host, so a strip here is the `/demo` strip again with only the host height changed. The height is the part worth checking, and it is asserted where it can be measured instead of eyeballed: `e2e/ambient-wash.spec.ts` checks on every route, in both themes, that the running animation is named `auroraDrift`, that the wash is clipped to its host and fills it, that its visible area clears a floor, and that any text it reaches keeps 4.5:1; `e2e/ambient-motion.spec.ts` covers the reduced-motion cut. #402.";
 
+=======
+>>>>>>> main
 export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = [
   {
     route: "/",
@@ -602,9 +605,12 @@ export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = 
     route: "/pricing",
     why: "The FAQ disclosure. Its glyph is element-level and seekable; its answer animates through `::details-content`, which no `Animation` object represents.",
   },
+<<<<<<< HEAD
   ...AMBIENT_WASH_ROUTES.filter(
     (route) => route !== "/demo" && route !== "/pricing",
   ).map((route) => ({ route, why: AMBIENT_WASH_WHY })),
+=======
+>>>>>>> main
 ];
 
 /**
@@ -631,6 +637,7 @@ export const SWEEP_MOTION_SURFACES: readonly { route: string; why: string }[] = 
  * way `useCountUp` is handled, is the missing piece.
  */
 export const SWEEP_MOTION_EXCEPTIONS: Readonly<Record<string, string>> = {
+<<<<<<< HEAD
   // `/demo` is absent because it has a pass; `/pricing` keeps its own reason
   // below because its blind spot is a different kind of thing.
   ...Object.fromEntries(
@@ -638,6 +645,8 @@ export const SWEEP_MOTION_EXCEPTIONS: Readonly<Record<string, string>> = {
       (route) => route !== "/demo" && route !== "/pricing",
     ).map((route) => [route, AMBIENT_WASH_EXCUSION]),
   ),
+=======
+>>>>>>> main
   "/pricing":
     "The FAQ answer animates via ::details-content, which getAnimations() never reports, so a seek-based filmstrip would place the glyph and leave the panel snapped — a sheet that looks like the #332 desync. Asserted numerically in e2e/pricing.spec.ts; the blind spot is recorded in the manifest by censusPseudoTransitions. #334.",
 };

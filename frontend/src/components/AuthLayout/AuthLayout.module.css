@@ -9,10 +9,6 @@
 
 .page {
   position: relative;
-  /* #402: the shared ambient backdrop is `z-index: -1`, which needs a stacking
-     context to mean "behind the card" instead of "behind this page's own
-     background" — where it would be invisible. */
-  isolation: isolate;
   min-height: calc(100vh - var(--header-height));
   display: flex;
   align-items: center;
@@ -129,17 +125,75 @@
 }
 
 /* ---- Ambient backdrop -------------------------------------------------
-   These blobs were declared here until #402 and now live in
-   `components/AmbientBackdrop`, shared with every other page shell — three
-   hand-copies of one decoration is how the drift ended up dead in one module
-   and alive in another (see the top of `styles/ambient.css`). The colours are
-   unchanged, and still `color-mix` over tokens both palettes define, so
-   `design-tokens.test.ts` stays green by construction.
+   The landing hero's colour blobs. Colours are `color-mix` over tokens both
+   palettes define — no new token, so `design-tokens.test.ts` stays green by
+   construction.
 
-   `.page` grew `isolation: isolate` to go with it. The shared backdrop sits at
-   `z-index: -1`, which is only "behind the content" inside a stacking context;
-   without one these blobs paint behind `.page`'s own background and vanish. The
-   grid above carries `z-index: 1`, so it still wins either way. */
+   The drift is composed from `ambient.css` rather than declared here, and the
+   comment that used to sit above this block had the reason backwards: it said
+   the keyframe was "re-declared rather than imported", which was never true —
+   nothing was re-declared, so `animation: auroraDrift` was being rewritten to a
+   scoped name that matched no keyframes rule, and the backdrop never moved. The
+   shared file spells out the trap; composing from it is what fixes it. */
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.blobPrimary,
+.blobAccent,
+.blobViolet {
+  position: absolute;
+  border-radius: var(--radius-full);
+  filter: blur(80px);
+}
+
+.blobPrimary {
+  composes: ambientDrift from "../../styles/ambient.css";
+  width: 480px;
+  height: 480px;
+  top: -200px;
+  left: -140px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-primary) 34%, transparent),
+    transparent 70%
+  );
+}
+
+.blobAccent {
+  composes: ambientDrift from "../../styles/ambient.css";
+  width: 400px;
+  height: 400px;
+  top: 26%;
+  right: -170px;
+  animation-duration: 32s;
+  animation-delay: -8s;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent-teal) 26%, transparent),
+    transparent 70%
+  );
+}
+
+.blobViolet {
+  composes: ambientDrift from "../../styles/ambient.css";
+  width: 420px;
+  height: 420px;
+  bottom: -240px;
+  left: 26%;
+  animation-duration: 40s;
+  animation-delay: -16s;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent-violet) 24%, transparent),
+    transparent 70%
+  );
+}
 
 @media (min-width: 1024px) {
   .aside {
@@ -157,5 +211,18 @@
 @media (max-width: 640px) {
   .page {
     padding: var(--space-8) var(--space-4) var(--space-12);
+  }
+}
+
+/* Belt and braces: the opt-out ships with the composed class in `ambient.css`,
+   so this is no longer the thing that stops the drift. It stays because the
+   three blobs are also re-timed below (duration/delay), and a future edit that
+   re-declares the animation locally would otherwise reintroduce motion for a
+   reader who asked for none. */
+@media (prefers-reduced-motion: reduce) {
+  .blobPrimary,
+  .blobAccent,
+  .blobViolet {
+    animation: none;
   }
 }

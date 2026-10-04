@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
@@ -115,7 +114,6 @@ function AdminDashboard() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <AmbientBackdrop />
         <PageTitle size="md" className={styles.title}>Admin dashboard</PageTitle>
         <p className={styles.subtitle}>Platform-wide statistics and moderation.</p>
       </div>

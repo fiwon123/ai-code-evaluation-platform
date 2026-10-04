@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 
-import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import PageTitle from "../components/PageTitle/PageTitle.tsx";
 import styles from "./NotFound.module.css";
 
@@ -20,7 +19,6 @@ function NotFound() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <AmbientBackdrop />
         <PageTitle className={styles.title}>404 — Page Not Found</PageTitle>
         <p className={styles.subtitle}>
           The page you&apos;re looking for doesn&apos;t exist.

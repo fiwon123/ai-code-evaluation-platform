@@ -107,6 +107,7 @@ test.describe("Challenges list", () => {
     expect(groupBox!.height).toBeLessThanOrEqual(toolbarBox!.height);
   });
 
+<<<<<<< HEAD
   test("parks each card's forward link at the right edge, under its arrow", async ({ page }) => {
     await mockApi(page);
     await page.goto("/challenges");
@@ -190,6 +191,8 @@ test.describe("Challenges list", () => {
     expect(linkBox!.width).toBeLessThan(cardBox!.width / 2);
   });
 
+=======
+>>>>>>> main
   test("shows an empty state when the catalog is empty", async ({ page }) => {
     await mockApi(page, []);
 

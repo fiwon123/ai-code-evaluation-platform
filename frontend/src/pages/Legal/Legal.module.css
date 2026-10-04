@@ -4,6 +4,20 @@
   margin: 0 auto;
 }
 
+.header {
+  margin-bottom: var(--space-12);
+}
+
+/* Layout only — size and the gradient come from the shared PageTitle. */
+.title {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-lg);
+  max-width: 600px;
+}
 
 /* The revision date is deliberately a separate line, styled as metadata, so
    "when was this last reviewed" is answerable at a glance. */

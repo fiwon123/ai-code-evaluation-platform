@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
@@ -167,7 +166,6 @@ function AdminUsers() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <AmbientBackdrop />
         <PageTitle size="md" className={styles.title}>Users</PageTitle>
         <p className={styles.subtitle}>
           Manage accounts: promote admins, deactivate or restore, and delete

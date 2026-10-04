@@ -58,12 +58,9 @@ test.describe("Demo challenge picker", () => {
     // Go is the third fixture challenge (#007C91 in `languageMeta`).
     await filter.selectOption("go");
     await expect(challenge.locator("option")).toHaveCount(1);
-    // Title only. The option used to read "Edit Distance — Go"; the language was
-    // dropped from the text rather than moved, because one filter admits one
-    // language at a time and the suffix would be identical on every option in
-    // the list. The identity is on screen instead as the stripe below and the
-    // preview's language badge — neither of which a closed `<select>` paints.
-    await expect(challenge.locator("option").first()).toHaveText("Edit Distance");
+    await expect(challenge.locator("option").first()).toHaveText(
+      "Edit Distance — Go",
+    );
 
     const accent = await stripe.evaluate(
       (el) => getComputedStyle(el).getPropertyValue("--lang-accent").trim(),
@@ -83,20 +80,6 @@ test.describe("Demo challenge picker", () => {
     expect(painted.content).not.toBe("none");
     expect(painted.background.toLowerCase()).toContain("rgb(0, 124, 145)");
     expect(parseFloat(painted.width)).toBeGreaterThan(0);
-
-    // …and the filter has to open again. This is the assertion that was
-    // impossible to write while no option matched the unfiltered state: the
-    // reader could narrow the list and never widen it, and the control painted
-    // the first language the whole time (#394). Selecting by *label* rather than
-    // by value, because the label is the thing the reader clicks.
-    await filter.selectOption({ label: "All languages" });
-
-    await expect(challenge.locator("option")).toHaveCount(3);
-    await expect(filter).toHaveValue("");
-    const widened = await stripe.evaluate(
-      (el) => getComputedStyle(el).getPropertyValue("--lang-accent").trim(),
-    );
-    expect(widened).toBe("transparent");
   });
 
   test("keeps the preview on the visible challenge after narrowing", async ({

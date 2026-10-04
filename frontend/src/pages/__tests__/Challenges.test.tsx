@@ -156,51 +156,40 @@ describe("Challenges", () => {
     renderPage();
     await screen.findByText("Two Sum");
 
-    // The label alone, because the language's *symbol* is not in the option text:
-    // it is the `--lang-accent` stripe on the control, which is the only place a
-    // native `<select>` can carry colour (its own `color` is painted over by the
-    // closed control and the popup is OS-rendered). Spelled out rather than built
-    // from `languageMeta` so this pins the catalog instead of asserting the page
-    // agrees with the helper it calls.
+    // The option text carries the language's symbol, because that is the only
+    // identity a native `<select>` can show: an `<option>`'s own `color` is
+    // ignored by the closed control and the popup is OS-rendered. Spelled out
+    // rather than built from `languageMeta` so this pins the catalog instead of
+    // asserting the page agrees with the helper it calls.
     const languageOptions = [
-      "Python",
-      "JavaScript",
-      "TypeScript",
-      "Java",
-      "Go",
-      "C",
-      "C++",
-      "Rust",
-      "PHP",
-      "Ruby",
-      "Perl",
-      "Kotlin",
-      "Lua",
-      "C#",
-      "Swift",
-      "Dart",
-      "Scala",
-      "R",
-      "Haskell",
-      "Objective-C",
+      "Py Python",
+      "JS JavaScript",
+      "TS TypeScript",
+      "Jv Java",
+      "Go Go",
+      "C C",
+      "C++ C++",
+      "Rs Rust",
+      "PHP PHP",
+      "Rb Ruby",
+      "Pl Perl",
+      "Kt Kotlin",
+      "Lua Lua",
+      "C# C#",
+      "Sw Swift",
+      "Da Dart",
+      "Sc Scala",
+      "R R",
+      "Hs Haskell",
+      "ObjC Objective-C",
     ];
-    // Scoped to the language `<select>` itself. The previous version filtered
-    // *every* option on the page down to those matching the expected list, so an
-    // option whose text had drifted out of the list was dropped from both sides
-    // of the comparison and the assertion still passed — the same shape as the
-    // `locator.first` trap in #399: a lookup that cannot fail is not a check.
-    // Scoping immediately paid for itself: it is what surfaced the leading
-    // "All languages" option, which the old filter had been discarding.
-    const languageOptionTexts = () =>
-      Array.from(
-        (screen.getByLabelText(/Filter by language/i) as HTMLSelectElement).options,
-      ).map((option) => option.textContent);
+    const options = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent)
+      .filter((label) => languageOptions.includes(label ?? ""));
 
-    // "All languages" leads, and it is a real option rather than an absent
-    // filter: without it the control's `value=""` matches nothing and the browser
-    // paints the first language while the page is unfiltered — the same defect
-    // the demo picker had (#394).
-    expect(languageOptionTexts()).toEqual(["All languages", ...languageOptions]);
+    // Same ordering/labeling as the challenge forms (LANGUAGES constant).
+    expect(options).toEqual(languageOptions);
 
     // The dropdown must not shrink after filtering to a single language —
     // previously it was derived from the current page's results, so picking
@@ -210,7 +199,12 @@ describe("Challenges", () => {
     });
     await waitFor(() => expect(mockList).toHaveBeenCalled());
 
-    expect(languageOptionTexts()).toEqual(["All languages", ...languageOptions]);
+    const afterFilter = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent)
+      .filter((label) => languageOptions.includes(label ?? ""));
+
+    expect(afterFilter).toEqual(languageOptions);
   });
 
   it("filters by difficulty via the API", async () => {

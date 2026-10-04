@@ -27,7 +27,7 @@ import { mockApi } from "./data";
  */
 
 /** One pipeline cycle is 10s (see `pipelineStepActive` in Home.module.css). */
-const CYCLE_MS = 10_000;
+const CYCLE_MS = 5500;
 
 /**
  * Park the pipeline in frame and hold it there, so the recording brackets at
