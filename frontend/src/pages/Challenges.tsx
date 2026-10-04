@@ -42,16 +42,18 @@ const DIFFICULTY_FILTERS = [
 }[];
 
 /**
- * A language's option text, symbol first.
+ * A language's option text: the name alone.
  *
- * The symbol is the identity cue a plain dropdown cannot have — and it can only
- * be in the text at all, because a native `<select>` will not colour its own
- * options. Measured rather than assumed: with `style="color"` on an `<option>`,
- * `getComputedStyle` reports the colour, and the *closed control* still paints
- * its own `color`/`background-color` on the selected option's text, because
- * `select` colours its own text and inherits nothing from the option. The popup
- * is rendered by the OS and is not in the DOM to be styled. So the symbol goes
- * in the text, and the colour goes on the control via `--lang-accent` below.
+ * The symbol used to lead this string. It is now the `--lang-accent` stripe on
+ * the control below, and the reason it cannot stay in the text is worth keeping:
+ * a native `<select>` will not colour its own options. Measured rather than
+ * assumed — with `style="color"` on an `<option>`, `getComputedStyle` reports the
+ * colour, and the *closed control* still paints its own `color`/`background-color`
+ * on the selected option's text, because `select` colours its own text and
+ * inherits nothing from the option. The popup is rendered by the OS and is not in
+ * the DOM to be styled. So the colour goes on the control, and the text says only
+ * the name — which is what `Challenges.test.tsx` pins, and what
+ * `e2e/challenges.spec.ts` reads in computed style.
  */
 function languageFilterLabel(language: string): string {
   return languageMeta(language).label;

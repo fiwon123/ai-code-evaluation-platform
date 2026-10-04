@@ -20,7 +20,6 @@ import { extractError } from "../../utils/errors.ts";
 import { formatElapsed } from "../../utils/formatting.ts";
 import {
   extensionForLanguage,
-  LANGUAGES,
   languageLabel,
   languageMeta,
   runnerForLanguage,
@@ -59,24 +58,28 @@ const POLL_TIMEOUT_MS = 60000; // ~60s cap before we give up
 /** How long each walkthrough step holds the rail before it advances. */
 const STEP_CYCLE_MS = 2600;
 
-/** The no-language-filtered case. Not a language: nothing is a filter state. */
-const ALL_LANGUAGES = "all";
-
 /**
- * A language's option text, symbol first.
+ * A language's option text: the name alone.
  *
- * The symbol is the identity a closed dropdown cannot show for itself, and it
- * can only live in the text: a native `<select>` paints its own colour over the
- * selected option and its popup is rendered by the OS. The colour goes on the
- * control as a stripe instead, via `--lang-accent`.
+ * This used to be "symbol first", justified by the fact that a native
+ * `<select>` paints its selected option in the OS's own colours, so the symbol
+ * had to live in the text. That is still true of the popup — so the identity
+ * moved rather than disappeared: it is the `--lang-accent` stripe on the control,
+ * which is what `e2e/demo-picker.spec.ts` measures in computed style. Keep this
+ * in step with the stripe; a comment claiming a symbol the string does not carry
+ * is how the two drifted apart in the first place (#394).
  */
 function languageOptionLabel(language: string): string {
   return languageMeta(language).label;
 }
 
 /**
- * A challenge's option text: title first, because that is what is being chosen,
- * with its language symbol behind it as the identity cue.
+ * A challenge's option text: the title, and nothing else.
+ *
+ * The language used to be appended as " — Go". It was dropped rather than
+ * moved, and that is deliberate: the filter above admits one language at a time
+ * (or all of them), so within any single open list every option would carry the
+ * same suffix. Which challenge it is, is what the reader is choosing.
  */
 function challengeOptionLabel(challenge: Challenge): string {
   return challenge.title;
@@ -106,9 +109,9 @@ function Demo() {
    * The challenges the language filter admits.
    *
    * Only the languages that actually have a challenge behind them are offered,
-   * so the control never presents a choice that would empty the page. `LANGUAGES`
-   * is the full 20-language catalog and most of it has no demo challenge, so
-   * listing all of it would make "All languages" the only useful option.
+   * so the control never presents a choice that would empty the page. The
+   * 20-language catalog is not listed: most of it has no demo challenge, so
+   * listing all of it would leave "All languages" the only useful option.
    */
   const filterableLanguages = useMemo(() => {
     const langs = new Set<string>();
@@ -431,16 +434,18 @@ function Demo() {
 
               <div className={styles.filterRow}>
                 {/* The language filter. `--lang-accent` is always set, including
-                    `transparent` for "all", so whether the stripe is visible is
-                    decided by the stylesheet alone rather than by whether React
-                    happened to omit a `style` attribute. The accent is
-                    decoration, so it is not announced — the option text already
-                    names the language. */}
+                    `transparent` for the unfiltered state, so whether the stripe
+                    is visible is decided by the stylesheet alone rather than by
+                    whether React happened to omit a `style` attribute. The
+                    accent is decoration, so it is not announced — the option text
+                    already names the language. */}
                 <span
                   className={styles.languageFilter}
                   style={
                     {
-                      "--lang-accent": languageMeta(language).color,
+                      // `languageMeta("")` would answer "Unknown" in grey, which is
+                      // a language identity the unfiltered state does not have.
+                      "--lang-accent": language ? languageMeta(language).color : "transparent",
                     } as React.CSSProperties
                   }
                 >
@@ -452,7 +457,13 @@ function Demo() {
                     aria-label="Filter by language"
                     className={styles.languageSelect}
                   >
-  
+                    {/* The unfiltered state is `""`, and it has to be an option:
+                        without one the control is a `<select>` whose value matches
+                        no option, so the browser paints the *first language* while
+                        the page is showing all of them — and picking a language
+                        leaves no way back (#394). First, because it is the state
+                        the page loads in. */}
+                    <option value="">All languages</option>
                     {filterableLanguages.map((lang) => (
                       <option key={lang} value={lang}>
                         {languageOptionLabel(lang)}
@@ -460,7 +471,6 @@ function Demo() {
                     ))}
                   </SelectInput>
                 </span>
-
               </div>
 
               <div className={styles.runnerRow}>
