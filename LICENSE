@@ -1,0 +1,39 @@
+PORTFOLIO LICENSE
+
+Copyright (c) 2026 Felipe Inoue
+
+This software is provided as a portfolio demonstration project ("the Portfolio Work").
+
+PERMITTED USES
+  - View, study, learn from, and reference the source code for educational purposes.
+  - Use portions of the code as inspiration for your own original projects.
+  - Fork and modify the code for personal, educational, or non-commercial portfolio
+    purposes, provided attribution to the original author is preserved.
+
+RESTRICTIONS
+  - Commercial use, redistribution, sublicensing, or deployment in production
+    environments for commercial gain is prohibited without explicit written
+    permission from the copyright holder.
+  - The Portfolio Work may not be claimed as your own original creation without
+    proper attribution.
+
+AI DISCLOSURE AND THIRD-PARTY COMPONENTS
+  - Portions of the Portfolio Work were developed with the assistance of AI
+    coding tools, including for code generation, refactoring, test scaffolding,
+    and documentation.
+  - All AI-assisted output was reviewed, tested, and adapted. The author retains
+    authorship of the overall design, architecture, and implementation decisions.
+  - Third-party libraries, frameworks, runtimes, and tools used in the Portfolio
+    Work remain the property of their respective owners and are governed by their
+    own licenses. Nothing in this license transfers any right in those components.
+
+DISCLAIMER OF WARRANTY
+  THE PORTFOLIO WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+  FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT
+  HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION
+  OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+  PORTFOLIO WORK OR THE USE OR OTHER DEALINGS IN THE PORTFOLIO WORK.
+
+For commercial licensing inquiries or permission requests, please contact the
+copyright holder.
