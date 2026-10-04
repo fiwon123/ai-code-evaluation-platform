@@ -4,8 +4,8 @@
 :root,
 [data-theme="light"] {
   /* Colors */
-  --color-primary: #3b82f6;
-  --color-primary-hover: #60a5fa;
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
   --color-primary-light: #dbeafe;
   /* The fourth `-strong` step, and the one the other three were missing
    * (#348). `--color-primary` is the right blue for a *fill* and the wrong one
