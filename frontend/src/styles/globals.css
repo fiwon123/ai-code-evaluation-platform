@@ -16,6 +16,8 @@
    * move the lightness until the pair clears 4.5:1 on the tint it sits on. */
   --color-primary-strong: #1e40af;
   --color-secondary: #475569;
+  --color-success: #22c55e;
+  --color-success-light: #14532d;
   --color-success: #16a34a;
   --color-success-light: #dcfce7;
   /* Text-on-tint variants (issue #346).
@@ -183,6 +185,13 @@
      so a retune cannot quietly drop below it. */
   --color-accent-teal: #0f766e;
   --color-accent-violet: #6d28d9;
+
+  /* #402: the tint strengths for `AmbientBackdrop`'s corner wash. Values, not
+   * guesses — `e2e/ambient-wash.spec.ts` measures the composited contrast of
+   * header text over the wash in both themes on all 19 routes. The light wash
+   * sits on a near-white page, where text has contrast to spare. */
+  --wash-primary: 34%;
+  --wash-accent: 20%;
   --color-accent-rose: #be123c;
 
   /* Code surfaces (stay dark in both themes for readability) */
@@ -353,6 +362,18 @@
        rose   6.24:1 / 6.77:1 */
   --color-accent-teal: #2dd4bf;
   --color-accent-violet: #a78bfa;
+
+  /* #402: the dark wash is weaker than the light one, and that is not a taste
+   * call. The dark palette's muted text starts around 4.9:1 on its own surfaces
+   * where the light palette's starts around 6.6:1, so a tint strong enough to
+   * read in the dark theme spends contrast the dark theme does not have.
+   * Measured across every route and both breakpoints, the tightest case in the
+   * app is the profile card's "Member since" line (89px from the primary blob's
+   * centre): 34% -> 3.70:1, 22% -> 4.55, 18% -> 4.62, 14% -> 4.69, 10% -> 4.76.
+   * 14% is where a screenshot review stopped calling the wash "barely there"
+   * while still clearing AA with margin. */
+  --wash-primary: 14%;
+  --wash-accent: 10%;
   --color-accent-rose: #fb7185;
 
   /* Code surfaces (stay dark in both themes for readability) */
@@ -409,6 +430,36 @@
   --color-code-keyword: #c792ea;
   --color-code-type: #56b6c2;
   --color-code-fn: #e5c07b;
+
+  /* Site chrome (issue #393) — the sticky header and the footer, and ONE fixed
+   * dark panel in both themes. Declared here, outside both palette blocks, for
+   * the same reason the code surfaces above are: the band does not change with
+   * the theme, so a per-theme value can only be a second thing to drift.
+   *
+   * It could not be done with the `--color-*-inverse` tokens the two bands used
+   * before. Those are per-theme by contract — the dark palette aliases each one
+   * to the ordinary token, so `Card variant="dark"` stays a no-op there, which
+   * `card-dark.test.ts` locks — so the footer measured #0f172a in light mode and
+   * #131d33 in dark. Worse, it painted *theme ink* onto that fixed dark panel,
+   * and in light mode `.colTitle` came out at 1.00:1 (`--color-text` #0f172a on a
+   * #0f172a fill: the Product/Company/Legal headings were invisible) and
+   * `.copyright` at 2.36:1, under the 4.5:1 AA wants for 12px text.
+   *
+   * #131d33 is the value the dark theme already shipped — it is the dark
+   * palette's own `--color-surface` — so dark mode renders exactly as it did and
+   * only light mode moves. Measured:
+   *     ink     #e6ebf3 on the fill = 14.02:1
+   *     muted   #94a3b8 on the fill =  6.55:1   (the copyright, 12px)
+   *     border  #2c3d5c on the fill =  1.54:1, and 1.74:1 vs the dark page
+   *     fill vs the light page #eef2f7 = 14.93:1
+   * The fill sits only 1.13:1 from the dark page, so there the border — not the
+   * fill — is what delimits the band, which is why the edge is a chrome token
+   * rather than the per-theme `--color-border`. `chrome-surface.test.ts` holds
+   * all four values, the ink contrast, and the theme-invariance itself. */
+  --color-chrome-bg: #131d33;
+  --color-chrome-border: #2c3d5c;
+  --color-chrome-text: #e6ebf3;
+  --color-chrome-text-muted: #94a3b8;
 
   /* Typography */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

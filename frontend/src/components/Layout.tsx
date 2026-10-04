@@ -25,85 +25,79 @@ function Layout() {
     <div>
       <header className={styles.header}>
         <nav className={styles.nav}>
-          <div className={styles.navLeft}>
-            <Link to="/" className={styles.brand} onClick={closeMenus}>
-              <Logo />
-            </Link>
-            <ul className={`${styles.links} ${menuOpen ? styles.open : ""}`}>
-              <li>
-                <NavLink to="/" end className={navLinkClass} onClick={closeMenus}>
-                  Home
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/features" className={navLinkClass} onClick={closeMenus}>
-                  Features
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/demo" className={navLinkClass} onClick={closeMenus}>
-                  Demo
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/challenges" className={navLinkClass} onClick={closeMenus}>
-                  Challenges
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/pricing" className={navLinkClass} onClick={closeMenus}>
-                  Pricing
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/about" className={navLinkClass} onClick={closeMenus}>
-                  About
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/contact" className={navLinkClass} onClick={closeMenus}>
-                  Contact
-                </NavLink>
-              </li>
-              <li className={styles.mobileAuth}>
-                {user ? (
-                  <>
-                    <Link to="/profile" className={styles.link} onClick={closeMenus}>
-                      Profile
+          <Link to="/" className={styles.brand} onClick={closeMenus}>
+            <Logo />
+          </Link>
+          <ul className={`${styles.links} ${menuOpen ? styles.open : ""}`}>
+            <li>
+              <NavLink to="/" end className={navLinkClass} onClick={closeMenus}>
+                Home
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/features" className={navLinkClass} onClick={closeMenus}>
+                Features
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/demo" className={navLinkClass} onClick={closeMenus}>
+                Demo
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/challenges" className={navLinkClass} onClick={closeMenus}>
+                Challenges
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/pricing" className={navLinkClass} onClick={closeMenus}>
+                Pricing
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/about" className={navLinkClass} onClick={closeMenus}>
+                About
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/contact" className={navLinkClass} onClick={closeMenus}>
+                Contact
+              </NavLink>
+            </li>
+            <li className={styles.mobileAuth}>
+              {user ? (
+                <>
+                  <Link to="/profile" className={styles.link} onClick={closeMenus}>
+                    Profile
+                  </Link>
+                  {user.is_admin && (
+                    <Link to="/admin" className={styles.link} onClick={closeMenus}>
+                      Admin
                     </Link>
-                    {user.is_admin && (
-                      <Link to="/admin" className={styles.link} onClick={closeMenus}>
-                        Admin
-                      </Link>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        logout();
-                        closeMenus();
-                      }}
-                    >
-                      Log out
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <NavLink to="/login" className={navLinkClass} onClick={closeMenus}>
-                      Log in
-                    </NavLink>
-                    <Button
-                      to="/register"
-                      onClick={closeMenus}
-                      size="sm"
-                    >
-                      Sign up
-                    </Button>
-                  </>
-                )}
-              </li>
-            </ul>
-          </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      logout();
+                      closeMenus();
+                    }}
+                  >
+                    Log out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <NavLink to="/login" className={navLinkClass} onClick={closeMenus}>
+                    Log in
+                  </NavLink>
+                  <Button to="/register" onClick={closeMenus} size="sm">
+                    Sign up
+                  </Button>
+                </>
+              )}
+            </li>
+          </ul>
 
           <div className={styles.navRight}>
             <ThemeToggle />

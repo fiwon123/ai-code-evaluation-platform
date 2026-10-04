@@ -52,8 +52,11 @@ The `ThemeToggle` component manages the attribute, persists the choice under
 the `theme` key in `localStorage`, and falls back to `prefers-color-scheme`.
 
 Every color token must have a value in **both** palettes. Neutrals follow an
-inverse scheme (light text on dark surfaces). Code surfaces
-(`--color-code-*`) stay dark in both themes for readability.
+inverse scheme (light text on dark surfaces). Two families are deliberately
+declared **once**, outside both palette blocks, because the surface they paint
+does not change with the theme: the code surfaces (`--color-code-*`) stay dark in
+both themes for readability, and the site chrome (`--color-chrome-*`) is one
+fixed panel for the header and footer — see [Site chrome](#site-chrome).
 
 Text on colored/accent surfaces uses a token instead of hardcoded white, and
 which one depends on how bright the surface is:
@@ -99,6 +102,52 @@ The light step is bounded by text, not by taste: `--color-text-muted` (`#475569`
 
 The dark value is unchanged from what `--color-bg-subtle` already provided, so the dark palette renders identically. That is not laziness: the dark page (`#0a1020`) is already the darkest element in the layout, so the failure mode is one-sided.
 
+<<<<<<< HEAD
+#### Site chrome
+
+The sticky header and the footer are **one fixed dark panel in both themes**. They
+are the app's only surfaces that do not follow the palette, so they get their own
+tokens rather than a per-theme one — declared once in the shared `:root` block,
+like the code surfaces, for the same reason.
+
+| Token | Used for |
+|-------|----------|
+| `--color-chrome-bg` | Header and footer fill |
+| `--color-chrome-border` | The bands' edges and the footer's column rule |
+| `--color-chrome-text` | Body ink on the bands, including the footer's column headings |
+| `--color-chrome-text-muted` | Meta ink on the bands (the copyright line, the user-menu caret) |
+
+They used to read `--color-surface-inverse` and friends, which are per-theme by
+contract, and that produced two different navies: the footer measured `#0f172a` in
+light mode and `#131d33` in dark. The tokens themselves could not simply be
+retuned, because the dark palette aliases `--color-*-inverse` to the ordinary
+tokens so `Card variant="dark"` stays a no-op there.
+
+The cost of the per-theme mistake was not only the fill. The bands painted *theme
+ink* onto a theme-invariant dark panel, and in light mode that meant:
+
+- the footer's Product / Company / Legal headings were `--color-text` (`#0f172a`)
+  on a `#0f172a` fill — **1.00:1**, invisible;
+- the 12px copyright was `--color-text-muted` (`#475569`) on the fill —
+  **2.36:1**, under the 4.5:1 AA asks for;
+- the footer's column rule was `--color-border` (`#c9d4e0`), a bright line across
+  a dark panel;
+- the mobile ☰ button was `--color-text` inside a `--color-border` ring —
+  **1.06:1**, a menu nobody could open on a phone.
+
+So anything drawn on a chrome surface takes a `--color-chrome-*` token, including
+the small controls inside the header. `e2e/contrast.spec.ts` already measures the
+footer's tagline and a header nav link in both themes;
+`chrome-surface.test.ts` holds the tokens' theme-invariance, the ink contrast on
+the fill, and which tokens each band's rules are allowed to name.
+
+One honest limitation: the fill is only **1.13:1** against the dark page, so in the
+dark theme the border — not the fill — is what delimits the band. That is unchanged
+from what dark mode already shipped, and the light theme is not the constraint
+(14.93:1 there).
+
+=======
+>>>>>>> main
 ### Page titles
 
 Every page `<h1>` renders through the shared `PageTitle` component

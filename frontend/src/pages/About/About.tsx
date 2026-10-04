@@ -1,3 +1,4 @@
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Card from "../../components/Card/Card.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import styles from "./About.module.css";
@@ -18,6 +19,7 @@ function About() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <AmbientBackdrop />
         <span className="eyebrow">About</span>
         <PageTitle size="lg" className={styles.title}>About this project</PageTitle>
         <p className={styles.subtitle}>

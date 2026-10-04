@@ -1,8 +1,14 @@
+/* Every colour here is a `--color-chrome-*` token (issue #393), because the band
+   is one fixed dark panel in BOTH themes and a per-theme token is what made the
+   footer two different navies. The tokens live in the shared `:root` block of
+   `globals.css`, next to the code surfaces, which are theme-invariant for the
+   same reason; `chrome-surface.test.ts` holds them. */
 .footer {
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  background: var(--color-chrome-bg);
+  border-top: 1px solid var(--color-chrome-border);
   padding: var(--space-12) 0 var(--space-8);
   margin-top: var(--space-16);
+  color: var(--color-chrome-text);
 }
 
 .inner {
@@ -16,7 +22,9 @@
   grid-template-columns: 2fr 1fr 1fr 1fr;
   gap: var(--space-10);
   padding-bottom: var(--space-8);
-  border-bottom: 1px solid var(--color-border);
+  /* The chrome edge, not `--color-border`: the light palette's #c9d4e0 drew a
+     bright rule across a dark panel, which is the same mistake the fill was. */
+  border-bottom: 1px solid var(--color-chrome-border);
 }
 
 .brandCol {
@@ -37,7 +45,7 @@
 }
 
 .tagline {
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.85);
   font-size: var(--font-size-sm);
   max-width: 320px;
 }
@@ -47,7 +55,10 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text);
+  /* Chrome ink, not `--color-text`. On the dark panel the ordinary text token
+     meant #0f172a in light mode — the same value as the fill, so these three
+     headings rendered at 1.00:1 and were invisible. */
+  color: var(--color-chrome-text);
   margin-bottom: var(--space-4);
 }
 
@@ -59,13 +70,13 @@
 }
 
 .link {
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.85);
   font-size: var(--font-size-sm);
   transition: color var(--transition-fast);
 }
 
 .link:hover {
-  color: var(--color-primary);
+  color: #ffffff;
   text-decoration: none;
 }
 
@@ -79,7 +90,9 @@
 }
 
 .copyright {
-  color: var(--color-text-muted);
+  /* Chrome muted, not `--color-text-muted`: #475569 on the dark fill is 2.36:1,
+     and this is 12px text, where WCAG AA asks for 4.5:1. Now 6.55:1. */
+  color: var(--color-chrome-text-muted);
   font-size: var(--font-size-xs);
 }
 
@@ -88,13 +101,13 @@
   align-items: center;
   min-height: var(--control-height);
   gap: var(--space-2);
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.85);
   font-size: var(--font-size-sm);
   transition: color var(--transition-fast);
 }
 
 .github:hover {
-  color: var(--color-primary);
+  color: #ffffff;
 }
 
 /* Four columns get cramped well before the phone breakpoint, so the link

@@ -16,6 +16,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import { maxWidthMediaBlocks, ruleBody } from "../test/cssRules";
 import css from "./Layout.module.css?raw";
 import styles from "./Layout.module.css";
 
@@ -24,45 +25,6 @@ vi.mock("../context/AuthContext.tsx", () => ({
 }));
 
 const { default: Layout } = await import("./Layout");
-
-/** The body of a top-level rule (`.navRight { ... }`), brace-balanced. */
-function ruleBody(stylesheet: string, selector: string): string {
-  const start = stylesheet.indexOf(selector);
-  expect(start, `selector ${selector} not found`).toBeGreaterThan(-1);
-  const open = stylesheet.indexOf("{", start);
-  let depth = 0;
-  for (let i = open; i < stylesheet.length; i += 1) {
-    if (stylesheet[i] === "{") depth += 1;
-    if (stylesheet[i] === "}") depth -= 1;
-    if (depth === 0) return stylesheet.slice(open + 1, i);
-  }
-  throw new Error(`unbalanced braces after ${selector}`);
-}
-
-/** Every `@media` block whose condition contains `max-width`, keyed by condition. */
-function mobileBlocks(stylesheet: string): { condition: string; body: string }[] {
-  const blocks: { condition: string; body: string }[] = [];
-  const pattern = /@media\s*\(max-width:\s*([^)]+)\)\s*\{/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(stylesheet)) !== null) {
-    const open = pattern.lastIndex - 1;
-    let depth = 0;
-    let end = open;
-    for (let i = open; i < stylesheet.length; i += 1) {
-      if (stylesheet[i] === "{") depth += 1;
-      else if (stylesheet[i] === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
-    blocks.push({ condition: match[1]!.trim(), body: stylesheet.slice(open + 1, end) });
-    pattern.lastIndex = end;
-  }
-  return blocks;
-}
 
 function renderLayout() {
   return render(
@@ -109,11 +71,15 @@ describe("header theme toggle spacing (#232)", () => {
     expect(navRight!.children.length).toBeGreaterThan(1);
   });
 
-  it("keeps the mobile header untouched", () => {
-    // Below 768px the whole right cluster (toggle included) is replaced by the
-    // hamburger, so the new spacing must not leak into that layout.
-    const phone = mobileBlocks(css).find((block) => block.condition.startsWith("768px"));
-    expect(phone, "the 768px media block not found").toBeDefined();
-    expect(ruleBody(phone!.body, ".navRight")).toMatch(/display:\s*none/);
+  it("keeps the collapsed header untouched", () => {
+    // Where the right cluster (toggle included) is replaced by the hamburger, the
+    // spacing must not leak into that layout. The cutoff used to be 768px and
+    // moved to 1023px in #400: above it `.nav` is a three-track grid centring the
+    // links, which needs 971px to fit, so 769-1023px has to collapse with the rest
+    // of the phone layout — it is also the band where the links used to overlap
+    // these very controls. This assertion is what keeps that move deliberate.
+    const collapsed = maxWidthMediaBlocks(css).find((block) => block.condition === "1023px");
+    expect(collapsed, "the 1023px media block not found").toBeDefined();
+    expect(ruleBody(collapsed!.body, ".navRight")).toMatch(/display:\s*none/);
   });
 });

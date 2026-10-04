@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
@@ -112,6 +113,7 @@ function Contact() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <AmbientBackdrop />
         <span className="eyebrow">Contact</span>
         <PageTitle size="lg" className={styles.title}>Get in touch</PageTitle>
         <p className={styles.subtitle}>

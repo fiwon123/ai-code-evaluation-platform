@@ -8,6 +8,8 @@ interface LanguageBadgeProps {
   className?: string;
   /** Hide the symbol chip, showing only the tinted label (default true). */
   showSymbol?: boolean;
+  /** Show the label text (default true). */
+  showLabel?: boolean;
 }
 
 /**
@@ -16,7 +18,12 @@ interface LanguageBadgeProps {
  * only") in a native title tooltip. Colors live in `utils/language.ts`
  * (`LANGUAGE_META`), mirrored from the backend catalog.
  */
-function LanguageBadge({ language, className = "", showSymbol = true }: LanguageBadgeProps) {
+function LanguageBadge({
+  language,
+  className = "",
+  showSymbol = true,
+  showLabel = true,
+}: LanguageBadgeProps) {
   if (!language) {
     return null;
   }
@@ -30,7 +37,7 @@ function LanguageBadge({ language, className = "", showSymbol = true }: Language
           {meta.symbol}
         </span>
       )}
-      <span>{meta.label}</span>
+      {showLabel && <span>{meta.label}</span>}
     </span>
   );
 }

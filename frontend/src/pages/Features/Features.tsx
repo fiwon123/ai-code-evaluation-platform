@@ -1,3 +1,4 @@
+import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import PageTitle from "../../components/PageTitle/PageTitle.tsx";
 import { Link } from "react-router-dom";
 import styles from "./Features.module.css";
@@ -165,6 +166,7 @@ function Features() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <AmbientBackdrop />
         <span className="eyebrow">Features</span>
         <PageTitle size="lg" className={styles.title}>Features</PageTitle>
         <p className={styles.subtitle}>

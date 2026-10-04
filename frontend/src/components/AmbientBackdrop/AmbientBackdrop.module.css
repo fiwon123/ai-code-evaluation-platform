@@ -1,0 +1,237 @@
+/*
+ * The ambient wash behind a page header (issue #402).
+ *
+ * The geometry starts from the two modules that already had it — `Demo`'s header
+ * wash and `AuthLayout`'s page-wide shell — so the pages that had a wash keep the
+ * one they had, and the seventeen that had none gain something that already
+ * shipped rather than something new. Consolidation is the point, but not at any
+ * price: three of `wash`'s numbers were measured and changed, and the exceptions
+ * are named where they are, below.
+ *
+ * Two things here are load-bearing rather than decorative:
+ *
+ * 1. `composes: ambientDrift from "../../styles/ambient.css"`. A module that
+ *    names a keyframe defined in an unscoped stylesheet ends up naming a
+ *    *scoped* keyframe that no `@keyframes` rule defines — the animation never
+ *    starts, the page looks fine while not moving, and nothing warns. That file
+ *    spells out the trap; composing from it is the fix.
+ * 2. `z-index: -1`, which only reads as "behind the content" when the
+ *    containing element establishes a stacking context (`isolation: isolate`).
+ *    Otherwise these blobs paint behind the page background and disappear.
+ *    `AmbientBackdrop.test.tsx` holds every caller to that.
+ */
+
+.backdrop {
+  /* Read by the wash geometry below. `inline-size` containment makes this element
+     the query container for its own inline size and keeps that size independent of
+     its contents — the blobs are absolutely positioned, so neither matters here. */
+  container-type: inline-size;
+  --wash-scale: 1;
+
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* One shape for all of them: a soft circle, blurred hard enough that no edge
+   survives. */
+.blobPrimary,
+.blobAccent,
+.blobTeal,
+.blobViolet {
+  position: absolute;
+  border-radius: var(--radius-full);
+  filter: blur(80px);
+}
+
+/* The drift, as a class of its own rather than `composes` on each blob.
+   `composes` is only accepted on a selector that is a single local class, so it
+   cannot live on `.wash .blobPrimary` — the variant-scoped geometry below. And
+   this keeps one place that names the animation: the reduced-motion opt-out in
+   `ambient.css` ships with this class, so a blob cannot be added here that
+   drifts for a reader who asked for no motion. Geometry rules are free to
+   re-time it (`.wash .blobAccent` is more specific than this, so its
+   `animation-duration` wins) without ever re-declaring the animation. */
+.drift {
+  composes: ambientDrift from "../../styles/ambient.css";
+  /* `span` is inline by default, and an inline element ignores `top`/`left`
+     offsets — the blobs would sit in the text flow instead of behind the
+     header's corner. The base rule's `position: absolute` already handles that,
+     so this is only belt and braces for a rule that exists to name the
+     animation. */
+  display: block;
+}
+
+/* The wash shrinks with its host, in three steps. A single continuous formula
+   wants `100cqi / 900`, which CSS cannot type (see the note in `.backdrop`); two
+   `@container` steps are boring and work in every browser that ships the feature.
+   Measured: at 0.5 the profile card's "Member since" line goes from 3.66:1 to
+   4.65:1 in the dark theme, because the blob's core stops reaching the text. */
+/* Set on the blobs, not on `.wash`: an element cannot query itself. `.wash` and
+   `.backdrop` are the same element, so `.wash` *is* the container here and
+   `@container` never matches it — the override has to land on a descendant. */
+@container (max-width: 700px) {
+  .wash .blobPrimary,
+  .wash .blobAccent {
+    --wash-scale: 0.62;
+  }
+}
+
+@container (max-width: 480px) {
+  .wash .blobPrimary,
+  .wash .blobAccent {
+    --wash-scale: 0.5;
+  }
+}
+
+/* ---- wash: the two-blob header decoration -------------------------------- */
+
+/* `Demo`'s numbers: a 380px blob sitting 180px above the top edge and 120px
+   left of it, so what a header shows is a wash across its top-left corner rather
+   than the circle itself.
+
+   Those are pixel values, and a pixel value is the wrong unit for "a corner of
+   *this* header" — on the profile page at a 364px card width (a Pixel 7) a 380px
+   blob covers the card instead of its corner, and its core ended up beside the
+   "Member since" line, at 3.66:1 in the dark theme. So every dimension is scaled
+   by one factor read from the host's own inline size (`--wash-scale` on
+   `.backdrop` above): full size on a wide header, half on a narrow one, and Demo's
+   exact geometry untouched in between.
+
+   Note what is *not* being used: `min(380px, 58%)`. Percentage `height` resolves
+   against the containing block's height while percentage `width` resolves against
+   its width, so a `min()` of the two quietly produced a 111x380 blob on a
+   1152x191 header and the wash all but disappeared (measured: 13.8px² of visible
+   area, against a floor of 4000). The scale factor keeps the blob square by
+   construction. */
+/* Faded out before the host's bottom edge, so the clip never cuts through the
+   bright part of a blob. Without it a *short* header — the 61px title row on
+   /challenges, the admin tables, /challenges/new — ends mid-strength and the
+   wash reads as a full-width rectangular band with hard top, bottom and side
+   edges rather than a corner glow (screenshot review, #402). A header taller
+   than the blobs' reach is unaffected: the primary has already faded to nothing
+   by the time it gets there, so Demo's look is untouched.
+
+   Only on `.wash`: the auth variant is a page-wide backdrop whose violet blob is
+   near the bottom, and it is meant to stay exactly as it was. */
+.wash {
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+}
+
+.wash .blobPrimary {
+  width: calc(380px * var(--wash-scale));
+  height: calc(380px * var(--wash-scale));
+  top: calc(-180px * var(--wash-scale));
+  left: calc(-120px * var(--wash-scale));
+  background: radial-gradient(
+    circle,
+    /* Demo's own 34%, read from a token: `globals.css` sets it per theme, and
+       the dark value is much weaker because the dark palette's muted text has
+       less contrast to spend. The literal here is the fallback. */
+    color-mix(in srgb, var(--color-primary) var(--wash-primary, 34%), transparent),
+    transparent 70%
+  );
+}
+
+/* Re-timed so the two blobs are never at the same point in their cycle, which is
+   what stops the wash reading as a single still gradient. */
+.wash .blobAccent {
+  width: calc(300px * var(--wash-scale));
+  height: calc(300px * var(--wash-scale));
+  /* `bottom: -240px`, not Demo's `-160px` (#402). Found by measurement, then kept
+     for a different reason than the one that found it. At -160px this blob's centre
+     lands ~20px *below* a 193px-tall header, putting its bright core on top of the
+     full-width footer line every legal page carries ("Last updated: …"): on
+     /privacy in the dark theme that line measured 3.57:1 against
+     `--color-text-muted`. The mask above now solves that generally — measured
+     after the mask landed, that line is reached by *no* blob at any accent tint,
+     18% to 34% — so this offset is no longer what saves it. It is kept because the
+     core should sit outside the header's box rather than rely on a mask to hide it:
+     the same glow then reaches the bottom-right corner from beyond the edge, which
+     is where it looked like it came from on the page that had it longest. */
+  bottom: calc(-240px * var(--wash-scale));
+  right: calc(-100px * var(--wash-scale));
+  animation-duration: 32s;
+  animation-delay: -8s;
+  background: radial-gradient(
+    circle,
+    /* 20% light, swept rather than guessed (#402). The sweep that chose it ran
+       before the mask existed, against the worst case then known — the legal
+       footer's full-width line: 34% -> 4.03:1, 26% -> 4.42, 22% -> 4.61, 18% ->
+       4.80, and nothing below that improved because the primary blob set a floor of
+       its own. That case is now unreachable at any tint, so the number is a little
+       conservative rather than exactly tuned; the dark value is what the current
+       worst case (the profile card) is actually set by, and it lives in
+       `globals.css` next to the measurements. */
+    color-mix(in srgb, var(--color-secondary) var(--wash-accent, 20%), transparent),
+    transparent 70%
+  );
+}
+
+/* ---- auth: `AuthLayout`'s three, unchanged ------------------------------- */
+
+.auth .blobPrimary {
+  width: 480px;
+  height: 480px;
+  top: -200px;
+  left: -140px;
+  background: radial-gradient(
+    circle,
+    /* Deliberately a literal, not `var(--wash-primary)`. The wash knobs are swept
+       against real rendered contrast for the header wash, and auth must not move
+       when they do: its backdrop is a page-wide gradient behind a full login
+       card, sized and toned for that, and "leave Auth alone" is a hard
+       requirement. A literal is what makes that true — with the variable here,
+       the dark sweep (34% -> 14%) quietly thinned this blob too. */
+    color-mix(in srgb, var(--color-primary) 34%, transparent),
+    transparent 70%
+  );
+}
+
+.auth .blobTeal {
+  width: 400px;
+  height: 400px;
+  top: 26%;
+  right: -170px;
+  animation-duration: 32s;
+  animation-delay: -8s;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent-teal) 26%, transparent),
+    transparent 70%
+  );
+}
+
+.auth .blobViolet {
+  width: 420px;
+  height: 420px;
+  bottom: -240px;
+  left: 26%;
+  animation-duration: 40s;
+  animation-delay: -16s;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent-violet) 24%, transparent),
+    transparent 70%
+  );
+}
+
+/*
+ * Belt and braces. The opt-out already ships with `.ambientDrift` in
+ * `ambient.css` — a module that composes it cannot forget — but the two modules
+ * this file replaces each carried their own copy, and `looping motion across
+ * modules` in `ambient-motion.test.ts` reads each module's own text, so the
+ * guarantee is kept here in the same place it was before.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .drift,
+  .blobPrimary,
+  .blobAccent,
+  .blobTeal,
+  .blobViolet {
+    animation: none;
+  }
+}
