@@ -1,6 +1,7 @@
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
+import ComparisonMark from "../../components/ComparisonMark/ComparisonMark.tsx";
 import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import styles from "./Pricing.module.css";
 
