@@ -8,7 +8,7 @@ import styles from "./Pricing.module.css";
 const TIERS = [
   {
     name: "Free",
-    price: "$0",
+    price: "$0/month",
     description: "For developers trying out AI code evaluation.",
     features: [
       "50 evaluations per month",
@@ -22,7 +22,7 @@ const TIERS = [
   },
   {
     name: "Pro",
-    price: "$29",
+    price: "$29/month",
     description: "For teams that evaluate code daily.",
     features: [
       "Unlimited evaluations",
@@ -47,7 +47,7 @@ const TIERS = [
       "Dedicated support",
     ],
     cta: "Contact sales",
-    to: "/about",
+    to: "/contact",
     featured: false,
   },
 ];
