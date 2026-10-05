@@ -235,6 +235,11 @@ docker-compose.override.yml
 .opencode/node_modules/
 # OpenCode session memory — agent-local progress file, never committed.
 .opencode/progress.md
+# OpenCode structured memory — 3 global + 3 short-term slots. Agent-local by
+# design: run notes, task state and verification results are per-checkout and
+# must never reach a PR. The *protocol* is tracked in
+# .opencode/instructions/memory.md; only the contents stay here.
+.opencode/memory/
 
 # Evaluation platform specific
 /tmp/evaluations/

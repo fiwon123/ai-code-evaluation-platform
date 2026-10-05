@@ -399,6 +399,41 @@ Agent definitions live in `opencode.json` and `.opencode/agents/`:
 - **frontend** (subagent): Implements React UI components, pages, hooks, and client-side behavior
 - **reviewer** (subagent): Reviews code for bugs, security, and regressions
 
+### Memory
+
+Six agent-local memory slots in `.opencode/memory/` — three global (project
+lifetime), three short-term (one task). The directory is **gitignored**: run
+notes and task state are per-checkout and must never reach a PR. Only the
+protocol is tracked, in `.opencode/instructions/memory.md`.
+
+| Slot | Holds |
+|------|-------|
+| `global-1-architecture.md` | stack, layering, footguns |
+| `global-2-conventions.md` | branch/commit/PR/test/secret rules |
+| `global-3-milestone-state.md` | what the current milestone is for |
+| `short-term-1-task.md` | goal, **the plan**, files, done criteria |
+| `short-term-2-github-state.md` | issue, branch, PR, milestone comments |
+| `short-term-3-verification.md` | commands run, results, unverified |
+
+Memory is a cache, not the source of truth — `AGENTS.md`, `PROJECT_CONTEXT.md`,
+`opencode.json` and the code win. If they disagree, correct the memory in the same
+task. Never record a credential or a `.env` value in any slot.
+
+### Plan before build
+
+`build` must not edit a file before `short-term-1-task.md` has a filled-in Plan
+section. If it is empty, or the requirement is ambiguous, `build` calls `plan`
+first, writes the plan down, then implements. `plan` is read-only (`edit: deny`;
+bash limited to `git log`, `git diff`, `ls`), so this adds no capability `build`
+lacks.
+
+`plan → build` is a **mode switch by the user, never a subagent spawn**. `build`
+has `edit: allow` and `make *`, so a `plan` that could spawn it could modify the
+repo by a route `opencode.json` cannot police — `test_opencode_env_guard.py`
+asserts bash/read denies, not delegation. `build → plan` and either agent →
+`visual` are allowed spawns, since both targets are strictly read-only. Full
+contract: `.opencode/instructions/memory.md` → Handoff contract.
+
 ### Skills
 
 - Load relevant skills when working on specific domains (e.g., Docker, Celery, LLM integration)

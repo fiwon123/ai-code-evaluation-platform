@@ -106,7 +106,8 @@
           "*": "deny",
           "explore": "allow",
           "reviewer": "allow",
-          "visual": "allow"
+          "visual": "allow",
+          "plan": "allow"
         },
         "skill": {
           "*": "allow"
@@ -128,7 +129,8 @@
         "task": {
           "*": "deny",
           "explore": "allow",
-          "reviewer": "allow"
+          "reviewer": "allow",
+          "visual": "allow"
         },
         "skill": {
           "*": "allow"
