@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../components/PageHeader/PageHeader.tsx";
 import styles from "./NotFound.module.css";
 
 /**
@@ -18,12 +17,11 @@ import styles from "./NotFound.module.css";
 function NotFound() {
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <PageTitle className={styles.title}>404 — Page Not Found</PageTitle>
-        <p className={styles.subtitle}>
-          The page you&apos;re looking for doesn&apos;t exist.
-        </p>
-      </header>
+      <PageHeader
+        tone="app"
+        title="404 — Page Not Found"
+        subtitle="The page you're looking for doesn't exist."
+      />
       <div className={styles.actions}>
         <Link to="/challenges" className={styles.action}>
           Browse challenges

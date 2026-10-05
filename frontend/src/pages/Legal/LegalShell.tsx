@@ -1,6 +1,6 @@
 import { Link, NavLink } from "react-router-dom";
 import Card from "../../components/Card/Card.tsx";
-import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import {
   LEGAL_DISCLAIMER,
   LEGAL_DOCUMENTS,
@@ -26,17 +26,22 @@ export function LegalShell({ document }: LegalShellProps) {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <span className="eyebrow">Legal</span>
-        <PageTitle size="lg" className={styles.title}>
-          {document.title}
-        </PageTitle>
-        <p className={styles.subtitle}>{document.summary}</p>
-        <p className={styles.revision}>
-          Last updated:{" "}
-          <time dateTime={document.lastUpdated}>{document.lastUpdated}</time>
-        </p>
-      </header>
+      {/* #404: the marketing tone, which is what every other marketing page
+          was already doing by hand — including the centring this page had
+          never received, which is why its summary sat against the left edge
+          while About, Contact, Features and Pricing sat centred. */}
+      <PageHeader
+        tone="marketing"
+        eyebrow="Legal"
+        title={document.title}
+        subtitle={document.summary}
+        meta={
+          <p className={styles.revision}>
+            Last updated:{" "}
+            <time dateTime={document.lastUpdated}>{document.lastUpdated}</time>
+          </p>
+        }
+      />
 
       {/* The caveat sits above the content, not in a footnote: a reader must
           meet it before relying on anything below it. */}

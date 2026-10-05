@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import AmbientBackdrop from "../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../components/Badge/Badge.tsx";
 import Card from "../components/Card/Card.tsx";
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../components/PageHeader/PageHeader.tsx";
 import ResultReport from "../components/ResultReport/ResultReport.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { resultsApi } from "../services/api.ts";
@@ -79,11 +78,11 @@ function SharedResultPage() {
         <Link to="/">AI Code Evaluation Platform</Link> — shared report
       </p>
 
-      <div className={styles.header}>
-        <AmbientBackdrop />
-        <PageTitle className={styles.title}>{result.challenge_title}</PageTitle>
-        <Badge variant={statusVariant(result.status)}>{result.status}</Badge>
-      </div>
+      <PageHeader
+        tone="detail"
+        title={result.challenge_title}
+        actions={<Badge variant={statusVariant(result.status)}>{result.status}</Badge>}
+      />
 
       <Card>
         <p className={styles.promptLabel}>Challenge</p>

@@ -19,6 +19,30 @@ async function openCreateForm(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "Create a challenge" })).toBeVisible();
 }
 
+/**
+ * Sub-pixel slack on a 44px hit target, for the float error in the rects — not
+ * for a pill that is genuinely short (#404).
+ *
+ * The difficulty tag is `height: 44px`, and `offsetHeight` reports exactly 44 on
+ * every run, so the layout never missed the target. What moved was the *report*:
+ * `getBoundingClientRect` is measured while this page's `fadeInUp` entrance is
+ * still translating (the test does not set `reducedMotion`), and a transformed
+ * rect is returned from the compositor path in float32. Near y≈530 one ULP is
+ * 2**-15 = 0.0000305px, so `bottom - top` came back as `43.999969482421875` — the
+ * same 44px box, one rounding step short — and the old bare `>= 44` failed on
+ * it. #404 surfaced it because centralising the page header moved the form down
+ * ~32px (the field sits at y≈486 instead of y≈454), which changed which frame the
+ * measurement lands in; dev passes the same assertion today and would fail the
+ * same way on the next shift.
+ *
+ * 0.05px is three orders of magnitude above that artefact and four below the
+ * ~19px the visual sweep originally measured (25.2px tags), so a real
+ * regression still fails loudly — the same shape of call as #400's
+ * `CENTRE_TOLERANCE_PX`, and the same lesson as #399: an exact boundary is only
+ * trustworthy once it has been measured at the offsets it will be read at.
+ */
+const HIT_TARGET_TOLERANCE_PX = 0.05;
+
 test.describe("Challenge create form", () => {
   test("renders the form as labelled sections", async ({ page }) => {
     await openCreateForm(page);
@@ -162,8 +186,14 @@ test.describe("Challenge create form", () => {
 
     expect(pills).toHaveLength(3);
     for (const p of pills) {
-      expect(p.hit.width, `${p.value}'s target is under 44px wide`).toBeGreaterThanOrEqual(44);
-      expect(p.hit.height, `${p.value}'s target is under 44px tall`).toBeGreaterThanOrEqual(44);
+      expect(
+        p.hit.width,
+        `${p.value}'s target is under 44px wide`,
+      ).toBeGreaterThanOrEqual(44 - HIT_TARGET_TOLERANCE_PX);
+      expect(
+        p.hit.height,
+        `${p.value}'s target is under 44px tall`,
+      ).toBeGreaterThanOrEqual(44 - HIT_TARGET_TOLERANCE_PX);
       // The rendered tag is still the tag, not the 44px box.
       expect(
         p.badge.height,

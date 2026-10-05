@@ -7,7 +7,7 @@ import Card from "../components/Card/Card.tsx";
 import EmptyState from "../components/EmptyState/EmptyState.tsx";
 import LanguageBadge from "../components/LanguageBadge/LanguageBadge.tsx";
 import { SelectInput, TextInput } from "../components/Input/Input.tsx";
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../components/PageHeader/PageHeader.tsx";
 import Pagination from "../components/Pagination/Pagination.tsx";
 import Skeleton from "../components/Skeleton/Skeleton.tsx";
 import { useAuth } from "../context/AuthContext.tsx";
@@ -42,20 +42,21 @@ const DIFFICULTY_FILTERS = [
 }[];
 
 /**
- * A language's option text, symbol first.
+ * A language's option text: the name alone.
  *
- * The symbol is the identity cue a plain dropdown cannot have — and it can only
- * be in the text at all, because a native `<select>` will not colour its own
- * options. Measured rather than assumed: with `style="color"` on an `<option>`,
- * `getComputedStyle` reports the colour, and the *closed control* still paints
- * its own `color`/`background-color` on the selected option's text, because
- * `select` colours its own text and inherits nothing from the option. The popup
- * is rendered by the OS and is not in the DOM to be styled. So the symbol goes
- * in the text, and the colour goes on the control via `--lang-accent` below.
+ * The symbol used to lead this string. It is now the `--lang-accent` stripe on
+ * the control below, and the reason it cannot stay in the text is worth keeping:
+ * a native `<select>` will not colour its own options. Measured rather than
+ * assumed — with `style="color"` on an `<option>`, `getComputedStyle` reports the
+ * colour, and the *closed control* still paints its own `color`/`background-color`
+ * on the selected option's text, because `select` colours its own text and
+ * inherits nothing from the option. The popup is rendered by the OS and is not in
+ * the DOM to be styled. So the colour goes on the control, and the text says only
+ * the name — which is what `Challenges.test.tsx` pins, and what
+ * `e2e/challenges.spec.ts` reads in computed style.
  */
 function languageFilterLabel(language: string): string {
-  const meta = languageMeta(language);
-  return `${meta.symbol} ${meta.label}`;
+  return languageMeta(language).label;
 }
 
 /** Sort options, each with a leading symbol for the same reason. */
@@ -175,15 +176,11 @@ function Challenges() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.pageHeader}>
-        <div>
-          <PageTitle className={styles.title}>Challenges</PageTitle>
-          <p className={styles.subtitle}>
-            Submit a challenge and let an LLM generate and evaluate a solution.
-          </p>
-        </div>
-        <Button to="/challenges/new">+ New challenge</Button>
-      </div>
+      <PageHeader
+        title="Challenges"
+        subtitle="Submit a challenge and let an LLM generate and evaluate a solution."
+        actions={<Button to="/challenges/new">+ New challenge</Button>}
+      />
 
       <div className={styles.toolbar}>
         <div className={styles.searchWrap}>
@@ -298,7 +295,6 @@ function Challenges() {
                         {difficultyLabel(challenge.difficulty)}
                       </Badge>
                     </div>
-                    <span className={styles.date}>{formatRelativeTime(challenge.created_at)}</span>
                   </div>
                   <h2 className={styles.cardTitle}>{challenge.title}</h2>
                   <p className={`${styles.cardDesc} lineClamp2`}>
@@ -307,7 +303,12 @@ function Challenges() {
                   {user?.id === challenge.owner_id && (
                     <span className={styles.ownerBadge}>You own this</span>
                   )}
-                  <span className={styles.cardArrow}>View challenge →</span>
+                  <div className={styles.cardFooter}>
+                    <span className={styles.date}>
+                      {formatRelativeTime(challenge.created_at)}
+                    </span>
+                    <span className={styles.cardArrow}>View challenge →</span>
+                  </div>
                 </Card>
               </Link>
             ))}

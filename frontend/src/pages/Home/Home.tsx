@@ -7,6 +7,7 @@ import Reveal from "../../components/Reveal/Reveal.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { useCountUp } from "../../hooks/useCountUp.ts";
 import { useInView } from "../../hooks/useInView.ts";
+import { scoreBand } from "../../utils/formatting.ts";
 import AnimatedTerminal from "./AnimatedTerminal";
 import styles from "./Home.module.css";
 
@@ -363,6 +364,7 @@ function Home() {
                 // CSSProperties without listing every name.
                 style={{ "--card-accent": STEP_ACCENTS[step.stat.accent] } as CSSProperties}
               >
+                <div className={styles.stepNumber}>{index + 1}</div>
                 <StatValue stat={step.stat} index={index} active={stepsInView} />
                 <h3 className={styles.stepTitle}>{step.title}</h3>
                 <p className={styles.stepText}>{step.text}</p>
@@ -388,16 +390,12 @@ function Home() {
           <div className={styles.pipelineTrack}>
             {PIPELINE.map((step, index) => (
               <div key={step.label} className={styles.pipelineGroup}>
-                <Card
-                  variant="dark"
-                  padding="default"
-                  className={`${styles.pipelineStep} ${styles[`step${index}`]}`}
-                >
+                <div className={`${styles.pipelineStep} ${styles[`step${index}`]}`}>
                   <span className={styles.pipelineNum}>{index + 1}</span>
                   <span className={styles.pipelineIcon}>{step.icon}</span>
                   <span className={styles.pipelineLabel}>{step.label}</span>
                   <span className={styles.pipelineDesc}>{step.desc}</span>
-                </Card>
+                </div>
                 {index < PIPELINE.length - 1 && (
                   <span
                     className={`${styles.pipelineConnector} ${styles[`arrow${index}`]}`}
@@ -470,7 +468,7 @@ function Home() {
               data-entered={teaserInView ? "true" : "false"}
               aria-hidden="true"
             >
-              <Card variant="dark" padding="default" className={styles.teaserPanel}>
+              <div className={styles.teaserPanel}>
                 {TEASER_RUN.map((row, index) => (
                   <div
                     key={row.label ?? `row-${index}`}
@@ -496,12 +494,21 @@ function Home() {
                     ) : (
                       <>
                         {row.label && <span className={styles.teaserLabel}>{row.label}</span>}
-                        {row.detail && <span className={styles.teaserDetail}>{row.detail}</span>}
+                        {row.detail &&                        <span
+                          className={styles.teaserDetail}
+                          style={
+                            row.score
+                              ? ({ "--score-band": scoreBand(66.7) } as CSSProperties)
+                              : undefined
+                          }
+                        >
+                          {row.detail}
+                        </span>}
                       </>
                     )}
                   </div>
                 ))}
-              </Card>
+              </div>
               <p className={styles.teaserPanelCaption}>
                 Sample run on the free demo provider — your own challenge, tests
                 and score
@@ -513,7 +520,7 @@ function Home() {
 
       <section className={`${styles.section} ${styles.sectionAlt}`}>
         <Reveal>
-          <Card variant="dark" padding="default" className={styles.cta}>
+          <div className={styles.cta}>
             {/* The page's closing motif (#355): a faint ring sweeping once
                 around the banner, echoing the score ring in the hero terminal
                 that the reader met at the top. Decorative and pointer-inert, so
@@ -535,7 +542,7 @@ function Home() {
                 Explore features
               </Button>
             </div>
-          </Card>
+          </div>
         </Reveal>
       </section>
     </div>
@@ -559,14 +566,14 @@ function SectionHead({
   subtitle: string;
 }) {
   return (
-    <header className={styles.sectionHead}>
+    <div className={styles.sectionHead}>
       <p className={styles.sectionEyebrow}>
         <span className={styles.eyebrowDot} aria-hidden="true" />
         {eyebrow}
       </p>
       <h2 className={styles.sectionTitle}>{title}</h2>
       <p className={styles.sectionSubtitle}>{subtitle}</p>
-    </header>
+    </div>
   );
 }
 

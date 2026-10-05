@@ -1,9 +1,7 @@
-import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
 import Badge from "../../components/Badge/Badge.tsx";
 import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
-import ComparisonMark from "../../components/ComparisonMark/ComparisonMark.tsx";
-import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import styles from "./Pricing.module.css";
 
 const TIERS = [
@@ -100,14 +98,12 @@ const FAQ = [
 function Pricing() {
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <AmbientBackdrop />
-        <span className="eyebrow">Pricing</span>
-        <PageTitle size="lg" className={styles.title}>Simple, transparent pricing</PageTitle>
-        <p className={styles.subtitle}>
-          Start free and scale as your evaluation volume grows.
-        </p>
-      </header>
+      <PageHeader
+        tone="marketing"
+        eyebrow="Pricing"
+        title="Simple, transparent pricing"
+        subtitle="Start free and scale as your evaluation volume grows."
+      />
 
       <div className={styles.tiers}>
         {TIERS.map((tier) => (

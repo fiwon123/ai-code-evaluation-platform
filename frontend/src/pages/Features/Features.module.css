@@ -4,34 +4,7 @@
   padding: var(--space-16) var(--space-6) var(--space-20);
 }
 
-.header {
-  /* #402: hosts the shared `AmbientBackdrop`. All three declarations are
-     load-bearing and the reason is in that component: `position` anchors it,
-     `isolation: isolate` is what makes its `z-index: -1` mean "behind this
-     header" rather than "behind the page background" (where it vanishes), and
-     `overflow: hidden` clips the blobs' 80px blur to the header instead of
-     letting it smear over the content below. */
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  text-align: center;
-  margin-bottom: var(--space-12);
-}
 
-/* Layout only — size and the gradient come from the shared PageTitle. */
-.title {
-  margin: var(--space-3) 0 var(--space-4);
-}
-
-.subtitle {
-  /* The same measure the other marketing pages use: 600px keeps the line length
-     readable, and 48rem here was 768px. */
-  max-width: 600px;
-  margin: 0 auto;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-lg);
-  line-height: 1.6;
-}
 
 /* ---------- Pipeline strip ---------- */
 

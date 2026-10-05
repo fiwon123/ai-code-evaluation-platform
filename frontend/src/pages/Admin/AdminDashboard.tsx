@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import ScoreRing from "../../components/ScoreRing/ScoreRing.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import StatCard, { type StatAccent } from "../../components/StatCard/StatCard.tsx";
@@ -113,10 +113,11 @@ function AdminDashboard() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.pageHeader}>
-        <PageTitle size="md" className={styles.title}>Admin dashboard</PageTitle>
-        <p className={styles.subtitle}>Platform-wide statistics and moderation.</p>
-      </div>
+      <PageHeader
+        tone="app"
+        title="Admin dashboard"
+        subtitle="Platform-wide statistics and moderation."
+      />
 
       <div className={styles.grid}>
         {cards.map((card) => (

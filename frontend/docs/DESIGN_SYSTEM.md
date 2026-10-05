@@ -102,7 +102,6 @@ The light step is bounded by text, not by taste: `--color-text-muted` (`#475569`
 
 The dark value is unchanged from what `--color-bg-subtle` already provided, so the dark palette renders identically. That is not laziness: the dark page (`#0a1020`) is already the darkest element in the layout, so the failure mode is one-sided.
 
-<<<<<<< HEAD
 #### Site chrome
 
 The sticky header and the footer are **one fixed dark panel in both themes**. They
@@ -146,8 +145,6 @@ dark theme the border — not the fill — is what delimits the band. That is un
 from what dark mode already shipped, and the light theme is not the constraint
 (14.93:1 there).
 
-=======
->>>>>>> main
 ### Page titles
 
 Every page `<h1>` renders through the shared `PageTitle` component

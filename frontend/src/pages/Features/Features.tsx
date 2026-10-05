@@ -1,5 +1,4 @@
-import AmbientBackdrop from "../../components/AmbientBackdrop/AmbientBackdrop.tsx";
-import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import { Link } from "react-router-dom";
 import styles from "./Features.module.css";
 
@@ -165,16 +164,12 @@ const MOCKUPS: Record<string, () => React.JSX.Element> = {
 function Features() {
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <AmbientBackdrop />
-        <span className="eyebrow">Features</span>
-        <PageTitle size="lg" className={styles.title}>Features</PageTitle>
-        <p className={styles.subtitle}>
-          A complete, production-shaped evaluation pipeline — write challenges,
-          choose a provider, have an LLM generate the solution, and verify it
-          automatically with grader-defined test suites.
-        </p>
-      </header>
+      <PageHeader
+        tone="marketing"
+        eyebrow="Features"
+        title="Features"
+        subtitle="A complete, production-shaped evaluation pipeline — write challenges, choose a provider, have an LLM generate the solution, and verify it automatically with grader-defined test suites."
+      />
 
       <section className={styles.pipeline} aria-label="Evaluation pipeline">
         {PIPELINE.map((step, index) => (

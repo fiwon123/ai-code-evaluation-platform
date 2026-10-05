@@ -861,11 +861,11 @@ describe("Home terminal entrance", () => {
  * The Home pipeline timeline (#353).
  *
  * This is the assertion that would have caught the defect #353 fixed. Five
- * cards shared one keyframe, each delayed by its own 1.1s slice (5.5s cycle) —
- * and the lit state sat at 20-30% of *local* time, which is the *next* slice's
- * opening. So the sweep began a step late and each card was bright while a
- * neighbouring card was brighter. It looked fine: motion was present, the order
- * was roughly right, and nothing was ever counted.
+ * cards shared one keyframe, each delayed by its own 2s slice — and the lit
+ * state sat at 20-30% of *local* time, which is the *next* slice's opening. So
+ * the sweep began a step late and each card was bright while a neighbouring card
+ * was brighter. It looked fine: motion was present, the order was roughly right,
+ * and nothing was ever counted.
  *
  * A screenshot cannot see this (a highlighted card is a highlighted card) and a
  * value assertion cannot see it (the page has no values). Only the agreement
@@ -904,17 +904,18 @@ describe("the Home pipeline timeline is self-consistent (#353)", () => {
       expect(block, `.step${i} must animate on the shared keyframe`).toContain(
         "pipelineStepActive",
       );
-      expect(block, `.step${i} must run on the same 5.5s cycle`).toContain(
-        "pipelineStepActive 5.5s",
+      expect(block, `.step${i} must run on the same 10s cycle`).toContain(
+        "pipelineStepActive 10s",
       );
     }
-    // One 1.1s slice each, in order.
+    // One 2s slice each, in order. A duplicated or skipped delay is the exact
+    // failure this file is here to prevent, and it is invisible in a screenshot.
     expect(delays).toEqual([
       "0s",
-      "1.1s",
-      "2.2s",
-      "3.3s",
-      "4.4s",
+      "2s",
+      "4s",
+      "6s",
+      "8s",
     ]);
   });
 
@@ -956,14 +957,10 @@ describe("the Home pipeline timeline is self-consistent (#353)", () => {
         homeCss.match(new RegExp(`\\.pipelineConnector\\.arrow${i}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
       expect(block, `.arrow${i} not found`).not.toBe("");
       expect(block).toContain("connectorFlow");
-      const actual = /animation-delay:\s*([\d.]+s)/.exec(block)?.[1] ?? "";
-      const expected = ((i + 1) * 1.1).toString();
-      // Handle floating point precision for 3.3
-      if (expected.startsWith("3.300000")) {
-        expect(actual).toMatch(/^3\.3/);
-      } else {
-        expect(actual).toBe(`${expected}s`);
-      }
+      expect(
+        /animation-delay:\s*([\d.]+s)/.exec(block)?.[1],
+        `.arrow${i} must light as the step after it becomes active`,
+      ).toBe(`${(i + 1) * 2}s`);
     }
     // Nothing lights in the first slice: there is no flow to show before step one.
     expect(homeCss).not.toMatch(/\.pipelineConnector\.arrow0\s*\{[^}]*animation-delay:\s*0s/);

@@ -5,14 +5,14 @@ import Button from "../../components/Button/Button.tsx";
 import Card from "../../components/Card/Card.tsx";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
 import { SelectInput } from "../../components/Input/Input.tsx";
-import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { adminApi } from "../../services/api.ts";
-import type { AdminSubmission, SubmissionStatus } from "../../types.ts";
+import type { Submission, SubmissionStatus } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
-import { formatRelativeTime, statusVariant } from "../../utils/formatting.ts";
+import { formatElapsed, statusVariant } from "../../utils/formatting.ts";
 import styles from "./Admin.module.css";
 
 const PAGE_SIZE = 20;
@@ -102,10 +102,11 @@ function AdminSubmissions() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.pageHeader}>
-        <PageTitle size="md" className={styles.title}>Submissions</PageTitle>
-        <p className={styles.subtitle}>Every evaluation run across the platform.</p>
-      </div>
+      <PageHeader
+        tone="app"
+        title="Submissions"
+        subtitle="Every evaluation run across the platform."
+      />
 
       <div className={styles.toolbar}>
         <SelectInput

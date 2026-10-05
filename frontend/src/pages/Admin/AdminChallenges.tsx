@@ -5,14 +5,13 @@ import Card from "../../components/Card/Card.tsx";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog.tsx";
 import { TextInput } from "../../components/Input/Input.tsx";
 import LanguageBadge from "../../components/LanguageBadge/LanguageBadge.tsx";
-import PageTitle from "../../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../../components/PageHeader/PageHeader.tsx";
 import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { adminApi } from "../../services/api.ts";
 import type { Challenge } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
-import { formatRelativeTime } from "../../utils/formatting.ts";
 import styles from "./Admin.module.css";
 
 const PAGE_SIZE = 20;
@@ -110,10 +109,11 @@ function AdminChallenges() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.pageHeader}>
-        <PageTitle size="md" className={styles.title}>Challenges</PageTitle>
-        <p className={styles.subtitle}>Review and remove challenges.</p>
-      </div>
+      <PageHeader
+        tone="app"
+        title="Challenges"
+        subtitle="Review and remove challenges."
+      />
 
       <div className={styles.toolbar}>
         <TextInput

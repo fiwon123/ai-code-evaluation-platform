@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import styles from "./CreateChallenge.module.css";
 import { challengesApi } from "../services/api.ts";
 import Card from "../components/Card/Card.tsx";
@@ -10,7 +10,7 @@ import {
 } from "../components/ChallengeForm/ChallengeFormFields.tsx";
 import { extractError } from "../utils/errors.ts";
 import { examplesForLanguage, languageGuide } from "../utils/language.ts";
-import PageTitle from "../components/PageTitle/PageTitle.tsx";
+import PageHeader from "../components/PageHeader/PageHeader.tsx";
 import { useToast } from "../components/Toast/ToastContext.tsx";
 
 export default function CreateChallenge() {
@@ -78,20 +78,15 @@ export default function CreateChallenge() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <nav className={styles.crumbs} aria-label="Breadcrumb">
-          <Link to="/challenges" className={styles.crumbLink}>
-            Challenges
-          </Link>
-          <span aria-hidden="true">/</span>
-          <span aria-current="page">New challenge</span>
-        </nav>
-        <PageTitle className={styles.title}>Create a challenge</PageTitle>
-        <p className={styles.subtitle}>
-          Define a coding task, the prompt your LLM will see, and the tests used
-          to grade the generated solution.
-        </p>
-      </header>
+      {/* The 760px measure belongs to the form below it, so it stays on this
+          page: the header is shared, its measure is not. */}
+      <PageHeader
+        className={styles.narrow}
+        animate
+        breadcrumb={[{ label: "Challenges", to: "/challenges" }, { label: "New challenge" }]}
+        title="Create a challenge"
+        subtitle="Define a coding task, the prompt your LLM will see, and the tests used to grade the generated solution."
+      />
 
       <Card className={styles.card}>
         <form onSubmit={(e) => void handleSubmit(e)}>
