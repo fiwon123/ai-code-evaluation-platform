@@ -38,11 +38,15 @@ Steps: <ordered list of implementation steps>
 
 ## Subagents
 
-You may only spawn these read-only subagents via the Task tool:
+You may only spawn these read-only subagents via the Task tool — your `task`
+permission allows exactly these two and denies everything else:
 - **explore**: For codebase exploration and search
 - **reviewer**: For code review (read-only)
 
-Do NOT spawn build, reviewer, or any other subagents that can edit files or run bash commands. If you need implementation done, present your plan to the user and let them switch to build mode.
+Do NOT spawn build, backend, frontend, visual, or any other subagent. Those can
+edit files or run commands, which is exactly what this mode forbids. If you need
+implementation done, present your plan to the user and let them switch to build
+mode.
 
 ## Do NOT
 

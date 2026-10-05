@@ -391,13 +391,33 @@ main          ← release merges (CI runs here — dev→main PRs only)
 
 ### Agents
 
-Agent definitions live in `opencode.json` and `.opencode/agents/`:
+Agent definitions are split by concern, deliberately:
 
-- **build** (primary): Full development work with all tools enabled
-- **plan** (primary): Analysis and planning without making changes — restricted to read-only subagents (explore, reviewer only)
-- **backend** (subagent): Implements FastAPI routes, services, Celery workers, and evaluation logic
-- **frontend** (subagent): Implements React UI components, pages, hooks, and client-side behavior
-- **reviewer** (subagent): Reviews code for bugs, security, and regressions
+- **`.opencode/agents/<name>.md`** — the agent's **prompt** (markdown body).
+  The filename is the agent name; opencode auto-loads the body as that agent's
+  system prompt.
+- **`opencode.json`** — the agent's **enforcement**: `mode`, `model`,
+  `description`, `color`, and `permission`.
+
+Every agent has exactly one prompt, in one place. Do not also put a `prompt` key
+in `opencode.json` — a second definition silently competes with the markdown
+body. Keep permission blocks in `opencode.json`, not in markdown frontmatter:
+`backend/tests/test_opencode_env_guard.py` reads the effective `.env` guard from
+`opencode.json` for every agent, so moving permissions would blind it.
+
+| Agent | Mode | Role |
+|-------|------|------|
+| **build** | primary | Full development work with all tools enabled |
+| **plan** | primary | Analysis and planning without making changes — restricted to read-only subagents (explore, reviewer only) |
+| **backend** | subagent | FastAPI routes, services, Celery workers, evaluation logic — `edit` scoped to `backend/**/*.py` |
+| **frontend** | subagent | React components, pages, hooks, client behavior — `edit` scoped to `frontend/**/*.ts(x)` |
+| **reviewer** | subagent | Reviews code for bugs, security, and regressions |
+| **visual** | all | Visual QA over screenshots, contact sheets, and video frames — read-only, `bash` limited to `ls` |
+
+`backend` and `frontend` are scoped deliberately: their `edit` permission is
+path-limited, so a subagent cannot wander outside its half of the stack. Both
+refuse to spawn further subagents — the primary agent owns orchestration and the
+GitHub lifecycle.
 
 ### Skills
 
