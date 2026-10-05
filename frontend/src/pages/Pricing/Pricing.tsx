@@ -8,7 +8,7 @@ import styles from "./Pricing.module.css";
 const TIERS = [
   {
     name: "Free",
-    price: "$0/month",
+    price: "$0",
     description: "For developers trying out AI code evaluation.",
     features: [
       "50 evaluations per month",
@@ -22,7 +22,7 @@ const TIERS = [
   },
   {
     name: "Pro",
-    price: "$29/month",
+    price: "$29",
     description: "For teams that evaluate code daily.",
     features: [
       "Unlimited evaluations",
@@ -121,7 +121,7 @@ function Pricing() {
             <div className={styles.tierPrice}>
               {tier.price}
               {tier.price !== "Custom" && (
-                <span className={styles.tierPriceSpan}> /mo</span>
+                <span className={styles.tierPriceSpan}> /month</span>
               )}
             </div>
             <p className={styles.tierDescription}>{tier.description}</p>
