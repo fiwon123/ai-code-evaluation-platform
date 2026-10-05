@@ -167,8 +167,13 @@ make test-e2e                              # 6 specs, desktop + Pixel 7 profiles
 make visual-sweep                          # 344 frames + manifest + contact sheets
 
 # Full gate
+make infra-up                              # required first: backend tests need redis
 make check                                 # backend lint+tests, frontend lint+build+tests
 ```
+
+`make check` is **not** self-contained — with redis down ~42 backend tests fail
+as `assert 503 == 201`, which reads like a product bug rather than a missing
+dependency. `make infra-up` first. See README → "Running the tests locally".
 
 ## Browser tests (`make test-e2e`)
 

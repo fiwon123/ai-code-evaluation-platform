@@ -1,7 +1,5 @@
 # AGENTS.md
 
-### Product
-
 ## Project Objective
 
 AI Code Evaluation Platform — A platform that accepts coding challenges, executes AI-generated code in isolated Docker containers, runs automated test suites, and produces evaluation results.
@@ -234,7 +232,15 @@ Locked by `backend/tests/test_dev_sandbox_gh_token.py`.
 
 - **gh CLI**: Authenticated on the host via `scripts/setup-host-tools.sh`
   (or `gh auth login`). The dev sandbox mounts `~/.config/gh` read-only.
-- **opencode**: Uses API keys configured in `opencode.json` or environment variables
+- **opencode**: resolves provider credentials from its own auth store
+  (`~/.local/share/opencode/auth.json`, written by `opencode auth login`) or from
+  provider environment variables — **never** from the repo's `opencode.json`.
+  That file is tracked and carries only `$schema`, `agent`, `instructions` and
+  `permission`; there is no `provider`/`auth` block to put a key in. Writing one
+  in would commit the key to history permanently. Agents are also denied
+  `.env` reads by permission blocks, so an agent cannot copy keys out of
+  `backend/.env` into a config file — see `.opencode/instructions/workflow.md`
+  → Environment and secret-file rules.
 
 ## Environment Variables
 
@@ -289,6 +295,15 @@ Backend settings read from `backend/.env` (gitignored):
 
 - Linting: Ruff for backend, Oxlint for frontend
 - Testing: pytest for backend, Vitest for frontend
+- **Infra is a prerequisite for backend tests**: run `make infra-up` (postgres +
+  redis + eval-sandbox image) first. With redis down, submission dispatch fails
+  and the endpoint correctly returns **503**, so ~42 tests fail as
+  `assert 503 == 201` — including `tests/test_submissions.py`, which has nothing
+  to do with Redis. `conftest.py` overrides the `get_redis` dependency but mocks
+  no Celery task, so the broker stays real. Use `uv run pytest`, never
+  `backend/.venv/bin/pytest` directly, because several tests shell out to a bare
+  `pytest` that only resolves when `uv run` puts the venv on `PATH`. Full
+  procedure in `.opencode/instructions/testing.md`.
 - Browser tests: Playwright in `frontend/e2e/` via `make test-e2e` — needs a
   real rendered browser, so it is **not** part of `make check`. Chromium is baked
   into the dev image (above `USER devuser`, `/ms-playwright`, since apt needs
@@ -298,7 +313,9 @@ Backend settings read from `backend/.env` (gitignored):
   real launch as the runtime user, Makefile wiring). See DEVELOPMENT.md →
   "Browser tests".
 - CI: GitHub Actions runs lint + build + test on `dev` → `main` PRs only — never on feature branch PRs or push to `dev`
-- Local testing: run `make check` before pushing feature branches
+- Local testing: run `make check` before pushing feature branches (with infra up —
+  see above). Backend tests are **not** self-contained; frontend lint, build and
+  Vitest need no infra.
 - Auth: JWT tokens (OAuth2 planned for future)
 - Database: UUID primary keys for all tables
 - Migrations: Alembic

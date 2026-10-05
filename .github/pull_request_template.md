@@ -24,10 +24,15 @@ Closes #<issue-number>
 
 ## Testing
 
-- [ ] Unit tests pass (`cd backend && uv run pytest`)
+> Infra is a prerequisite — `make infra-up` (postgres + redis). Without it ~42
+> backend tests fail with `assert 503 == 201` / Redis connection errors, which
+> reads like a product bug but is not. See README → "Running the tests locally".
+
+- [ ] Unit tests pass (`make infra-up`, then `cd backend && uv run pytest`)
 - [ ] Linting passes (`cd backend && uv run ruff check src/ tests/`)
 - [ ] Frontend lint passes (`cd frontend && npm run lint`)
 - [ ] Frontend build succeeds (`cd frontend && npm run build`)
+- [ ] Browser tests pass (`make test-e2e`) — required for rendered layout, routing or auth changes
 - [ ] Manual testing performed
 
 ## Checklist

@@ -202,19 +202,42 @@ silently, which trips up nearly everyone once:
 
 ## Running the tests locally
 
+**Infra first.** The backend suite needs postgres and Redis reachable on the
+host — `make infra-up` starts both (and builds the eval-sandbox image). It is
+easy to miss, and the symptom does not look like a missing dependency:
+
+```
+42 failed, 840 passed, 5 skipped
+...
+FAILED tests/test_submissions.py::test_create_submission_success - assert 503 == 201
+```
+
+Creating a submission dispatches a Celery task over Redis
+(`dispatch_evaluation()` → `evaluate_submission.delay()`), and the broker *is*
+Redis. `.delay()` raises when Redis is down, `dispatch_evaluation` catches it and
+returns `False`, and the route answers **503** — so every test asserting a `201`
+fails, in a test file that has nothing to do with Redis. `conftest.py` overrides
+the `get_redis` FastAPI dependency but mocks no Celery task, so the broker stays
+real. With infra up the suite is **885 passed, 2 skipped** (887 collected).
+
+Use `uv run …`, not the venv's binaries directly: several tests shell out to a
+bare `pytest`, which only resolves when `uv run` puts `backend/.venv/bin` on
+`PATH`.
+
 The full gate:
 
 ```bash
+make infra-up   # one-time per boot: postgres + redis + eval-sandbox image
 make check
 ```
 
 Or each piece on its own:
 
 ```bash
-# Backend — 887 tests
+# Backend — 887 tests (needs infra up)
 cd backend && uv run pytest
 
-# Frontend — 1119 tests
+# Frontend — 1119 tests, no infra needed
 cd frontend && npx vitest run
 
 # Lint
