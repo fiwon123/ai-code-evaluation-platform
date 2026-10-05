@@ -92,6 +92,20 @@
   margin: 0 auto;
 }
 
+/* detail — a single record. -------------------------------------------------- */
+
+.detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.detail .title {
+  margin: 0;
+}
+
 /* breadcrumb --------------------------------------------------------------- */
 
 .crumbs {

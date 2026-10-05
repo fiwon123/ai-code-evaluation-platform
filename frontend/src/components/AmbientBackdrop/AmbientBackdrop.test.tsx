@@ -37,21 +37,13 @@ const HOST_SHELLS = [
   "components/AuthLayout/AuthLayout.module.css",
   // #404: `PageHeader` mounts the wash on behalf of every page that adopted it,
   // so its module is now a host shell like any other. Its callers no longer
-  // declare the trio themselves — they inherit it — which is why the four
-  // migrated page modules are absent from this list rather than still carrying
-  // a copy of the rule.
+  // declare the trio themselves — they inherit it — which is why the migrated
+  // page modules are absent from this list rather than still carrying a copy
+  // of the rule.
   "components/PageHeader/PageHeader.module.css",
-  "pages/About/About.module.css",
-  "pages/Admin/Admin.module.css",
   "pages/ChallengeDetail.module.css",
-  "pages/Contact/Contact.module.css",
   "pages/Demo/Demo.module.css",
-  "pages/Features/Features.module.css",
-  "pages/NotFound.module.css",
-  "pages/Pricing/Pricing.module.css",
   "pages/Profile/Profile.module.css",
-  "pages/SharedResultPage.module.css",
-  "pages/SubmissionDetail.module.css",
 ] as const;
 
 /**

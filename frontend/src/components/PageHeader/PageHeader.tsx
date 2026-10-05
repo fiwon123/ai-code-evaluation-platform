@@ -36,8 +36,8 @@ import AmbientBackdrop from "../AmbientBackdrop/AmbientBackdrop.tsx";
 import PageTitle from "../PageTitle/PageTitle.tsx";
 import styles from "./PageHeader.module.css";
 
-/** `app` — dashboards, lists, forms · `marketing` — landing and informational. */
-export type PageHeaderTone = "app" | "marketing";
+/** `app` — dashboards, lists, forms · `marketing` — landing and informational · `detail` — a single record. */
+export type PageHeaderTone = "app" | "marketing" | "detail";
 
 /** One step of the `breadcrumb`. The step without a `to` is the current page. */
 export interface PageHeaderCrumb {
