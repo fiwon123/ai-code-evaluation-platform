@@ -297,7 +297,7 @@ Backend settings read from `backend/.env` (gitignored):
   `backend/tests/test_dev_sandbox_playwright.py` (version sync, layer order, a
   real launch as the runtime user, Makefile wiring). See DEVELOPMENT.md →
   "Browser tests".
-- CI: GitHub Actions runs lint + build + test on `dev` → `main` PRs only — never on feature branch PRs or push to `dev`
+- CI: GitHub Actions runs lint + build + test on `dev` → `main` PRs only — never on feature branch PRs or push to `dev`. Every job is additionally gated on the **`ci` label**, so a release PR created without it runs nothing — a `dev` → `main` PR needs **both** `release` (milestone grouping) and `ci` (what actually triggers the run). See `.opencode/instructions/workflow.md` → step 7.
 - Local testing: run `make check` before pushing feature branches
 - Auth: JWT tokens (OAuth2 planned for future)
 - Database: UUID primary keys for all tables

@@ -42,6 +42,13 @@ No orphaned branches, PRs, or issues. Every piece of work is linked.
 > If the label does not exist on the repo, create it first:
 > `gh label create <name> --color <hex> --description "<description>"`
 
+**PR-only labels** (not commit types, so not in the table above):
+
+| Label | Used for |
+|-------|----------|
+| `release` | the `dev` → `main` release PR — milestone grouping only |
+| `ci` | **triggers** every CI job; required on the release PR, see step 7 |
+
 ### Milestone conventions
 
 - Every issue MUST be assigned to a milestone before work begins
@@ -173,8 +180,16 @@ gh pr create \
     --title "release: <milestone-name>" \
     --body "Release PR for milestone: <milestone-name>" \
     --label "release" \
+    --label "ci" \
     --base main
   ```
+- The `ci` label is **required**, not cosmetic: every job in
+  `.github/workflows/ci.yml` is gated on
+  `contains(github.event.pull_request.labels.*.name, 'ci')`, so a release PR
+  without it runs nothing. `release` labels the PR for the milestone view; `ci`
+  is what actually starts the run. (`types: [labeled, synchronize]` means adding
+  `ci` afterwards re-triggers it — `gh pr edit <number> --add-label ci` works if
+  the PR was created without it.)
 - CI runs automatically on this PR
 - **Comment on the issue**: `gh issue comment <issue-number> --body "Release PR opened: #<pr-number>"`
 - After CI passes:
