@@ -4,33 +4,7 @@
   margin: 0 auto;
 }
 
-.header {
-  /* #402: hosts the shared `AmbientBackdrop`. All three declarations are
-     load-bearing and the reason is in that component: `position` anchors it,
-     `isolation: isolate` is what makes its `z-index: -1` mean "behind this
-     header" rather than "behind the page background" (where it vanishes), and
-     `overflow: hidden` clips the blobs' 80px blur to the header instead of
-     letting it smear over the content below. */
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  text-align: center;
-  margin-bottom: var(--space-12);
-}
 
-/* Layout only — size and the gradient come from the shared PageTitle. */
-.title {
-  margin: var(--space-3) 0 var(--space-4);
-}
-
-.subtitle {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-lg);
-  max-width: 600px;
-  /* The box is narrower than .page, so it needs explicit auto margins to
-     center under the heading — text-align alone only centers the glyphs. */
-  margin: 0 auto;
-}
 
 .grid {
   display: grid;
