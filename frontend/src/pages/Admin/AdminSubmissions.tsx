@@ -10,9 +10,9 @@ import Pagination from "../../components/Pagination/Pagination.tsx";
 import Skeleton from "../../components/Skeleton/Skeleton.tsx";
 import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { adminApi } from "../../services/api.ts";
-import type { Submission, SubmissionStatus } from "../../types.ts";
+import type { AdminSubmission, SubmissionStatus } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
-import { formatElapsed, statusVariant } from "../../utils/formatting.ts";
+import { formatRelativeTime, statusVariant } from "../../utils/formatting.ts";
 import styles from "./Admin.module.css";
 
 const PAGE_SIZE = 20;

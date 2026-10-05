@@ -12,6 +12,7 @@ import { useToast } from "../../components/Toast/ToastContext.tsx";
 import { adminApi } from "../../services/api.ts";
 import type { Challenge } from "../../types.ts";
 import { extractError } from "../../utils/errors.ts";
+import { formatRelativeTime } from "../../utils/formatting.ts";
 import styles from "./Admin.module.css";
 
 const PAGE_SIZE = 20;
