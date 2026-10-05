@@ -121,7 +121,7 @@ function Pricing() {
             <div className={styles.tierPrice}>
               {tier.price}
               {tier.price !== "Custom" && (
-                <span className={styles.tierPriceSpan}> /mo</span>
+                <span className={styles.tierPriceSpan}> /month</span>
               )}
             </div>
             <p className={styles.tierDescription}>{tier.description}</p>
