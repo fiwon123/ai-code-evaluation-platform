@@ -140,7 +140,9 @@ cd /sandbox/ai-code-evaluation-platform && opencode     # the AI coding agent, s
 The dev image mounts (all read-only): the host opencode binary
 (`${HOME}/.opencode/bin/opencode` → `/usr/local/bin/opencode`), opencode
 config (`${HOME}/.config/opencode`) and git identity (`${HOME}/.gitconfig`);
-`make dev-up` pre-creates the config paths and errors if opencode is missing.
+`make dev-up` pre-creates the config paths; the agent is optional and only
+`opencode`/`shell` require a Linux opencode binary. The base stack runs with
+`docker compose up dev` on any OS.
 
 **Ownership**: `dev`, `celery` and `beat` run as the **host user** (`user:` +
 `group_add:` in `docker-compose.yml`, fed by `HOST_UID`/`HOST_GID`/`DOCKER_GID`

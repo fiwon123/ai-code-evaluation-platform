@@ -1,0 +1,40 @@
+# Optional overlay: host-only mounts for the in-container AI coding agent.
+#
+# NOT part of the default stack, and deliberately not referenced by
+# `docker-compose.yml`. Merge it explicitly:
+#
+#     docker compose -f docker-compose.yml -f docker-compose.agent.yml up dev
+#
+# The Makefile and `scripts/dev-up.py` do this for you — but only when the host
+# can actually satisfy every mount below.
+#
+# Why these mounts live here instead of the base file (#436):
+#
+#   1. Every path is a HOST path that a demo user may not have. Compose treats
+#      a missing bind-mount source as a hard failure on Windows and creates a
+#      root-owned directory for it on Linux, so shipping them in the base file
+#      means a single absent `~/.config/gh` breaks `docker compose up dev` for
+#      a reader who only wanted to see the project run.
+#   2. The mounted agent binary must be a LINUX executable, because the dev
+#      container is Linux. A macOS (Mach-O) or Windows (PE) install would fail
+#      with "exec format error" *after* a confusing mount, so the entry points
+#      check the binary's magic bytes and omit this file when it is not ELF.
+#
+# The dev container already shares the workspace bind mount by design (trusted-
+# agent model — see AGENTS.md); these mounts add the agent binary/config, git
+# identity, and read-only gh auth.
+#
+# `make dev-up` / `scripts/dev-up.py` pre-create ~/.config/opencode,
+# ~/.config/gh and ~/.gitconfig so the read-only sources always exist.
+
+services:
+  dev:
+    volumes:
+      # gh CLI auth, read-only. The container runs as the host user, so the
+      # target home is the non-root user's (/home/devuser), not /root.
+      - ${HOME}/.config/gh:/home/devuser/.config/gh:ro
+      # Sandboxed AI coding agent: host opencode binary + config and git
+      # identity, read-only, so `opencode` can run INSIDE the dev container.
+      - ${HOME}/.opencode/bin/opencode:/usr/local/bin/opencode:ro
+      - ${HOME}/.config/opencode:/home/devuser/.config/opencode:ro
+      - ${HOME}/.gitconfig:/home/devuser/.gitconfig:ro

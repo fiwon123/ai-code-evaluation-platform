@@ -12,6 +12,12 @@ on:
       - "uv.lock"
       - "package.json"
       - "package-lock.json"
+      - "docker-compose*.yml"
+      - "Dockerfile"
+      - "dev-entrypoint.sh"
+      - "Makefile"
+      - ".gitattributes"
+      - "scripts/**"
   workflow_dispatch:
 
 concurrency:

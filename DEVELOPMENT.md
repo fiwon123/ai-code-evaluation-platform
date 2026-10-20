@@ -281,24 +281,20 @@ vitest gate nor the normal Playwright config.
 
 | Symptom | Fix |
 |---|---|
+| CRLF line endings break `/bin/bash^M` / `set: pipefail: invalid option name` | Stale checkout: `git rm --cached -r . >/dev/null && git reset --hard` (see README). |
 | Stack up but no hot reload | `make dev-down && make dev-up` (entrypoint restarts uvicorn/vite) |
 | DB in a bad state / want fresh data | `docker compose down -v && make dev-up` (wipes postgres + redis) |
 | Eval sandbox image outdated | `docker compose build sandbox` (or `make infra-up`) |
-| `make dev-up` errors "opencode not found" | Install opencode (see above) — only required for the sandboxed-agent mounts |
+| `make dev-up` says "opencode not found" | Expected — `dev-up` no longer requires opencode. Only `make opencode`/`make shell` need a Linux ELF binary. On Windows/macOS run opencode on the host or use WSL2. |
 | `uv`/`npm` fails with "Permission denied" on `/tmp/uv-cache` or `/tmp/npm-cache` | The image predates the cache-ownership fix (#183) — `make dev-build` (rebuilds dev + celery + beat) |
 | `celery`/`beat` seem to ignore an image/Dockerfile change | They have their own images: `make dev-build` rebuilds all three, then `make dev-restart` |
-| Working tree owned by root (files "locked" in the editor, from an older root-running sandbox) | `sudo chown -R "$USER": "$(pwd)"` — **one-time** cleanup; a working tree that keeps drifting back to root means the stack was started without the Makefile (`docker compose up` directly) — use `make dev-up`, which passes `HOST_UID`/`HOST_GID` |
-| `dev` container logs "UID … has no passwd entry" | The image was built for a different UID than the one you're running as — `make dev-build` to rebuild it for your UID |
-| Evaluations fall back to unsandboxed execution / `celery` logs a Docker socket permission error | The host Docker socket group wasn't passed through — start the stack via the Makefile so `DOCKER_GID` is picked up (`make -n dev-up`). On macOS/rootless/remote daemons set it explicitly: `make dev-up DOCKER_GID=$(stat -f %g /var/run/docker.sock)` |
+| Working tree owned by root (files "locked" in the editor, from an older root-running sandbox) | `sudo chown -R "$USER": "$(pwd)"` — one-time cleanup; use `make dev-up` which passes `HOST_UID`/`HOST_GID` |
+| `dev` container logs "UID … has no passwd entry" | Image built for different UID — `make dev-build` to rebuild for your UID |
+| Evaluations fall back to unsandboxed execution / `celery` logs a Docker socket permission error | Socket is merged only when present (overlay). On native Windows this is expected (subprocess fallback). On Linux/macOS ensure Docker Desktop runs and socket is accessible. |
 | Docker unavailable | Backend falls back to subprocess execution (`DOCKER_ENABLED=false`) |
-| `make test-e2e` says "No Playwright browser found" | The image predates the Chromium bake — `make dev-build` (then `make dev-restart` if the stack is already up). On a host-native checkout, `cd frontend && npx playwright install chromium` |
-| e2e fails with "Execution context was destroyed" or a form stuck on its own page | The Vite dev server pushed a full page reload into the run — `make dev-log` shows `[vite] (client) page reload` at the failure time. It only kills whichever tests were mid-navigation, so re-run; editing `frontend/src` while the suite runs causes it deliberately |
-| Ollama fallback leg fails with a DNS error | `host.docker.internal` is not mapped — the compose services that call a local model need `extra_hosts: host.docker.internal:host-gateway` (#233) |
-| Fallback never engages | `LLM_FALLBACK_PROVIDER` is empty (that is the off switch) — and remember `make dev-down && make dev-up` to re-read the repo-root `.env` into the worker |
-| Worker says "API key missing" for a provider you configured | The key is in `backend/.env`, but compose interpolates `${GROQ_API_KEY:-}` / `${GEMINI_API_KEY:-}` from the **repo-root** `.env` and the worker reads it with `os.getenv` — move the key (see "Which `.env` gets which variable") and `make dev-restart` |
-| Groq submissions fail with `403` from the worker, but `curl https://api.groq.com/openai/v1/models` on the **host** returns `401` | Groq's edge answers `403` to the same request over **IPv4** and `401` over **IPv6** — `401` means the request reached auth, so the key is fine and the worker is simply on the address family that gets rejected. Compare on the host: `curl -4` → 403, `curl -6` → 401. The compose network is dual-stack for this reason (`networks.default.enable_ipv6`); if a compose change or an older `docker-compose.yml` dropped it, `make dev-restart` to recreate the network (`down` removes it, so a plain container restart is not enough) (#270) |
-| A network change in `docker-compose.yml` appears to do nothing | `docker compose restart` reuses the existing network. A change to `networks:` needs the network recreated — `make dev-restart` runs `down` then `up`, which does it while keeping the data volumes |
-| Submissions stuck "pending" for hours | The recovery sweep (Celery beat) must be running: `docker compose ps` should show `beat` healthy. Stale `pending` rows are re-dispatched after 10 min and **abandoned (failed) 60 min after creation** (`PENDING_MAX_MINUTES` in `backend/src/app/tasks/recover.py`). The Profile/SubmissionDetail UI shows "stuck"/"waiting over 10 minutes" in the meantime. |
+| `make test-e2e` says "No Playwright browser found" | Image predates Chromium bake — `make dev-build` |
+| Network change in `docker-compose.yml` appears to do nothing | `docker compose restart` reuses network; use `make dev-restart` (down then up) |
+| Submissions stuck "pending" for hours | Recovery sweep (Celery beat) must be running; `docker compose ps` should show `beat` healthy |
 
 ## Local model fallback (optional, for real-model testing)
 

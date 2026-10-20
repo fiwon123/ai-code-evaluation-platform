@@ -1,4 +1,4 @@
-.PHONY: help setup host-tools infra-up infra-down preflight dev-up dev-build dev-down dev-restart \
+.PHONY: help setup host-tools infra-up infra-down preflight require-agent dev-up dev-build dev-down dev-restart \
         dev-log dev-exec dev-agent opencode shell sandbox reset \
         test test-backend test-frontend test-e2e visual-sweep lint lint-fix format typecheck build check \
         install run dev-backend dev-frontend dev-celery dev-all seed-examples clean \
@@ -14,6 +14,38 @@ help: ## Show this help
 COMPOSE ?= docker compose
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
+
+# --- Optional compose overlays ------------------------------------------------
+# `docker-compose.yml` alone must run on any OS, so it carries NO host-only
+# bind mounts: Compose treats a missing bind-mount source as a fatal error on
+# Windows and creates a root-owned directory for it on Linux, so one absent
+# `~/.config/gh` would break `docker compose up dev`. The host-specific mounts
+# live in two overlays, each merged ONLY when the host can satisfy it:
+#
+#   docker-compose.socket.yml  /var/run/docker.sock for dev + celery — merged
+#                              when the socket exists (Linux/macOS/WSL2). Not
+#                              on native Windows, where the worker then falls
+#                              back to the existing subprocess evaluation mode.
+#   docker-compose.agent.yml   gh/opencode/gitconfig read-only mounts — merged
+#                              only when a *Linux* opencode binary exists,
+#                              because the dev container is Linux and a Mach-O
+#                              (macOS) or PE (Windows) binary can only fail
+#                              with "exec format error" once mounted.
+#
+# Detection is deliberately a shell test, not `?=`: it must reflect the host at
+# make time so a bare `make dev-up` does the right thing with no arguments.
+# Override COMPOSE_FILES explicitly to opt out (e.g. to run the base only).
+COMPOSE_FILES := -f docker-compose.yml
+ifneq ($(wildcard /var/run/docker.sock),)
+COMPOSE_FILES += -f docker-compose.socket.yml
+endif
+# ELF magic (0x7f 'E' 'L' 'F'): the only opencode build the Linux container can
+# execute. `head -c4` is POSIX; the test is silent when the file is absent.
+OPENCODE_IS_ELF := $(shell head -c4 "$(HOME)/.opencode/bin/opencode" 2>/dev/null | od -An -tx1 | tr -d ' \n')
+ifeq ($(OPENCODE_IS_ELF),7f454c46)
+COMPOSE_FILES += -f docker-compose.agent.yml
+endif
+export COMPOSE_FILES
 
 # --- Host identity for the dev sandbox ---------------------------------------
 # The workspace is bind-mounted into the dev/celery/beat containers, so those
@@ -108,10 +140,10 @@ seed-examples: ## Seed the curated example challenges into the DB (idempotent)
 
 # --- Infrastructure only (postgres/redis/eval-sandbox image) -----------------
 infra-up: ## Start postgres + redis + build the eval-sandbox image (host-native path)
-	$(COMPOSE) up -d --build postgres redis sandbox
+	$(COMPOSE) $(COMPOSE_FILES) up -d --build postgres redis sandbox
 
 infra-down: ## Stop infra only (also stops dev/celery if running)
-	$(COMPOSE) down postgres redis sandbox
+	$(COMPOSE) $(COMPOSE_FILES) down postgres redis sandbox
 
 # --- Isolated dev sandbox (dev + worker + infra) -----------------------------
 #
@@ -137,50 +169,72 @@ OPENCODE_BIN ?= $(HOME)/.opencode/bin/opencode
 #   make opencode OPENCODE_ARGS="run 'task' --auto"     # one-shot non-interactive
 OPENCODE_ARGS ?= --auto
 
-preflight: ## (internal) Require host opencode + pre-create mounted config paths
-	@test -x "$(OPENCODE_BIN)" || { echo "ERROR: opencode not found at $(OPENCODE_BIN)" >&2; \
-	  echo "  Install: curl -fsSL https://opencode.ai/install | bash   (or scripts/setup-host-tools.sh)" >&2; exit 1; }
+preflight: ## (internal) Pre-create the mounted config paths — never blocks startup
+	@# This target deliberately does NOT test for the opencode binary. It used to,
+	@# and because `dev-up` depended on it, `make dev-up` failed with
+	@#   ERROR: opencode not found at /home/you/.opencode/bin/opencode
+	@# on any host without a *Linux* opencode install (native Windows, macOS,
+	@# WSL2 without an in-distro install) — even though the base stack runs
+	@# fine without the agent. The agent is optional for `dev-up`; only the
+	@# agent-specific targets (`opencode`, `shell`) require it. See require-agent.
 	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
 
+require-agent: ## (internal) Require the host opencode binary + the agent overlay
+	@# Kept separate from preflight so the *startup* path stays unblocked. The
+	@# mounted binary must be a Linux executable: the dev container is Linux, so
+	@# a macOS/Windows install fails with "exec format error" and cannot be
+	@# papered over. WSL2 users install opencode inside the distro (the ELF
+	@# then exists on that filesystem) — see README.md -> OS matrix.
+	@test -x "$(OPENCODE_BIN)" || { echo "ERROR: opencode not found at $(OPENCODE_BIN)" >&2; \
+	  echo "  The sandbox agent needs a LINUX opencode binary (the dev container is Linux)." >&2; \
+	  echo "  Install: curl -fsSL https://opencode.ai/install | bash   (or scripts/setup-host-tools.sh)" >&2; \
+	  echo "  On native Windows/macOS run opencode on the HOST instead — see README.md." >&2; exit 1; }
+	@test "$(OPENCODE_IS_ELF)" = "7f454c46" || { echo "ERROR: $(OPENCODE_BIN) is not a Linux (ELF) binary." >&2; \
+	  echo "  The dev container is Linux, so a macOS (Mach-O) or Windows (PE) install cannot run inside it." >&2; \
+	  echo "  Install opencode inside the Linux environment (WSL2: inside the distro), then retry." >&2; exit 1; }
+	@# Refresh COMPOSE_FILES: make evaluates `:=` once at parse time, so a binary
+	@# installed *after* make started would otherwise leave the overlay unmerged.
+	$(eval COMPOSE_FILES := -f docker-compose.yml$(if $(wildcard /var/run/docker.sock), -f docker-compose.socket.yml,)$(if $(filter 7f454c46,$(OPENCODE_IS_ELF)), -f docker-compose.agent.yml,))
+
 dev-up: preflight ## Start the isolated dev sandbox (uvicorn + vite + worker + infra)
-	$(COMPOSE) up dev
+	$(COMPOSE) $(COMPOSE_FILES) up dev
 
 # dev-build rebuilds EVERY workspace service, not just `dev`: celery and beat
 # build from the same Dockerfile into their own images, so building only `dev`
 # left them on the previous (pre-fix) image — a root-owned venv and no
 # devuser — which is exactly the state issue #183 removes.
 dev-build: ## Rebuild the dev, celery and beat images (Dockerfile/pyproject/uv.lock changes)
-	$(COMPOSE) build dev celery beat
+	$(COMPOSE) $(COMPOSE_FILES) build dev celery beat
 
 dev-down: ## Stop the dev sandbox (keeps data volumes)
-	$(COMPOSE) down
+	$(COMPOSE) $(COMPOSE_FILES) down
 
 dev-restart: preflight ## Stop and restart the dev sandbox in one step (data kept, foreground logs)
-	$(COMPOSE) down
-	$(COMPOSE) up dev
+	$(COMPOSE) $(COMPOSE_FILES) down
+	$(COMPOSE) $(COMPOSE_FILES) up dev
 
 dev-log: ## Tail dev sandbox + celery worker + beat logs
-	$(COMPOSE) logs -f dev celery beat
+	$(COMPOSE) $(COMPOSE_FILES) logs -f dev celery beat
 
 dev-exec: ## Open a shell inside the dev sandbox
-	$(COMPOSE) exec dev zsh
+	$(COMPOSE) $(COMPOSE_FILES) exec dev zsh
 
-opencode: preflight ## Run the AI coding agent (opencode) inside the dev sandbox
-	@if [ -z "$$($(COMPOSE) ps -q dev)" ]; then echo "[opencode] starting dev stack..."; $(COMPOSE) up -d dev; fi
+opencode: preflight require-agent ## Run the AI coding agent (opencode) inside the dev sandbox
+	@if [ -z "$$($(COMPOSE) $(COMPOSE_FILES) ps -q dev)" ]; then echo "[opencode] starting dev stack..."; $(COMPOSE) $(COMPOSE_FILES) up -d dev; fi
 	@echo "[sandbox] opencode is running INSIDE the dev container (terminal title: [SANDBOX] ...)"
-	@if [ -t 0 ]; then $(COMPOSE) exec -it dev zsh -lc "cd /sandbox/ai-code-evaluation-platform && env OPENCODE_DISABLE_TERMINAL_TITLE=true opencode $(OPENCODE_ARGS)"; else $(COMPOSE) exec -T dev zsh -lc "cd /sandbox/ai-code-evaluation-platform && env OPENCODE_DISABLE_TERMINAL_TITLE=true opencode $(OPENCODE_ARGS)"; fi
+	@if [ -t 0 ]; then $(COMPOSE) $(COMPOSE_FILES) exec -it dev zsh -lc "cd /sandbox/ai-code-evaluation-platform && env OPENCODE_DISABLE_TERMINAL_TITLE=true opencode $(OPENCODE_ARGS)"; else $(COMPOSE) $(COMPOSE_FILES) exec -T dev zsh -lc "cd /sandbox/ai-code-evaluation-platform && env OPENCODE_DISABLE_TERMINAL_TITLE=true opencode $(OPENCODE_ARGS)"; fi
 
 # Alias kept for compatibility with earlier dev-sandbox docs.
 dev-agent: opencode
 
-shell: preflight ## Open an interactive zsh shell in the dev sandbox (opencode ready)
+shell: preflight require-agent ## Open an interactive zsh shell in the dev sandbox (opencode ready)
 	scripts/open-in-sandbox.sh
 
 # Alias kept for compatibility with earlier dev-sandbox docs.
 sandbox: shell
 
 reset: ## Stop everything and wipe volumes (clean slate — destructive!)
-	$(COMPOSE) down -v
+	$(COMPOSE) $(COMPOSE_FILES) down -v
 
 # --- Kubernetes (optional — requires Docker + the K8s toolchain on PATH) -----
 # Docker Compose remains the primary local path. These targets wrap the
