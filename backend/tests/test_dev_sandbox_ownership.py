@@ -85,9 +85,12 @@ class TestComposeHostIdentity:
         dev = _service_block("dev")
         # gh CLI auth, opencode config and git identity land in the runtime
         # user's home; /root/... would be unreadable to a non-root process.
-        assert f":{DEV_USER_HOME}/.config/gh:ro" in dev
-        assert f":{DEV_USER_HOME}/.config/opencode:ro" in dev
-        assert f":{DEV_USER_HOME}/.gitconfig:ro" in dev
+        # Moved to docker-compose.agent.yml (#436) so base compose runs without
+        # host-only mounts on any OS.
+        overlay = (REPO_ROOT / "docker-compose.agent.yml").read_text()
+        assert f":{DEV_USER_HOME}/.config/gh:ro" in overlay
+        assert f":{DEV_USER_HOME}/.config/opencode:ro" in overlay
+        assert f":{DEV_USER_HOME}/.gitconfig:ro" in overlay
         assert "/root/.config" not in _compose_text()
         assert "/root/.gitconfig" not in _compose_text()
 
@@ -174,7 +177,7 @@ class TestMakefileHostIdentityExport:
         # building only `dev` left the worker on the pre-fix image.
         text = MAKEFILE.read_text()
         assert re.search(
-            r"^dev-build:.*\n\t\$\(COMPOSE\) build dev celery beat$", text, re.MULTILINE
+            r"^dev-build:.*\n\t\$\(COMPOSE\) \$\(COMPOSE_FILES\) build dev celery beat$", text, re.MULTILINE
         )
 
 

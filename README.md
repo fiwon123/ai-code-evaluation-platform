@@ -164,13 +164,41 @@ the primary local workflow.
 - Node.js 22 and Python 3.14 with `uv` (only for the host-native loop)
 - At least one provider API key — or use Ollama and the free demo model
 
+### OS matrix (dev sandbox)
+
+The dev sandbox (`docker compose up dev`) runs with **no host-only mounts** in
+the base file, so it works on any OS with Docker alone. Host-specific bits
+(gh/opencode/gitconfig and the Docker socket) are merged only when the host
+can satisfy them:
+
+| Platform | `docker compose up dev` | `make dev-up` / `scripts/dev-up.py` | In-container agent (opencode) | Evaluations (sandboxed containers) |
+|---|---|---|---|---|
+| Linux | Yes | Yes | Yes (Linux binary) | Yes (`/var/run/docker.sock`) |
+| macOS (Docker Desktop) | Yes | Yes | Host opencode only (Mach-O binary can't run in Linux) | Yes (socket via Docker Desktop) |
+| WSL2 (Docker Desktop integration) | Yes | Yes | Yes (install opencode inside the distro) | Yes (`/var/run/docker.sock`) |
+| Native Windows (Docker Desktop) | Yes | Yes via `python scripts/dev-up.py dev-up` | Host opencode only (PE binary can't run in Linux) | **Subprocess fallback** (no host socket mount). Isolation is weaker than containerized evals — documented, not hidden. |
+
+**Native Windows note:** `make` requires a POSIX shell. Use `python scripts/dev-up.py dev-up` (or `.\scripts\dev-up.ps1 dev-up`) from PowerShell. If the repo was cloned with CRLF line endings (stale checkout before `.gitattributes`), see [Troubleshooting](#troubleshooting).
+
 ### The dev sandbox
 
 ```bash
+# Linux / macOS / WSL2
 make dev-up      # build the image, run uvicorn + vite + celery
-make dev-log     # tail both services
+make dev-log     # tail services
 make dev-down    # stop
+
+# Native Windows (PowerShell)
+python scripts/dev-up.py dev-up
+python scripts/dev-up.py dev-log
+python scripts/dev-up.py dev-down
 ```
+
+The agent is **optional**: `dev-up` starts the stack without a host opencode
+binary. Only `make opencode` / `make shell` (or
+`python scripts/dev-up.py opencode|shell`) require a **Linux** ELF opencode
+binary mounted into the container. On macOS/native Windows run opencode on the
+host. The base stack never fails because a host path is missing.
 
 | Service     | URL                     |
 |-------------|-------------------------|
@@ -235,6 +263,40 @@ what regressed here was invisible in a diff: gradient titles quietly dropping be
 contrast, an ambient animation forgetting to respect `prefers-reduced-motion`, a shell that
 lost its `isolation: isolate` and dropped behind the page background. Those are cheap to
 check in Vitest and expensive to notice by eye.
+
+## Troubleshooting
+
+### CRLF line endings break the container entrypoint (`/bin/bash^M: bad interpreter`)
+
+If you cloned the repo on Windows with `core.autocrlf=true` *before* `.gitattributes`
+was added, your working tree may still have CRLF on `dev-entrypoint.sh` and
+`scripts/*.sh`. Git compares normalized content, so `git status` can stay clean
+while the files remain CRLF on disk. When bind-mounted into the Linux container,
+bash parses those CRLF bytes and dies before running anything (the error is
+`set: pipefail: invalid option name`, not a friendly message).
+
+`dev-entrypoint.sh` detects this and prints the exact remedy. To fix a stale
+checkout:
+
+```bash
+git rm --cached -r . >/dev/null && git reset --hard
+```
+
+`.gitattributes` now enforces LF going forward. PowerShell/cmd entry points
+(`*.ps1`, `*.bat`, `*.cmd`) are allowed to keep CRLF.
+
+### `opencode` is missing / binary is not Linux ELF
+
+The in-container agent needs a **Linux** opencode binary. On native Windows or
+macOS, install opencode on the host and run it there, or use WSL2 (install
+inside the distro). `make dev-up` / `scripts/dev-up.py dev-up` never require it.
+
+### Native Windows: use the Python launcher
+
+`make` isn't available by default on cmd/PowerShell. Use
+`python scripts/dev-up.py <command>` or `.\scripts\dev-up.ps1 <command>`.
+If you see `opencode not found`, that's expected — see above; `dev-up` doesn't
+require it.
 
 ## Repository layout
 
