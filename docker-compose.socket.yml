@@ -1,0 +1,37 @@
+# Optional overlay: the host Docker socket, for services that spawn containers.
+#
+# NOT part of the default stack, and deliberately not referenced by
+# `docker-compose.yml`. Merge it explicitly:
+#
+#     docker compose -f docker-compose.yml -f docker-compose.socket.yml up dev
+#
+# Purpose: the Celery worker evaluates untrusted code by starting throwaway
+# eval-sandbox containers (via the Docker SDK), and the sandboxed agent may
+# build/inspect images. Both need the host Docker socket.
+#
+# Why this is an overlay rather than a base-file mount (#436):
+#
+#   `/var/run/docker.sock` is a host path that does not exist on every platform.
+#   Compose treats a missing bind-mount source as a fatal error on Windows, and
+#   native Windows has no such socket at all. Keeping it here lets the base file
+#   start on any OS; the entry points merge this file only when the socket is
+#   actually present.
+#
+# Consequence on native Windows (documented in README.md): without the socket
+# the worker cannot create eval-sandbox containers, so evaluations fall back to
+# the existing in-process subprocess mode — weaker isolation (shared kernel),
+# which the codebase already supports and documents. WSL2, macOS (Docker
+# Desktop) and Linux keep full containerised evaluation.
+
+services:
+  dev:
+    volumes:
+      # Mount the host Docker socket so evaluations can spawn isolated
+      # eval-sandbox containers (docker_sandbox uses the Python SDK).
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  celery:
+    volumes:
+      # Mount the host Docker socket so the Celery worker can create
+      # isolated eval-sandbox containers for code evaluation.
+      - /var/run/docker.sock:/var/run/docker.sock

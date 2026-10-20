@@ -1,12 +1,25 @@
-# Dev-sandbox Compose file (repo root) — lightweight Docker-based development.
+# Dev-sandbox Compose file (repo root) — the demo/development entry point.
 #
-# Replaces the old VS Code Dev Containers setup (`.devcontainer/`): a single
-# prebuilt `dev` container (bind-mounted source, deps baked at image build)
-# runs uvicorn + vite in the foreground, a `celery` service runs the
-# evaluation worker, a `beat` service runs the periodic stale-submission
-# recovery sweep, and `postgres` / `redis` provide infra. The `sandbox`
-# service builds the air-gapped eval-sandbox image used to isolate untrusted
-# code evaluation. Use `docker compose up dev` (or push `infra-up`).
+# `docker compose up dev` works with this file alone, on any OS, with **no
+# host-side prerequisites beyond Docker itself**: no Make, no Python, no
+# opencode, no gh. Every host-derived value below has an inline default, so
+# nothing has to be exported first.
+#
+# Host-only mounts deliberately do NOT live here — Compose treats a missing
+# bind-mount source as a fatal error on Windows and creates a root-owned
+# directory for it on Linux, so a single absent `~/.config/gh` would break the
+# one command this file exists to support. They live in two opt-in overlays,
+# merged by the developer entry points (Makefile / scripts/dev-up.py) only when
+# the host can satisfy them:
+#
+#   docker-compose.agent.yml   gh/opencode/gitconfig read-only mounts,
+#                              merged only when a *Linux* opencode binary exists
+#   docker-compose.socket.yml  /var/run/docker.sock for dev + celery, merged
+#                              only when the host socket exists (never on
+#                              native Windows; evaluations fall back to the
+#                              existing subprocess mode there — see README.md)
+#
+# Use `docker compose up dev` (or `make dev-up`, which selects the overlays).
 #
 # name is pinned so project volumes/networks keep the ai-eval_* prefix
 # regardless of the repo directory name or where the compose file lives.
@@ -19,18 +32,19 @@ name: ai-eval
 # Note: limits apply to running containers with `docker compose up` (Compose v2).
 #
 # --- Host identity ------------------------------------------------------------
-# `user: "${HOST_UID}:${HOST_GID}"` makes the dev/celery/beat services run as
-# the host user, so files written into the bind-mounted workspace keep the
-# host's ownership instead of landing as root:root (which shows up "locked" in
-# the host editor and breaks git with "dubious ownership"). The Makefile
-# exports HOST_UID/HOST_GID from `id -u`/`id -g` — override them explicitly when
-# running `docker compose` by hand (the defaults below keep plain
-# `docker compose up` working for a 1000:1000 host).
+# `user: "${HOST_UID:-1000}:${HOST_GID:-1000}"` makes the dev/celery/beat
+# services run as the host user, so files written into the bind-mounted
+# workspace keep the host's ownership instead of landing as root:root (which
+# shows up "locked" in the host editor and breaks git with "dubious ownership").
+# The Makefile (and scripts/dev-up.py) export HOST_UID/HOST_GID from the host;
+# the `:-1000` defaults keep a bare `docker compose up` working on a 1000:1000
+# host — for any other uid, start via `make dev-up` or `scripts/dev-up.py`.
 #
-# `group_add: ["${DOCKER_GID}"]` grants access to the host Docker socket
+# `group_add: ["${DOCKER_GID:-0}"]` grants access to the host Docker socket
 # (root:docker 0660) for the non-root user — required by the evaluation worker
 # (it spawns isolated eval-sandbox containers) and by the sandboxed agent.
-# DOCKER_GID comes from `stat -c %g /var/run/docker.sock` in the Makefile and
+# Only meaningful when docker-compose.socket.yml is merged (i.e. the socket is
+# actually mounted); DOCKER_GID is resolved by the Makefile / dev-up.py and
 # defaults to 0 (root group) for platforms where the socket is root-owned.
 services:
   # Dev sandbox — the coding/runtime environment. Source is bind-mounted for
@@ -47,29 +61,20 @@ services:
     # Run as the host user so bind-mounted files stay host-owned (see header).
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     # Docker socket group (host) — keep evaluation container spawning working.
+    # Harmless when the socket is not mounted (the group is simply unused).
     group_add:
       - "${DOCKER_GID:-0}"
-    command: ["/sandbox/ai-code-evaluation-platform/dev-entrypoint.sh"]
+    # Invoked through bash rather than executed directly: a Windows checkout does
+    # not preserve the executable bit through a bind mount, so running the path
+    # itself fails with "Permission denied". The path is the in-container
+    # workspace mount point (/sandbox/ai-code-evaluation-platform), not the host
+    # path.
+    command: ["/bin/bash", "/sandbox/ai-code-evaluation-platform/dev-entrypoint.sh"]
     # Friendly hostname so prompts (`%n@%m`) and `hostname` clearly show you're
     # inside the sandbox (containers otherwise get a random hex ID).
     hostname: ai-eval-sandbox
     volumes:
       - .:/sandbox/ai-code-evaluation-platform:cached
-      # Mount the host Docker socket so evaluations can spawn isolated
-      # eval-sandbox containers (docker_sandbox uses the Python SDK).
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Share the host gh CLI auth with the dev sandbox (read-only). The
-      # container runs as the host user, so the target home is the
-      # non-root user's (/home/devuser), not /root.
-      - ${HOME}/.config/gh:/home/devuser/.config/gh:ro
-      # Sandboxed AI coding agent: mount the host opencode binary + config and
-      # git identity read-only so `opencode` can run INSIDE the dev container
-      # (same trusted-agent model as gh: workspace bind mount + docker socket
-      # are shared by design). `make dev-up` pre-creates ${HOME}/.config/opencode
-      # and ${HOME}/.gitconfig so these mounts never fail on a fresh machine.
-      - ${HOME}/.opencode/bin/opencode:/usr/local/bin/opencode:ro
-      - ${HOME}/.config/opencode:/home/devuser/.config/opencode:ro
-      - ${HOME}/.gitconfig:/home/devuser/.gitconfig:ro
     # Same gateway alias as celery: Ollama on the host is reachable as
     # host.docker.internal, and the dev container's own localhost is itself.
     # Declared on both services that may call a local model (dev runs scripts and
@@ -169,9 +174,6 @@ services:
     command: bash -c 'cd /sandbox/ai-code-evaluation-platform/backend && { [[ -x /opt/backend-venv/bin/celery ]] || uv sync; } && exec /opt/backend-venv/bin/celery -A app.core.celery_app:celery_app worker --loglevel=info'
     volumes:
       - .:/sandbox/ai-code-evaluation-platform:cached
-      # Mount the host Docker socket so the Celery worker can create
-      # isolated eval-sandbox containers for code evaluation.
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       # HOME/USER/LOGNAME for the non-root runtime user (uv cache/config).
       - HOME=/home/devuser
